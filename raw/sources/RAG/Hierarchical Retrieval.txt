@@ -1,0 +1,678 @@
+arXiv:2509.16411v1 [cs.IR] 19 Sep 2025
+
+2025-09-19
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+Chong You1, Rajesh Jayaram1, Ananda Theertha Suresh1, Robin Nittka1, Felix Yu1 and Sanjiv Kumar1 1Google
+Dual encoder (DE) models, where a pair of matching query and document are embedded into similar vector representations, are widely used in information retrieval due to their simplicity and scalability. However, the Euclidean geometry of the embedding space limits the expressive power of DEs, which may compromise their quality. This paper investigates such limitations in the context of hierarchical retrieval (HR), where the document set has a hierarchical structure and the matching documents for a query are all of its ancestors. We first prove that DEs are feasible for HR as long as the embedding dimension is linear in the depth of the hierarchy and logarithmic in the number of documents. Then we study the problem of learning such embeddings in a standard retrieval setup where DEs are trained on samples of matching query and document pairs. Our experiments reveal a lost-in-the-long-distance phenomenon, where retrieval accuracy degrades for documents further away in the hierarchy. To address this, we introduce a pretrain-finetune recipe that significantly improves long-distance retrieval without sacrificing performance on closer documents. We experiment on a realistic hierarchy from WordNet for retrieving documents at various levels of abstraction, and show that pretrain-finetune boosts the recall on long-distance pairs from 19% to 76%. Finally, we demonstrate that our method improves retrieval of relevant products on a shopping queries dataset.
+1. Introduction
+Information retrieval (Mitra et al., 2018) is the task of finding the most relevant documents within a large database in response to a user query. Dual Encoder (DE) is one of the most popular modeling architectures for information retrieval due to their simplicity and scalability. It functions by encoding each query and each document by a vector representation, e.g., using a deep neural network (Chang et al., 2020b; Guo et al., 2016; Zhao et al., 2024). Then, similarity between a query and a document is calculated using their Euclidean distance or inner product, enabling scalable retrieval through approximate nearest neighbor search (Chern et al., 2022; Guo et al., 2020; Johnson et al., 2019).
+This paper considers Hierarchical Retrieval (HR), a particular case of information retrieval where the set of documents is organized into a (hidden) hierarchical structure. To motivate our retrieval task on a hierarchy, consider the keyword targeting problem in online advertising where ad platforms aim to display ads based on the relevance of the associated keywords to a user’s query. While many notions of relevance exist, a particularly important case, known as Phrase Match (Ama; Goo; Mic), defines relevant keywords as those that are semantically more general than the user’s query. This definition motivates the modeling of advertiser keywords as a hierarchy, where higher level keywords are semantically more general than the lower level keywords (see Figure 1 Left). Then, Phrase Match may be expressed as the problem of retrieving not only the keyword that matches exactly the meaning of a user query, but also all those at a higher level in the hierarchy. Motivated by Phrase Match, we define HR as the retrieval problem on a hierarchy that can be described by a direct acyclic graph (DAG, see Figure 1 Middle). Then, the goal is to retrieve, for each node 𝑢, all nodes 𝑣 reachable from 𝑢 with a directed path. In particular, we assume that the DAG is unobserved, which is the typical case in information retrieval where the model is learned on a data set of matching query-document pairs.
+Corresponding author(s): cyou@google.com © 2025 Google. All rights reserved
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+✓Relevant
+Footwear
+
+✓Relevant
+
+✓Relevant
+
+Sandals
+
+Kid’s shoes
+
+Sports shoes
+
+✓Relevant
+Kid’s sandals
+Query
+Kid’s running shoes
+
+Running shoes
+
+Figure 1 | (Left) A illustrative example of a document set that forms a hierarchy. Given a query, e.g.
+“Kid’s sandals”, the goal is to retrieve all its ancestors in the hierarchy. (Middle) An abstraction of this hierarchy using a DAG where the edges are represented as solid arrows. For each node 𝑢 of the graph, the goal of Hierarchical Retrieval (HR) is to retrieve all 𝑣 such that 𝑣 is reachable from 𝑢. (Right) The lost-in-the-long-distance phenomenon of a Dual Encoders (DEs) trained for HR on the WordNet DAG. Documents further away from the query in the hierarchy are more difficult to retrieve.
+We introduce a pretrain-finetune recipe to drastically improve long-distance retrieval.
+
+Why is Hierarchical Retrieval hard? DEs solve information retrieval tasks by finding embeddings such that a relevant document is closer in distance to the query than an irrelevant one. For HR, this distance measure needs to be asymmetric. For example, if “Kid’s sandals” is the query then “Sandals” is considered a relevant keyword, but the inverse is not true: if “Sandals” is the query then “Kid’s sandals” is not a relevant keyword. This makes asymmetric DE a natural choice, where the same node is embedded differently by a query encoder 𝑄() and a document encoder 𝐷().
+However, asymmetric DEs can still be limited for HR due to the properties of the Euclidean geometry (Menon et al., 2022). To illustrate this, consider the query “Kid’s sandals” for which a DE needs to place the two document embeddings 𝐷(“Sandals”) and 𝐷(“Kid’s shoes”) in close proximity to each other, since they need to be both close to 𝑄(“Kid’s sandals”). On the other hand, for the query “Kid’s running shoes”, a DE needs to place the aforementioned two document embeddings far apart since only one of them is close to 𝑄(“Kid’s running shoes”). This apparent inconsistency leads to the critical question:
+Q1: Does there exist Dual Encoders that solve Hierarchical Retrieval?
+We will provide an affirmative answer to Q1, establishing the feasibility of DEs for HR.
+Nonetheless, the existence of such DEs does not mean that they can be learned from data. In practice, the following question is of great importance:
+Q2: Can we learn (from train data) Dual Encoders that solve Hierarchical Retrieval?
+We show through experimental evidence that if the embedding dimension of DE is sufficiently high, then the answer to Q2 is positive as well. This result justifies DE as a feasible architecture for HR.
+Lost in the long distance? While the answer to Q2 is positive with a high embedding dimension, practical retrieval systems have memory and latency requirement hence a low embedding dimension is desirable and critical. Towards improving the practice of DEs for HR, we examine cases where learned embeddings fail due to an insufficient embedding dimension, and discover an intriguing lost-in-the-long-distance phenomenon. This phenomenon states that documents further away from the query in the underlying hierarchy are more difficult to retrieve, hence compromises the quality of the retrieval (see Figure 1 Right). To mitigate this, we introduce a pretrain-finetune recipe, where a pretrained DE is finetuned on a dataset focusing solely on long-distance pairs. Such a recipe enhances the practicality of DEs for HR by improving long-distance retrieval capabilities.
+
+2
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+We summarize the contribution of this paper as follows.
+• Dual Encoders are feasible for Hierarchical Retrieval. We formally establish that asymmetric DEs are feasible for solving HR. Specifically, with a constructive algorithm that maps an arbitrary DAG to a set of asymmetric embeddings, we prove that such embeddings solve the associated HR task with a high probability. This holds as long as the dimension of the embedding space is larger than a threshold determined by the underlying hierarchy (Section 3).
+• Dual Encoders can be learned from training data to solve Hierarchical Retrieval. The constructive algorithm above requires the DAG as input. On the other hand, information retrieval tasks often do not directly provide the DAG but require learning embeddings from a training dataset of matching query-document pairs. Next, we conduct an experimental study of this learning problem, starting from a synthetic tree-structured hierarchies for gaining insights. We verify that the learned DEs successfully solve HR with a sufficiently high embedding dimension (Section 4).
+• A Pretrain-Finetune recipe improves the training of Dual Encoders for Hierarchical Retrieval. We reveal the lost-in-the-long-distance phenomenon under a toy setup with a synthetic tree-structured hierarchy. Critically, we show that the standard approach based on rebalancing the sampling of short vs. long distance pairs in the training dataset fails to solve the problem. This highlights the importance of our pretrain-finetune recipe, where a pretrained DE further finetuned on long-distance pairs gains enhanced long-distance retrieval capabilities without compromising the quality on short-distance documents (Section 5). Finally, the effectiveness of this recipe extends beyond the toy setup to real datasets, including 1) WordNet, a large lexical database of English, and 2) ESCI, a shopping queries dataset (Section 6).
+1.1. Related Work
+Graph embedding. Graph embedding broadly refers to methods that learn a set of node embeddings that preserves certain properties of the graph (Xu, 2021). While Euclidean embedding is a natural choice, the symmetric nature of the distance metric makes it problematic for handling graphs with directed edges, such as DAGs. To address the issue, numerous works have explored ideas going beyond Euclidean embeddings, e.g., by representing each node with a geometric region (Chheda et al., 2021; Rozonoyer et al., 2024; Vendrov et al., 2015; Vilnis et al., 2018) or a probability distribution (Athiwaratkun and Wilson, 2018; Vilnis and McCallum, 2015). These ideas may be coupled with non-Euclidean metrics (Ganea et al., 2018; Nickel and Kiela, 2017; Tifrea et al., 2018) to better model the hierarchical structures. However, such embedding models are not suited for retrieval due to a lack of an efficient nearest neighbor search that hinders their applicability to large scale data. Another work more related to ours is Ou et al. (2016), where asymmetric embeddings are used to capture the asymmetry and transitivity of the DAG. However, the focus of Ou et al. (2016) is on computing embeddings on a given graph. In contrast, retrieval applications often do not have access to the underlying graph, and embeddings are learned from a dataset of matching query-document pairs.
+Pretrain-finetune. The paradigm of pretraining and finetuning, where a model is first trained on a large, general-purpose dataset then adapted to downstream tasks with a finetuning procedure, is a cornerstone of modern machine learning (Brown et al., 2020; Donahue et al., 2014; Raffel et al., 2020). For information retrieval, this paradigm demonstrates effectiveness for improved DE quality, particularly for sparse or noisy downstream data (Chang et al., 2020a). Our pretraining-finetuning recipe adapts this paradigm by treating the retrieval of long-distance matches as a downstream task, which we demonstrate to be effective in addressing the loss-in-the-long-distance challenge in HR.
+3
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+2. Problem Setup
+Hierarchical Retrieval (HR). Let Q = {𝑞𝑖}𝑛𝑖=1 be a collection of 𝑛 queries and D = {𝑥 𝑗}𝑚𝑗=1 be a collection of 𝑚 documents, respectively. For each 𝑖 ∈ {1, . . . , 𝑛}, let 𝑆(𝑞𝑖) ⊆ D be the set that contains all documents that are the most relevant to the query 𝑞𝑖. The goal of information retrieval is to return a ranked list of the documents in D for each 𝑞𝑖, with the top ones being those in 𝑆(𝑞𝑖).
+This paper considers HR, a particular case of information retrieval where the document set is associated with a hierarchy. Let us assume that each query has an exact match document, e.g., for a query “Sandals for kids”, the document “Kid’s sandals” from the document set illustrated in Figure 1 is considered an exact match. Then, the relevant document set 𝑆(𝑞𝑖) contains both its exact match and all its descendants in the hierarchy. Formally, HR is defined as follows.
+Definition 2.1 (Hierarchical Retrieval (HR)). Assume that there is a directed acyclic graph (DAG), denoted as G = (V, E), associated with the document set D, i.e., with V = D and E ⊆ V × V. Also, assume that there is a 𝐸 : Q → D, where 𝐸(𝑞𝑖) is referred to as the exact match to 𝑞𝑖. Then, HR refers to information retrieval with the relevant documents given by 𝑆(𝑞𝑖) = {𝑥 ∈ D : 𝑥 is reachable from 𝐸(𝑞𝑖)} for each 𝑖 ∈ {1, . . . , 𝑛}.
+
+Dual Encoders (DEs). DEs are embedding models that map the query and document to the same
+embedding space, where the inner product may be used to measure relevance. A DE is composed of a query encoder, denoted as 𝑓𝑞(·, 𝜽𝑞) : Q → ℝ𝑑, and a document encoder, denoted as 𝑓𝑥 (·, 𝜽𝑥) : D → ℝ𝑑,
+where 𝜽𝑞 and 𝜽𝑥 are parameters to be learned from data.
+
+Following standard practice in information retrieval, we assume that the HR training dataset is composed of matching query-document pairs. That is, there is a collection of pairs {(𝑞(𝑘) , 𝑥 (𝑘) )}𝑁𝑘=1 ⊆ Q × D that satisfies 𝑥 (𝑘) ∈ 𝑆(𝑞(𝑘) ) for each 𝑘 = 1, . . . , 𝑁. The parameters 𝜽𝑞 and 𝜽𝑥 of a DE may be
+
+learned from minimizing the following softmax loss on the training dataset:
+
+1 ∑𝑁︁
+
+𝑫(𝜽𝑥 )⊤ · 𝑓𝑞 (𝑞(𝑘) , 𝜽𝑞)
+
+𝐿(𝜽𝑞, 𝜽𝑥) =
+
+CE 𝜎
+
+, 1𝑘 ,
+
+(1)
+
+𝑁
+
+𝑇
+
+𝑘=1
+
+where
+
+𝑫(𝜽𝑥) = 𝑓𝑥 (𝑥 (1) , 𝜽𝑥), . . . , 𝑓𝑥 (𝑥 (𝑁 ) , 𝜽𝑥) ∈ ℝ𝑑×𝑁
+
+(2)
+
+is a matrix containing all document embeddings as columns. In above, 1𝑘 ∈ ℝ𝑁 is a vector with the 𝑘-th entry being 1 and all other entries being 0, and 𝑇 is a hyper-parameter that is fixed to be 20 in all our experiments. CE means the cross-entropy loss and 𝜎() represents the softmax function.
+
+Our ultimate objective is to understand whether a DE from optimizing Equation (1) solves the HR problem. The answer will necessarily depend on multiple factors including the specificity of G, the architecture of 𝑓𝑞(·, 𝜽𝑞) and 𝑓𝑥 (·, 𝜽𝑥), and the optimization algorithm, etc, signficantly complicating the study. In the following, we start with a study of the geometry of HR which is agnostic to the choice of model architecture and optimization procedure.
+
+3. The Geometry of Dual Encoders for Hierarchical Retrieval
+This section studies the following problem: Is there a collection of query and document embeddings that solves the HR? An affirmative answer to this question asserts the existence of embeddings that solve HR, which is a necessary condition for the minimizer of Equation (1) to solve HR.
+To answer this question, we start with considering the special case when the embedding dimension 𝑑 is as large as the size 𝑚 of the document set. Here, one may simply take 𝒙 𝑗 = 1𝑗 as the embedding
+
+4
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+for each 𝑥 𝑗. Subsequently, we set the query embedding for each 𝑞𝑗 as 𝒒𝑖 = 𝑗∈𝑆(𝑞𝑖) 𝒙 𝑗. It can be verified that ⟨𝒒𝑖, 𝒙 𝑗⟩ take a value 1 if 𝑗 ∈ 𝑆(𝑞𝑖), and 0 otherwise, i.e., these embeddings solve HR.
+
+Algorithm 1 A constructive algorithm for Hierarchical Retrieval
+1: Input: A query set Q = {𝑞𝑖}𝑛𝑖=1, a document set D = {𝑥 𝑗}𝑚𝑗=1, and relevant document sets {𝑆(𝑞𝑖) ⊆ D}𝑛𝑖=1.
+2: Sample {𝒙 𝑗}𝑚𝑗=1 ⊆ ℝ𝑑 i.i.d. from the standard Gaussian distribution. 3: For each 𝑗, take 𝒙 𝑗 = ∥𝒙𝑗 ∥2 𝒙𝑗 . 4: For each 𝑖, take 𝒒𝑖 = ∥𝒒𝑖 ∥2 𝒒𝑖 , where 𝒒𝑖 = 𝑗∈𝑆(𝑞𝑖 ) 𝒙 𝑗. 5: Output: Query embeddings {𝒒𝑖}𝑛𝑖=1 and document embeddings {𝒙 𝑗}𝑚𝑗=1.
+
+The construction above is feasible only when the embedding dimension 𝑑 is allowed to be very large. Towards deriving a tighter bound, we consider another construction where the document embeddings are drawn from a Gaussian distribution, in lieu of the one-hot embeddings, see Algorithm 1. We will use that random embeddings are with a high probability sufficiently uncorrelated to each other to show that this construction provides a solution to HR with a much relaxed requirement on 𝑑. This is stated formally below.
+
+Theorem 3.1. Consider the HR problem in Theorem 2.1, and fix any 𝜖 ∈ (0, 1/2). Assume that the hierarchy G satisfies |𝑆(𝑞𝑖)| ≤ 𝑠, ∀𝑖 ∈ [𝑛] for some integer 𝑠. Then there exists a dimension 𝑑 with
+
+𝑑 = 𝑂(max{𝑠 log 𝑚, 1/𝜖2 log 𝑚}),
+
+(3)
+
+a threshold1 𝑟, and a collection of embeddings {𝒒𝑖}𝑛𝑖=1, {𝒙 𝑗}𝑚𝑗=1 ⊂ ℝ𝑑, such that for all 𝑖 ∈ [𝑛] and 𝑗 ∈ [𝑚] the following holds:
+
+• Case 1: If 𝑑 𝑗 ∈ 𝑆(𝑞𝑖), then ⟨𝒒𝑖, 𝒙 𝑗⟩ ≥ 𝑟 + 𝜖. • Case 2: If 𝑑 𝑗 ∉ 𝑆(𝑞𝑖), then ⟨𝒒𝑖, 𝒙 𝑗⟩ ≤ 𝑟 − 𝜖.
+
+Moreover, the vectors {𝒒𝑖}𝑛𝑖=1, {𝒙 𝑗}𝑚𝑗=1 can be constructed to satisfy these properties in time 𝑂˜(𝑚𝑑 + 𝑛𝑠𝑑) with high probability.
+
+Theorem 3.1 asserts that the required embedding dimension is on the order specified in Equation (3). This order is logarithmic in 𝑚, implying that a small dimension can be sufficient for handling a large document set. For a fixed 𝜖 and 𝑚, this order is linear in 𝑠, the maximum number of relevant documents per query, which in practice is usually much smaller than 𝑚. For instance, when G is a perfect tree with edges pointing from each child node to its parent node, 𝑠 becomes the number of levels of the tree and is on the order of log(𝑚); plugging this into Equation (3) we obtain 𝑀 = 𝑂((log 𝑚)2), which again scales benignly with 𝑚. Finally, Equation (3) is independent of 𝑛, the number of queries. This is because the theorem only requires us to handle a subset of queries {𝒒𝑖}𝑖∈𝑇 , 𝑇 ⊆ {1, . . . , 𝑛} for which their relevant document sets are distinct from each other, i.e., 𝑆(𝒒𝑖) ≠ 𝑆(𝒒𝑗), ∀{𝑖, 𝑗} ⊆ 𝑇 and 𝑖 ≠ 𝑗. For HR, the size of such a 𝑇 is upper bounded by 𝑚 according to Theorem 2.1.
+The construction procedure in Algorithm 1 requires knowing the sets {𝑆(𝑞𝑖)}𝑖=1,...,𝑚. In practice, these sets are often not directly observed. Instead, it is often the case that the training dataset is composed of a set of matching query-document pairs, see Section 2. Hence, while Theorem 3.1 establishes the correctness of such embeddings, Algorithm 1 may not be applicable in practice. Instead, the embeddings are often learned by optimizing a proper training loss such as Equation (1). Understanding if such learned embeddings solve the HR problem is the subject of the next section.
+1This is a universal threshold 𝑟 that separates the matching documents from no-matching ones for all queries. In practice, it is often sufficient to have a query-dependent threshold.
+
+5
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+(a) Varying 𝐻 for 𝑊 = 2
+
+(b) Varying 𝑊 for 𝐻 = 4
+
+Figure 2 | Comparing learned (i.e., from optimizing Equation (1)) vs handcrafted (i.e., from running Algorithm 1) DEs for a HR task defined on a 𝑊, 𝐻-tree. For each (𝐻, 𝑊) pair, we experiment with an increasing sequence of embedding dimensions 𝑑 until the retrieval is successful, and report that
+dimension on the y-axis. Successful retrieval means that recall is above 95% on the evaluation set. Dotted lines are least squares fittings of the Handcrafted.
+
+Comparing Theorem 3.1 with Prior Work Guo et al. (2019). Our Theorem 3.1 relates to Guo et al. (2019) which also establishes logarithmic bounds on embedding dimensions. However, Guo et al. (2019) addresses a different problem. The focus of Guo et al. (2019) is multi-label classification, for which their Theorem 2.1 establishes a bound for representing the multi-label set. In contrast, our Theorem 3.1 specifically addresses HR, proving the existence of asymmetric query and document embeddings in Euclidean space that satisfy the specific ancestor-retrieval property. That being said, Guo et al. (2019)’s result may be applied to HR by associating their multi-label set with a hierarchy. With this specification, their result states the following (informally):
+There is a dimension 𝑑 = 𝑂(𝑠 log 𝑚) such that for 𝑑 𝑗 ∈ 𝑆(𝑞𝑖), it has ⟨𝒒𝑖, 𝒙 𝑗⟩ > 2/3, and for 𝑑 𝑗 ∉ 𝑆(𝑞𝑖), it has ⟨𝒒𝑖, 𝒙 𝑗⟩ < 1/3.
+Comparing to this result which has a fixed gap of 1/3 between matching and no-matching pairs, ours in Theorem 3.1 holds for an arbitrary gap of 2𝜖, hence is more general.
+
+4. Towards Learning Dual Encoders for Hierarchical Retrieval
+This section studies whether learned DEs from optimizing Equation (1) can solve HR. To understand the effect of depth and size of the hierarchy, this section focuses on synthetic, tree-structured hierarchies. Experiments on real hierarchies from practical data are provided in Section 6.
+A toy setup. We consider perfect trees, where each non-leaf node has the same number child nodes and all tree leaf nodes are at the same level. A perfect tree is described by two parameters, namely the number of child nodes for each non-leaf node (i.e., the width 𝑊), and the number of levels (i.e., the height 𝐻). We use 𝐻, 𝑊-tree to refer to a perfect tree with width 𝑊 and height 𝐻.
+Given an 𝐻, 𝑊-tree, we consider a HR problem where both the query set Q and the document set D have a one-to-one correspondence to the set of all nodes of the tree2. Then, the hierarchy associated with D is naturally described by a DAG with edges pointing from each child node to its parent node. Hence, the relevant document set 𝑆(𝑞) for a query 𝑞 ∈ Q contains the document that corresponds to the same node in the tree as 𝑞, as well as all nodes reachable from it. We consider solving this HR problem by a lookup-table DE, a standard choice for studying embedding models (An
+2Excluding the root node since if it were included then all queries should trivially retrieve it.
+
+6
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+(a) Regular sampling of train data (b) Re-balanced train data
+
+(c) Pretraining-finetuning
+
+Figure 3 | Recall on query-document pairs at varying distances ∈ {0, 1, 2} (denoted as qd dist in the legend). We train DEs with 𝑑 = 3 dimensional embeddings via optimizing Equation (1) on a tree with 𝐻 = 4 and 𝑊 = 5. (a) Regular training data. The recall for (𝑞, 𝑥) pairs with distances 1 and 2 are low. (b) Re-balanced training data, where (𝑞, 𝑥) pairs with a distance of 1 or 2 are up-sampled. The recall for such pairs are significantly improved at the cost of a drastic decrease in recall for pairs with distance 0. (c) Pretrain on regular data for 10k steps then finetune on long distance pairs for another 10k steps. Recalls at all distances are close to 100% near 15k steps. In particular, the overall recall (i.e., averaged over the 3 distances) improves to 97%, compared to 66% in (a) and 70% in (b).
+
+et al., 2023; Dhingra et al., 2018; Parmar and Narayan, 2022). In such a DE, the encoders 𝑓𝑞 and 𝑓𝑥 are lookup tables with one embedding associated with each 𝑞 ∈ Q and 𝑥 ∈ D, respectively.
+We sample training data using the following procedure. First, a query 𝑞 is sampled by drawing a node with equal probabilities from all nodes of the tree. Then, we obtain a matching document to 𝑞 by sampling a node with equal probabilities from the set of all of its matching documents. Training is conducted by optimizing Equation (1) with gradient descent. Evaluation is conducted on data sampled using the same procedure described above. We use the standard recall metric, which is the percentage of (𝑞, 𝑥) pairs in the evaluation set for which 𝑥 is one of the 𝑘 documents that have the largest inner product score with 𝑞, with 𝑘 = |𝑆(𝑞)| being the total number of relevant documents for 𝑞. We are interested in the smallest embedding dimension (i.e., 𝑑) sufficient for a successful retrieval. To obtain this dimension, for each (𝐻, 𝑊), we experiment with an increasing sequence of 𝑑 and terminate the process when the evaluation recall metric is >95%.
+Results. In Figure 2, we report the dimension 𝑑 needed for a successful retrieval as a function of (𝐻, 𝑊). Towards that, we vary 𝐻 for a fixed 𝑊 = 2 on the left, and vary 𝑊 for a fixed 𝐻 = 4 on the right. Both cases show that a reasonably large 𝑑 is sufficient even for 𝐻 up to 10 and 𝑊 up to 30.
+We further compare such learned embeddings with handcrafted ones from Algorithm 1. From Theorem 3.1, the handcrafted embeddings solve HR with 𝑑 = 𝑂(𝑠 log 𝑚). For 𝐻, 𝑊-trees, we have 𝑠 = 𝐻, 𝑚 = 𝑂(𝑊 𝐻−1), which gives 𝑑 = 𝑂(𝐻2 log 𝑊). This aligns well with our simulation results which we report in Figure 2. For example, in Figure 2a, we perform a line fitting in the log-log space and obtain a slope of 2.29, whereas the slope derived from 𝑑 = 𝑂(𝐻2 log 𝑊) is 2. In Figure 2b, we perform a line fitting in the space of log(𝑊) and obtains a slope of 16.5, whereas the slope derived from 𝑑 = 𝑂(𝐻2 log 𝑊) is 16. Finally, Figure 2 shows that that learned embeddings achieve successful retrieval with a much smaller 𝑑 compared to our handcrafted embeddings.
+
+5. Improving Dual Encoders for Hierarchical Retrieval
+With the establishment that standard training of DEs solves HR, this section takes one step further and asks the following practical question: Can we improve our training algorithm to minimize the dimension required for solving HR? We approach this by examining the failure cases of learned
+
+7
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+embeddings from standard training when the dimension is insufficient. This leads us to discover a common failure case called the lost-in-the-long-distance phenomenon. In addressing this issue, we present a pretrain-finetune recipe that leads to an improved retrieval quality.
+5.1. Lost-in-the-Long-Distance
+We again consider HR on a 𝐻, 𝑊-tree as described in Section 4, but focus on a particular case where standard training of DE fails to retrieve relevant documents. In particular, we consider the case of 𝐻 = 4, 𝑊 = 5, and 𝑑 = 3. Towards understanding this failure case, we introduce the notion of distance between a matching pair (𝑞, 𝑥), defined as the difference between the level of the tree nodes corresponding to 𝑞 and 𝑥. For example, a distance of 0 means that 𝑞 and 𝑥 correspond to the same node, and a distance of 1 means that 𝑥 corresponds to the parent node of 𝑞.
+For the tree with 𝐻 = 4, 𝑊 = 5, any query that corresponds to a leaf node has 3 matching documents with distance 0, 1, and 2, respectively (recall that the root node does not correspond to any query / document). We evaluate recall for query-document pairs at these three distances separately, and report results in Figure 3a. It can be seen that the learned embeddings achieve almost perfect retrieval for pairs with a distance 0, but do not work well for pairs with distance 1 and 2. We refer to the phenomenon that matching documents at longer distances to the query tend to be lost in retrieval as lost-in-the-long-distance.
+Failure of re-balanced sampling. A tempting approach to alleviate lost-in-the-long-distance is to re-balance the training set, so that more pairs of longer distances are included. To test this, we consider two sampling distributions:
+• Regular sampling which refers to the sampling procedure described in Section 4. For 𝐻 = 4, 𝑊 = 5, distances 0, 1, and 2 pairs are sampled with probabilities 38%, 35%, and 27%, respectively.
+• Heavy-Tail sampling, where pairs with distances 0, 1, and 2 are sampled with probabilities 0%, 50%, and 50%, respectively.
+By mixing regular and heavy-tail sampling with a ratio of 𝑝 : 1 − 𝑝, we may create training datasets with a controllable ratio between short and long distance pairs. In Figure 3b we report the result with 𝑝 = 0.03. It can be seen that the recall for pairs with distance 1 and 2 are significantly improved and reaches a level of beyond 80% towards the end of training. However, this comes at the cost of a significant recall degradation on distance 0 pairs. Finally, this tradeoff cannot be fixed by tuning 𝑝, as illustrated in Figure C.1 (see Appendix) which contains further results with varying 𝑝 in {0.01, 0.1, 0.3}.
+5.2. Main Algorithm: A Pretrain-Finetune Recipe
+We introduce a pretrain-finetune recipe to address the challenge of lost-in-the-long-distance. This approach simply means that the DE is first pretrained on a standard training set, then finetuned on a long-distance dataset. Notably, the finetuning stage requires long-distance data only and does not require tuning the ratio of short vs long distance pairs as a hyperparameter.
+We conduct an experiment with pretraining and finetuning using data from regular and heavy-tail sampling, respectively, and report the results in Figure 3c. We observe that in the finetuning stage, the retrieval quality for pairs with distance 1 and 2 quickly improves and reaches nearly 100% at 15,000 train step. Notably, at this point the recall for distance 0 pairs remains close to 100%, and the overall recall (i.e., averaged over pairs of all distances) is 97%, far exceeding the regular data sampling (which has 66% recall) or re-balanced data sampling (which has 70% near 17000 steps). Finally, after 15,000 steps the quality of distance 0 pairs starts to decline. This is expected since the
+8
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+finetuning stage does not have any training data with distance 0. However, this quality degradation does not compromise the practicality of our approach since one can apply early stopping during the finetuning stage by monitoring the model quality on a validation set.
+Discussion on data requirement. In applying the pretrain-finetune recipe, a practical question is how to construct the long-distance dataset for finetuning when the underlying hierarchy, and thus the query-document distances, is unobserved as is typical in many retrieval applications. The key point is that our recipe does not require precise path lengths or knowledge of the full DAG. Instead, it only requires a practical proxy for distance that can be used to partition the training data into short-distance and long-distance subsets. This proxy is often readily available from the data or the problem definition itself. For instance, in our shopping dataset experiment (see Section 6), we treat Exact query-product matches as the short-distance set for pretraining and Substitute matches as the long-distance set for finetuning. In other scenarios, this partition could be based on whether a document is a direct parent versus a more remote ancestor in a known but partial hierarchy. Finally, human annotation can be another viable path towards obtaining such a dataset, which is a significantly easier task than annotating the full DAG. This flexibility allows our pretrain-finetune recipe to be applied in a wide range of practical settings where the full hierarchy is not explicitly given.
+Finally, our recipe implicitly assumes that there is sufficient short-distance data to learn a meaningful initial representation during pretraining. If this data is extremely sparse, pretraining may be ineffective, and a mixed training approach might indeed perform better.
+6. Experiments on Real Data
+In this section, we experiment with the pretrain-finetune recipe on two real datasets, namely WordNet and ESCI. On WordNet, which is a large lexical database of English, our method improves the retrieval of hypernyms that are several levels more general than the query. On ESCI, which is a shopping queries dataset where each query has both exact matching products and substitute products, our method enables a single DE to retrieve both categories at a higher recall.
+6.1. WordNet Experiments
+WordNet (Miller, 1995) is a large lexical database of English where the nouns, verbs, adjectives, and adverbs are grouped into synsets that represent synonyms. The set of synsets is equipped with a binary hypernym relation, e.g., “chair” is the hypernym of “armchair”. This relation may be described by a DAG with nodes corresponding to synsets and edges pointing from a synset to its hypernym synset.
+In our experiments, we use the 82,115 noun synsets as our document set D. We take the query set Q to be the same as D. For each query 𝑞 ∈ Q, the matching documents 𝑆(𝑞) include itself, its hypernyms, and hypernyms of all hypernyms, etc. For example, matching documents for the query “cat” include “cat”, “feline”, “carnivore”, “placental”, etc. In practice, we make a slight modification to this definition by restricting to (𝑞, 𝑑) pairs with a distance of at most 8. Here, the distance between two synsets is defined as the length of the shortest path that connects them in the hypernym DAG.
+Unless specified otherwise, we use the following regular sampling procedure to generate training and evaluation data. First, a query 𝑞 is sampled uniformly at random among all 82,115 synsets. Then, a document is sampled uniformly at random from the set of all matching documents to 𝑞.
+Lost-in-the-long-distance. We train a lookup-table DE by optimizing Equation (1) using SGD for 50k iterations on 10M matching pairs from regular sampling. We use learning rate 0.5, momentum 0.9, and batch size 4096. To evaluate the learned DE, we use the recall metric defined as the percentage
+9
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+Table 1 | Quality of DE for HR on WordNet. Regular sampling refers to first sampling a query then a document uniformly at random from the set of all matching documents. Rebalanced means a mixture of data from regular sampling with a proportion 𝑝 and a heavy-tail data of proportion 1 − 𝑝 where long-distance pairs are upsampled proportionally to their distance. Pretrain-finetune (ours) refers to first pretraining on regular sampling data then finetuning on heavy-tail data. Quality is measured by averaged recall on a test set. Our method (i.e., pretrain-finetune) enables good retrieval quality for query-document pairs at all distances.
+
+Method
+
+0
+
+Embedding dimension = 16:
+
+Regular sampling
+
+100.0
+
+Pretrain-finetune (Ours) 100.0
+
+Embedding dimension = 32:
+
+Regular sampling
+
+100.0
+
+Pretrain-finetune (Ours) 100.0
+
+Embedding dimension = 64:
+
+Regular sampling
+
+100.0
+
+Rebalanced (p=0.01)
+
+0.6
+
+Rebalanced (p=0.03)
+
+2.8
+
+Pretrain-finetune (Ours) 100.0
+
+1
+62.8 57.1
+90.8 77.3
+93.9 46.9 49.6 90.8
+
+2
+46.6 46.4
+79.2 76.5
+86.9 69.7 69.4 91.6
+
+Query-document distance
+
+3
+
+4
+
+5
+
+6
+
+7
+
+33.9 20.9 11.9 7.2 2.9 47.9 50.2 53.6 53.1 47.3
+
+62.3 46.4 31.8 20.1 14.8 80.4 83.5 84.2 84.3 80.1
+
+76.8 67.2 64.2 92.7
+
+60.2 56.3 52.1 92.6
+
+46.8 44.7 43.2 91.8
+
+36.1 39.4 37.7 90.9
+
+28.8 34.9 31.8 87.3
+
+8
+1.0 32.0
+8.4 67.3
+19.4 36.6 32.7 75.7
+
+Min
+1.0 32.0
+8.4 67.3
+19.4 0.6 2.8 75.7
+
+Overall
+43.0 60.1
+61.8 87.3
+71.4 41.8 40.7 92.3
+
+of (𝑞, 𝑥) pairs for which 𝑥 is one of the 𝑘 documents that have the largest inner product score with 𝑞, with 𝑘 = |𝑆(𝑞)|. We use a validation set of size 10k to pick the best checkpoint. Then, we report in Table 1 the recall computed on a test set of size 10k, including an overall recall that is averaged over all pairs in the test set, and recall on slices with different query-document distances (i.e., 0, 1, ..., 8). For a varying dimension of the embedding space in {16, 32, 64}, we observe that quality degrades rapidly as a function of the distance between the query and document. A similar qualitative behavior is also observed in He et al. (2024).
+
+Rebalanced data sampling is insufficient. The lostin-the-long-distance phenomenon may be attributed to the distribution of data from regular sampling, which is
+biased towards pairs with short distances (see Figure 4).
+A natural choice is to use a heavy-tail sampling of the training dataset, which works as follows. First, a query 𝑞
+is sampled uniformly at random from all synsets. Then, the matching document for 𝑞 is sampled with a probability proportional to the distance between the document and 𝑞.
+
+We create a rebalanced dataset where each batch has 𝑝 × 4096 pairs from regular sampling and (1 − 𝑝) × 4096 from heavy-tailed data. Results with 𝑝 = 0.01 or 𝑝 = 0.03
+for embedding dimension 64 are reported in Table 1. It
+
+Figure 4 | Distribution of regular sampling and heavy-tail data over varying query-document distances on WordNet.
+
+can be seen that rebalanced data improves the retrieval
+
+quality on long distance pairs but at the cost of compromising quality on short distance pairs, aligning
+
+with the observation in Section 5.
+
+Our pretrain-finetune recipe offers a solution. We pretrain the DE on data from normal sampling, then finetune on the heavy-tail dataset. During finetuning, we reduce the learning rate to 1,000 times
+
+10
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+Table 2 | Spearman correlation score 𝜌 on Hyperlex for DE trained on WordNet. We used 5-dimensional
+embeddings to be consistent with prior work. Our method (i.e., pretrain-finetune) obtains the best correlation score.
+
+Method 𝜌
+
+OrderEmb Vulić et al. (2017)
+0.195
+
+WN-Basic Vulić et al. (2017)
+0.240
+
+WN-Euclidean Nickel and Kiela (2017)
+0.389
+
+Regular sampling
+0.350
+
+Pretrainfinetune (ours)
+0.415
+
+smaller and increase the temperature in Equation (1) from 20 to 500; an ablation study on these two hyper-parameters is provided in Section E. In both of the two stages, we pick the best checkpoint on the validation set. The results in Table 1 demonstrate a significant retrieval quality improvement for long distance document, leading to much higher overall recall. We further provide an example of the retrieved documents for selected queries in Table C.1. These examples show that regular sampling tends to miss the long distance pairs and the pretrain-finetune recipe fixes many such errors.
+Hypernymy evaluation. We supplement our evaluation by using HyperLex (Vulić et al., 2017), a dataset for evaluating how well a model captures the hyponymy-hypernymy relation between concept pairs. Here, we evaluate our DE models learned on WordNet using regular sampling as well as the pretrain-finetune recipe. We also compare with results from previous papers and report the results in Table 2. This result confirms the effectiveness of the pretrain-finetune recipe.
+6.2. Experiment on ESCI Shopping Dataset
+ESCI (Reddy et al., 2022) is a public Amazon search dataset, containing 2.6 million manually labeled query-product relevance judgements in four categories, namely, Exact, Substitute, Complement, and Irrelevant. For our experiment, we focus on Exact, where the product is relevant for the query and satisfies all query specifications, and Substitute where the product is somewhat relevant and fails to fulfill some aspects of the query. We consider the task of retrieving, given a user query, both Exact and Substitute documents by a DE3.
+Training and evaluation data. ESCI comes with a train vs test data splitting. We take the Exact and Substitute pairs from the train split as our training sets, denoted as 𝐸train and 𝑆train, respectively. 𝐸train and 𝑆train contain 1.3 million and 0.4 million matches, respectively. We sample 5k Exact and 2k Substitute pairs from the test split for evaluating our model. These two sets are denoted as 𝐸test and 𝑆test, respectively. To evaluate our model, we use
+Recall@𝑘 = #{(𝑞, 𝑑) ∈ 𝑇 | 𝑑 is among the top-𝑘 matches for 𝑞} , (4) |𝑇 |
+where 𝑇 is either 𝐸test or 𝑆test. In words, it is the percentage of (𝑞, 𝑥) pairs in the set 𝑇 with the property that the inner product score between 𝑞 and 𝑥 is among the 𝑘 largest ones across all 𝑥 ∈ D. Here, D is all products provided as part of ESCI and has a size of approximately 1 million.
+We use the SentencePiece tokenizer, Transformers for the encoder models in DE, and the Lazy Adam optimizer (Laz). Details are provided in Section B.
+3This task may not fit exactly the HR problem definition. However, the similarity to HR is that a Substitute match may be considered as having a longer distance to the query than an Exact match, leading to the same lost-in-long-distance challenge as HR.
+
+11
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+(a) Results on Exact
+
+(b) Results on Substitute
+
+Figure 5 | Quality of Exact (left) and Substitute (right) retrieval on the ESCI dataset using a single DE. By first pretraining on Exact then finetuning on Substitute matches, our pretrain-finetune recipe performs better than naively joint training on Exact and Substitute matches.
+
+Methods and Results. A naive approach for this task is Joint Training, where DE is trained on the union of 𝐸train and 𝑆train. We compare this with our pretrain-finetune recipe, where a DE is pretrained on 𝐸train then finetuned on 𝑆train. The results are presented in Figure 5 on Exact matches (Left) and
+Substitute matches (Right). It shows that the pretrain-finetune recipe performs better than joint training in terms of recall@k for varying values of 𝑘 ∈ {100, 1000, 10000}.
+
+7. Conclusion
+This paper studies the theory and practice of dual encoders (DE) for hierarchical retrieval (HR), the task where the document set is organized into a hierarchy. Through a geometric analysis, we first validated rigorously that DEs are capable of solving the HR problem despite the constraints from the Euclidean geometry. We then demonstrated through experiments that such DEs can be found in practice via standard DE training. Towards improving the practical performance of DE, we introduced a pretrain-finetune recipe which addresses the challenge associated with long-distance pairs. Finally, the effectiveness of this recipe is verified on real datasets including WordNet and ESCI shopping queries.
+
+References
+Amazon Ads. https://advertising.amazon.com/help/GHTRFDZRJPW6764R. Accessed: 2024-
+12-15.
+Google Ads. https://support.google.com/google-ads/answer/11586965?hl=en#: ~:text=A%20keyword%20match%20type%20that,specific%20form%20of%20the% 20meaning. Accessed: 2024-12-15.
+Lazy Adam. https://www.tensorflow.org/addons/api_docs/python/tfa/optimizers/ LazyAdam. Accessed: 2025-1-24.
+Microsoft Ads. https://help.ads.microsoft.com/apex/index/3/en-us/50822#! Ac-
+cessed: 2024-12-15.
+K. An, C. Zheng, B. Gao, H. Zhao, and B. Chang. Coarse-to-fine dual encoders are better frame identification learners. In Findings of the Association for Computational Linguistics: EMNLP 2023, pages 13455–13466, 2023.
+B. Athiwaratkun and A. G. Wilson. Hierarchical density order embeddings. In International Conference on Learning Representations, 2018.
+12
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+T. Brown, B. Mann, N. Ryder, M. Subbiah, J. D. Kaplan, P. Dhariwal, A. Neelakantan, P. Shyam, G. Sastry, A. Askell, et al. Language models are few-shot learners. Advances in neural information processing systems, 33:1877–1901, 2020.
+W.-C. Chang, X. Y. Felix, Y.-W. Chang, Y. Yang, and S. Kumar. Pre-training tasks for embedding-based large-scale retrieval. In International Conference on Learning Representations, 2020a.
+W.-C. Chang, Y. Felix X, Y.-W. Chang, Y. Yang, and S. Kumar. Pre-training tasks for embedding-based large-scale retrieval. In International Conference on Learning Representations, 2020b.
+F. Chern, B. Hechtman, A. Davis, R. Guo, D. Majnemer, and S. Kumar. Tpu-knn: K nearest neighbor search at peak flop/s. Advances in Neural Information Processing Systems, 35:15489–15501, 2022.
+T. Chheda, P. Goyal, T. Tran, D. Patel, M. Boratko, S. S. Dasgupta, and A. Mccallum. Box embeddings: An open-source library for representation learning using geometric structures. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing: System Demonstrations, pages 203–211, 2021.
+B. Dhingra, C. Shallue, M. Norouzi, A. Dai, and G. Dahl. Embedding text in hyperbolic spaces. In Proceedings of the Twelfth Workshop on Graph-Based Methods for Natural Language Processing (TextGraphs-12), pages 59–69, 2018.
+J. Donahue, Y. Jia, O. Vinyals, J. Hoffman, N. Zhang, E. Tzeng, and T. Darrell. Decaf: A deep convolutional activation feature for generic visual recognition. In International conference on machine learning, pages 647–655. PMLR, 2014.
+O. Ganea, G. Bécigneul, and T. Hofmann. Hyperbolic entailment cones for learning hierarchical embeddings. In International conference on machine learning, pages 1646–1655. PMLR, 2018.
+C. Guo, A. Mousavi, X. Wu, D. N. Holtmann-Rice, S. Kale, S. Reddi, and S. Kumar. Breaking the glass ceiling for embedding-based classifiers for large output spaces. Advances in Neural Information Processing Systems, 32, 2019.
+J. Guo, Y. Fan, Q. Ai, and W. B. Croft. A deep relevance matching model for ad-hoc retrieval. In Proceedings of the 25th ACM international on conference on information and knowledge management, pages 55–64, 2016.
+R. Guo, P. Sun, E. Lindgren, Q. Geng, D. Simcha, F. Chern, and S. Kumar. Accelerating large-scale inference with anisotropic vector quantization. In International Conference on Machine Learning, pages 3887–3896. PMLR, 2020.
+Y. He, Z. Yuan, J. Chen, and I. Horrocks. Language models as hierarchy encoders. arXiv preprint arXiv:2401.11374, 2024.
+J. Johnson, M. Douze, and H. Jégou. Billion-scale similarity search with gpus. IEEE Transactions on Big Data, 7(3):535–547, 2019.
+B. Laurent and P. Massart. Adaptive estimation of a quadratic functional by model selection. Annals of statistics, pages 1302–1338, 2000.
+A. Menon, S. Jayasumana, A. S. Rawat, S. Kim, S. Reddi, and S. Kumar. In defense of dual-encoders for neural ranking. In International Conference on Machine Learning, pages 15376–15400. PMLR, 2022.
+13
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+G. A. Miller. Wordnet: a lexical database for english. Communications of the ACM, 38(11):39–41, 1995.
+B. Mitra, N. Craswell, et al. An introduction to neural information retrieval. Foundations and Trends® in Information Retrieval, 13(1):1–126, 2018.
+M. Nickel and D. Kiela. Poincaré embeddings for learning hierarchical representations. Advances in neural information processing systems, 30, 2017.
+M. Ou, P. Cui, J. Pei, Z. Zhang, and W. Zhu. Asymmetric transitivity preserving graph embedding. In Proceedings of the 22nd ACM SIGKDD international conference on Knowledge discovery and data mining, pages 1105–1114, 2016.
+M. Parmar and A. Narayan. Hyperbox: A supervised approach for hypernym discovery using box embeddings. In Proceedings of the Thirteenth Language Resources and Evaluation Conference, pages 6069–6076, 2022.
+C. Raffel, N. Shazeer, A. Roberts, K. Lee, S. Narang, M. Matena, Y. Zhou, W. Li, and P. J. Liu. Exploring the limits of transfer learning with a unified text-to-text transformer. Journal of machine learning research, 21(140):1–67, 2020.
+C. K. Reddy, L. Màrquez, F. Valero, N. Rao, H. Zaragoza, S. Bandyopadhyay, A. Biswas, A. Xing, and K. Subbian. Shopping queries dataset: A large-scale esci benchmark for improving product search. arXiv preprint arXiv:2206.06588, 2022.
+B. Rozonoyer, M. Boratko, D. Patel, W. Zhao, S. S. Dasgupta, H. Le, and A. McCallum. Learning representations for hierarchies with minimal support. In The Thirty-eighth Annual Conference on Neural Information Processing Systems, 2024.
+A. Tifrea, G. Becigneul, and O.-E. Ganea. Poincare glove: Hyperbolic word embeddings. In International Conference on Learning Representations, 2018.
+I. Vendrov, R. Kiros, S. Fidler, and R. Urtasun. Order-embeddings of images and language. arXiv preprint arXiv:1511.06361, 2015.
+L. Vilnis and A. McCallum. Word representations via gaussian embedding. 2015.
+L. Vilnis, X. Li, S. Murty, and A. Mccallum. Probabilistic embedding of knowledge graphs with box lattice measures. In Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 263–272, 2018.
+I. Vulić, D. Gerz, D. Kiela, F. Hill, and A. Korhonen. Hyperlex: A large-scale evaluation of graded lexical entailment. Computational Linguistics, 43(4):781–835, 2017.
+M. Xu. Understanding graph embedding methods and their applications. SIAM Review, 63(4):825–853, 2021.
+W. X. Zhao, J. Liu, R. Ren, and J.-R. Wen. Dense text retrieval based on pretrained language models: A survey. ACM Transactions on Information Systems, 42(4):1–60, 2024.
+14
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+A. Proof of Theorem 3.1
+
+Here we present the proof that our construction of embeddings solves the dual encoder embedding construction task. In what follows, we write 𝑎 = 𝑥 ± 𝑦 to indicate the containment 𝑎 ∈ [𝑥 − 𝑦, 𝑥 + 𝑦], and we assume 𝑛 = 𝑚 without loss of generality.
+
+Proof of Theorem 3.1. We begin by drawing standard Gaussian vectors 𝑥1, . . . , 𝑥𝑛 ∼ N (0, 𝐼𝑑) ∈ ℝ𝑑 (we will later normalize them). Next, we set 𝑞𝑖 = √1|𝑆 𝑗 𝑖 | ∈𝑆𝑖 𝑥 𝑗 (here we abuse notation and think of 𝑆𝑖 ⊂ [𝑚] to be the corresponding indices). Note that, by stability of Gaussian random variables and independence of the 𝑥 𝑗’s, it follows that each coordinate of 𝑞𝑖 is distributed independently as a standard normal distributed (i.e. N (0, 1)). By standard 𝜒2 concentration (e.g. (Laurent and Massart, 2000, Lemma 1)), for any single Gaussian vector 𝑔 an√d value 𝜆 > 0, if 𝑔 ∼ N (0, 𝐼𝑑) is a vector of i.i.d. standard Gaussian variables, we have |∥𝑔∥22 − 𝑑| ≤ 2 𝑑𝜆 + 2𝜆 with probability at least 1 − 2 · 2−𝜆. Setting 𝜆 = 4 log 𝑛 and taking 𝑑 = Ω(log 𝑛) with a sufficiently large constant, we have
+√︁ Pr ∥𝑔∥22 − 𝑑 ≤ 5 𝑑 log 𝑛 ≥ 1 − 𝑛−4
+
+√︁
+
+√︁
+
+We can thus condition on ∥𝑥𝑖 ∥22 = 𝑑 ± 5 𝑑 log 𝑛 and ∥𝑞𝑖 ∥22 = 𝑑 ± 5 𝑑 log 𝑛 occurring for all 𝑖 ∈ [𝑛],
+
+which holds with probability at least 1 − 2𝑛−3 by a union bound over the 2𝑛 vectors. Call this event
+
+E1.
+
+Let 𝐸 be the edge set of the HR problem, namely, (𝑖, 𝑗) ∈ 𝐸 iff 𝑗 ∈ 𝑆𝑖. To furthe√r︁ analyze the construction, first define the event E2 that for all (𝑖, 𝑗) ∉ 𝐸, we have |⟨𝑞𝑖, 𝑥 𝑗⟩| ≤ 100 𝑑 log 𝑛. Also
+√︁ define the event E3 that for all (𝑖, 𝑗) ∈ 𝐸 we have |⟨ 𝑡∈𝑆𝑖\𝑗 𝑥𝑡, 𝑥 𝑗⟩| < 100 𝑑𝑠 log 𝑛.
+
+We first analyze Pr [E2]. If (𝑖, 𝑗) ∉ 𝐸, then 𝑞𝑖 and 𝑥 𝑗 are independent Gaussian vectors, thus by Gaussian stability we have
+
+√︂
+
+1/2
+
+√
+
+log(𝑛)
+
+√
+1
+
+|⟨𝑞𝑖, 𝑥 𝑗⟩| ∼ |𝑔| · ∥𝑥 𝑗 ∥2 ≤ |𝑔| 𝑑 1 + 5 𝑑
+
+≤ |𝑔| 𝑑 (1 + 100 )
+
+where 𝑔 ∼ N (0, 1) and we took 𝑑 = Ω(log 𝑛). Via the density function of a Gaussian, we have √︁
+Pr |𝑔| · ∥𝑥 𝑗 ∥2 > 100 𝑑 log 𝑛 < 1/𝑛4. Thus, by a union bound over at most 𝑛2 pairs, we have Pr [E2] > 1 − 1/𝑛2. For E3, note that for any 𝑖 ∈ [𝑛] with 𝑗 ∈ 𝑆𝑖, the vector 𝑡∈𝑆𝑖\𝑗 𝑥𝑡 is distributed like
+√︁ N (0, |𝑆𝑖| − 1 · 𝐼𝑑); namely each coordinate is i.i.d. Gaussian distributed with variance |𝑆𝑖| − 1. Thus
+
+∑︁ 𝑥𝑡, 𝑥 𝑗
+𝑡∈𝑆𝑖\ 𝑗
+
+√︁
+
+√
+
+∼ |𝑆𝑖 | − 1 · |𝑔| · ∥𝑥 𝑗 ∥2 < |𝑔| 𝑠𝑑 (1 + 100 1 )
+
+where again 𝑔 ∼ N (0, 1). Following the same argument as above yields Pr [E3] > 1 − 𝑛−2.
+
+In
+
+what
+
+follows,
+
+let
+
+𝛾
+
+=
+
+10·max{𝑠,
+
+1 𝜖2
+
+},
+
+and
+
+set
+
+the
+
+dimension
+
+𝑑
+
+=
+
+𝐶𝛾
+
+log
+
+𝑛
+
+for
+
+a
+
+sufficiently
+
+large
+
+con-
+
+stant 𝐶. Conditioned on E1, E2, E3, we claim that the vectors 𝑞1/∥𝑞1 ∥2, . . . , 𝑞𝑛/∥𝑞𝑛 ∥2, 𝑥1/∥𝑥1 ∥2, . . . , 𝑥𝑛/∥𝑥𝑛 ∥2
+
+15
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+(a) 𝑝 = 0.01
+
+(b) 𝑝 = 0.1
+
+(c) 𝑝 = 0.3
+
+Figure C.1 | Effect of re-balanced training data with a varying ratio 𝑝 between the regular and the heavy-tail data on retrieval quality.
+
+satisfy the desired properties with threshold 𝑟 = 4√1𝛾 . For case one, if 𝑗 ∈ 𝑆𝑖 we have
+
+𝑞𝑖 , 𝑥 𝑗 ∥𝑞𝑖 ∥2 ∥𝑥 𝑗 ∥2
+
+= 1 √︁ ∥𝑥 𝑗 ∥22 + ∑︁ 𝑥𝑡, 𝑥 𝑗
+
+∥𝑞𝑖 ∥2∥𝑥 𝑗 ∥2 |𝑆𝑖|
+
+𝑡∈𝑆𝑖\ 𝑗
+
+√︂
+
+22
+
+√︁
+
+4 200 log 𝑛
+
+≥ √ 𝑑 − 100 𝑑𝑠 log 𝑛 > √ − ·
+
+3𝑑 𝛾 3
+
+9𝛾 3
+
+𝑑
+
+(A.1)
+
+1 ≥√
+3𝛾 Where we used the bounds on 𝑑. Next, for case two, when 𝑗 ∉ 𝑆𝑖, using the events E1, E2, we have
+
+𝑞𝑖 , 𝑥 𝑗 ∥𝑞𝑖 ∥2 ∥𝑥 𝑗 ∥2
+
+1
+
+3 √︁
+
+150
+
+<
+
+⟨𝑞𝑖, 𝑥 𝑗⟩ ≤ 100 𝑑 log 𝑛 = √ ≤ 𝑟/2
+
+∥𝑞𝑖 ∥2∥𝑥 𝑗 ∥2
+
+2𝑑
+
+𝐶𝛾
+
+(A.2)
+
+Where we took 𝐶 > (2 · 4 · 150)2, which completes the proof as 𝑟/2 < 𝑟 − 𝜖. Finally, note for runtime,
+
+one needs only generate 𝑂(𝑚) 𝑑-dimensional Gaussian vectors, and then compute each 𝑞𝑖 which takes
+
+𝑂˜(𝑠𝑑) time each, thus the total time is 𝑂˜(𝑚𝑑 + 𝑛𝑠𝑑) as desired.
+
+□
+
+B. Implementation Details on ESCI Dataset
+Here we provide additional details for experiments on ESCI. We use the SentencePiece model to tokenize the queries and products which are fed to standard 8-layer Transformers as the architecture for the encoder models in DE. For the Transformer, we use model dimension 512, 8 attention heads, two-layer MLP with GELU activation and a hidden dimension of 4096 as the feedforward network. The output embeddings from the Transformer are mean-pooled and projected to 128 dimensions, followed by a normalization to the unit ℓ2 sphere as the final embedding. The model is trained with the Lazy Adam optimizer (Laz) with a warmup stage of 2000 steps to a learning rate of 1e-4, followed by a linear decay to 1e-6 at step 50000.
+
+C. Additional Experiments for the Toy Setup in Section 4
+In Figure C.1, we provide additional results complementing Figure 3b. These results reconfirm that rebalanced sampling cannot effectively solve the lost-in-the-long-distance issue.
+
+16
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+Table C.1 | Retrieved synsets for selected queries with 64-dimensional embeddings. For each of the three queries considered here, we list the relevant documents in the row “Groundtruth” with an ascending order in their distance to the query. For “Regular sampling” and “Pretrain-finetune”, we list top-𝑘 documents in an ascending order of 𝑘. Documents retrieved but not in the groundtruth are underscored.
+
+Query = “cat”
+
+Groundtruth
+
+cat
+
+Regular sampling cat
+
+Pretrain-finetune
+
+cat
+
+Query = “recliner” Groundtruth Regular sampling
+Pretrain-finetune
+
+recliner recliner recliner
+
+Query = “motorist”
+
+Groundtruth
+
+motorist
+
+Regular sampling motorist
+
+Pretrain-finetune motorist
+
+feline feline feline
+armchair armchair armchair
+driver operator operator
+
+carnivore carnivore chordate
+chair seat seat
+operator driver driver
+
+placental placental vertebrate
+seat chair chair
+causal agent floridian
+physical entity
+
+mammal mammal animal
+furniture furnishing furnishing
+physical entity foe
+causal agent
+
+vertebrate wildcat placental
+furnishing furniture furniture
+
+chordate domestic cat
+mammal
+instrumentality article
+instrumentality
+
+animal vertebrate carnivore
+artifact ware artifact
+
+organism canine wildcat
+whole toy dog cleaning pad
+
+D. Comparison with Hyperbolic Embeddings on WordNet
+
+Figure D.1 | Retrieval quality at varying query-document distances on WordNet, using hyperbolic embeddings of dimension 16. The peak performance is a recall of 45.4% obtained at step 49. This recall is higher than that with the Euclidean embeddings of the same dimension with standard training, which is at 43.0% (see Table 1), demonstrating the superiority of hyperbolic spaces. Nonetheless, it is worse compared to our pretrain-finetune recipe, which has a recall of 60.1%.
+For hierarchical relations, hyperbolic space is a popular choice for addressing the shortcomings of the Euclidean space (Nickel and Kiela, 2017). Unfortunately, practical large-scale retrieval systems cannot widely adopt hyperbolic embeddings, due to a lack of an efficient approximate k-nearest neighbor search algorithms in hyperbolic spaces. Nonetheless, for the purpose of scientifically understanding the capability of hyperbolic geometry for solving the HR problem, here we implement hyperbolic embeddings and perform experiments on the WordNet dataset.
+Specifically, we train 16-dimensional hyperbolic embeddings on the same 10M normal sampling data as in Section 6. Among many options for implementing hyperbolic embeddings, we use the reparameterization form in Dhingra et al. (2018), using a learning rate of 0.01. All other training details are the same as those for Euclidean embeddings.
+We evaluate the recall for query-document pairs at varying distances and report the results in Figure D.1. We see that hyperbolic embeddings struggle to obtain a good balance between pairs with short vs long distances. Specifically, the model first learns to retrieve pairs with short distances,
+17
+
+Hierarchical Retrieval: The Geometry and a Pretrain-Finetune Recipe
+
+(a) Effect of Learning Rate
+
+(b) Effect of Temperature
+
+Figure E.1 | Effect of learning rate and temperature during the finetuning stage of the pretrain-finetune recipe for HR on WordNet.
+
+i.e. with distance 0 and 2. As it starts to retrieve longer distance pairs, the quality on the short distance pairs drops rapidly. The best overall recall (i.e., averaged over all distances) is 45.4% obtained at step 49. This recall is better than that of a DE trained on the same data, which is 43.0% (see Table 1), showing the superiority of embedding in hyperbolic space. However, it is still worse than our pretrain-finetune approach, which obtains a recall of 60.1%.
+
+E. Ablation Studies for Finetuning on WordNet
+In this section, we study the effect of hyper-parameters in our pretrain-finetune recipe for the WordNet experiments presented in Section 6. In particular, the results in Table 1 are obtained with a finetuning learning rate that is 0.001 times the one used during pretraining, and a temperature that is increased from 20 during pretraining to 500 when finetuning. Here, we vary the choice of this learning rate multiplier and temperature during finetuning, and present the results in Figure E.1.
+For varying learning rate multiplier (see Figure E.1a), we observe that the recall on long distance pairs improves as this multiplier is increased from a very small number of 1e-7 up to 1e-3. Crucially, we observe that the recall on short distance pairs are not significantly affected, despite the fact that such pairs are not included in the finetuning data. However, when this multiplier is further increased from 1e-3, the model performance starts to deteriorate on both short and long distance pairs.
+In terms of temperature (see Figure E.1b), we see that the best recall is obtained with a temperature of around 500. Both much smaller and much larger values of temperature lead to a quality loss.
+Finally, Figure E.1 shows that the model quality in terms of recall is not sensitive to the choice of these two hyper-parameters, making our method practically easy to tune.
+
+18
+

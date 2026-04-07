@@ -1,0 +1,449 @@
+Multilingual Unsupervised Sentence Simpliﬁcation
+Louis Martin1,2 Angela Fan1,3 E´ ric de la Clergerie2 Antoine Bordes1 Benoˆıt Sagot2
+1Facebook AI Research, Paris, France 2Inria, Paris, France
+3LORIA, Nancy, France {louismartin, angelafan, abordes}@fb.com {eric.de la clergerie, benoit.sagot}@inria.fr
+
+arXiv:2005.00352v1 [cs.CL] 1 May 2020
+
+Abstract
+Progress in Sentence Simpliﬁcation has been hindered by the lack of supervised data, particularly in languages other than English. Previous work has aligned sentences from original and simpliﬁed corpora such as English Wikipedia and Simple English Wikipedia, but this limits corpus size, domain, and language. In this work, we propose using unsupervised mining techniques to automatically create training corpora for simpliﬁcation in multiple languages from raw Common Crawl web data. When coupled with a controllable generation mechanism that can ﬂexibly adjust attributes such as length and lexical complexity, these mined paraphrase corpora can be used to train simpliﬁcation systems in any language. We further incorporate multilingual unsupervised pretraining methods to create even stronger models and show that by training on mined data rather than supervised corpora, we outperform the previous best results. We evaluate our approach on English, French, and Spanish simpliﬁcation benchmarks and reach stateof-the-art performance with a totally unsupervised approach. We will release our models and code to mine the data in any language included in Common Crawl.
+1 Introduction
+Text Simpliﬁcation is the task of reducing the complexity of the vocabulary and sentence structure of text while retaining its original meaning, with the goal of improving readability and understanding. Simpliﬁcation has a variety of important societal applications, for example increasing accessibility for those with cognitive disabilities such as aphasia (Carroll et al., 1998), dyslexia (Rello et al., 2013), and autism (Evans et al., 2014), or for nonnative speakers (Paetzold and Specia, 2016) and children with reading difﬁculties (Gala et al., 2020). Research has mostly focused on English simpliﬁcation, where corpora with source texts and their
+
+Figure 1: Sentence Simpliﬁcation Models for Any Language using Unsupervised Data. Sentences from the web are used to create a large scale index that allows mining millions of paraphrases. Subsequently, we ﬁnetune pretrained models augmented with controllable mechanisms on the paraphrase corpora to achieve sentence simpliﬁcation models in any language.
+associated simpliﬁed texts exist and can be automatically aligned, such as English Wikipedia and Simple English Wikipedia or the Newsela corpus (Xu et al., 2015). However, such data is difﬁcult to ﬁnd in languages other than English, and the need for manually simpliﬁed corpora limits the incorporation of large quantities of raw text data.
+In this work, we focus on leveraging unsupervised data to train sentence simpliﬁcation systems in multiple languages. As sentence simpliﬁcation is a special case of paraphrasing, we present a general technique to create training corpora in any language by mining pairs of paraphrased sequences from the web. Using controllable text generation mechanisms proposed in Martin et al. (2020) we then train simpliﬁcation models by controlling attributes such as length, lexical complexity, and syntactic complexity. Mining paraphrases as a superset of sentence simpliﬁcations proves better than mining for simpliﬁcations directly. Datasets mined for simpliﬁcations would necessitate several heuristics on the type of simpliﬁcations that should be mined; we show that a model able to adjust during training on a dataset mined with fewer assumptions can reach better experimental results.
+
+These automatically created corpora beneﬁt from large quantities of data in various languages available online. We apply this technique to mine English, French, and Spanish paraphrase training data. On English, we show that the quality of the models trained with mined data is similar to that of models trained with automatically aligned English Wikipedia and Simple English Wikipedia.
+Subsequently, we use multilingual pretraining with BART and mBART (Lewis et al., 2019; Liu et al., 2020) to further incorporate unsupervised data in our sentence simpliﬁcation models. This unsupervised pretraining leverages large quantities of data freely available on the web to create high quality generative models. By using pretrained models and ﬁnetuning on our mined paraphrase datasets, we are able to achieve state of the art results with no supervised data in multiple languages. In summary, we make the following contributions:
+• We propose a mining procedure to create large paraphrase corpora in multiple languages, to train sentence simpliﬁcation systems.
+• We incorporate recent advances in generative pretraining and controllable generation to achieve or match the state of the art in English with 42.65 SARI on ASSET and 40.85 SARI on TURKCORPUS datasets with a completely unsupervised approach. We show that we can further improve by more than 1 SARI point by incorporating supervised data.
+• We reach state of the art in multiple languages using only mined data, alleviating the need for language-speciﬁc supervised corpora.
+2 Related work
+Sentence Simpliﬁcation in multiple languages Data-driven methods have been predominant approach in English Sentence Simpliﬁcation in the recent years, requiring large supervised training corpora of complex-simple aligned sentences (Wubben et al., 2012; Xu et al., 2016; Zhang and Lapata, 2017; Zhao et al., 2018; Martin et al., 2020). Methods have relied on using the Wikipedia edit history (Botha et al., 2018), or more notably on English Wikipedia and Simple English Wikipedia with automatic alignment of sentences from similar articles for the creation of such corpora (Zhu et al., 2010; Coster and Kauchak, 2011; Woodsend and Lapata, 2011; Kauchak, 2013; Zhang and Lapata, 2017). Using Wikipedia and automatic alignments
+
+has been shown to have various ﬂaws compared to professional simpliﬁcations from news articles such as in the Newsela dataset (Xu et al., 2015). There are fewer professional simpliﬁcations, and these often come with restrictive licenses that hinder widespread usage and reproducibility.
+Multiple efforts have explored simpliﬁcation in other languages such as Brazilian Portuguese (Alu´ısio et al., 2008), Spanish (Saggion et al., 2015; Sˇ tajner et al., 2015), Italian (Brunato et al., 2015; Tonelli et al., 2016), Japanese (Goto et al., 2015; Kajiwara and Komachi, 2018; Katsuta and Yamamoto, 2019), and French (Gala et al., 2020), but these lack of a large supervised training corpus such as what is available in English.1 In this work, we show that a method trained on large corpora automatically mined from raw text in any language can reach state of the art results in all languages.
+Unsupervised Simpliﬁcation When parallel data is not available or not used, sentence simpliﬁcation systems rely on unsupervised simpliﬁcation techniques, often based on techniques from machine translation. The prevailing approach is to split a raw monolingual corpora into two disjoint sets of complex and simple sentences with readability metrics to train unsupervised models. Kajiwara and Komachi (2018) train statistical machine translation models on unsupervised alignment, based on word embeddings, of English Wikipedia. Other methods remove the alignment process and train with the two disjoint sets with auto-encoders (Surya et al., 2019; Zhao et al., 2020), unsupervised statistical machine translation for Japanese (Katsuta and Yamamoto, 2019), and back-translation in Spanish and Italian (Aprosio et al., 2019). The performance of such unsupervised methods are however often below their supervised counterparts. In our work we remove the need for separating the raw monolingual corpora in two disjoint sets and instead mine paraphrases directly, and train models with stateof-the-art performance.
+Mining Previous work on the unsupervised creation of corpora from noisy text has focused on mining parallel data for machine translation systems. Works have leveraged document retrieval (Munteanu and Marcu, 2005), language models (Buck and Koehn, 2016; Koehn et al., 2018, 2019), and embedding space alignment (Artetxe
+1More detail can be found in the survey by Alva-Manchego et al. (2020b)
+
+and Schwenk, 2019) to create large corpora (Tiedemann, 2012; Schwenk et al., 2019a,b). We focus on paraphrasing for sentence simpliﬁcations, which presents new challenges for unsupervised mining. Unlike machine translation, where the same sentence should be identiﬁed in two languages, we develop a method to identify varied simpliﬁcations of sentences. Mining in translation has leveraged heuristics such as similar length, but paraphrases, and most speciﬁcally simpliﬁcations, have a wide array of surface forms, including multiple sentences, different vocabulary usage, and removal of content from more complex sentences.
+Previous work in unsupervised paraphrasing has learned to align sentences from various corpora (Barzilay and Lee, 2003) with a variety of different objective functions (Liu et al., 2019). Techniques for large-scale mining have been used to create large paraphrase corpora (Wieting and Gimpel, 2018), but this has not been applied to multiple languages or the task of sentence simpliﬁcation.
+3 Method
+We describe how to create sentence simpliﬁcation models in multiple languages without supervised data. We mine a large quantity of paraphrases from the Common Crawl using libraries such as LASER (Artetxe et al., 2018) and faiss (Johnson et al., 2019). Then, we show how we leverage controllable generation mechanisms and unsupervised pretraining in addition to unsupervised data mining to train high quality simpliﬁcation models.
+3.1 Mining Paraphrases in Multiple Languages
+Challenges in Mining Simpliﬁcations Progress in creating simpliﬁcation models in multiple languages has been hindered by lack of supervised training data, namely pairs of complex sentences matched with their simpliﬁed forms. Existing models often use automatically aligned sentences from Wikipedia and Simple English Wikipedia, but this approach is not scalable and does not exist for other languages. Further, simpliﬁcations exist in many possible forms that depends on the target audience it is aimed for — a simple sequence is not always only shorter, but could be split into multiple sentences, use less complex vocabulary, include less detail, and so on. These simpliﬁcation guidelines are not uniquely deﬁned, and even if they could be used to heuristically mine corpora, rules for
+
+different languages might wildly differ and prevent large-scale mining in multiple languages. We conﬁrm experimentally in Section 5.3 that mining simpliﬁcations does not achieve better results than the more general mining of paraphrases.
+Mining Paraphrases as Generalized Simpliﬁcations Thus, in this work, we focus on creating strong simpliﬁcation models from paraphrase data. Paraphrases can be seen as strict generalization of simpliﬁcations. To create models that can simplify after being trained on paraphrases, we leverage advancements in controllable text generation. Control models have been used in a variety of settings to adjust length (Fan et al., 2018), bias (Dinan et al., 2019), and style (See et al., 2019). We use the controllable sentence simpliﬁcation model ACCESS (Martin et al., 2020), which learns to control length, amount of paraphrasing, lexical complexity and syntactic complexity to train on mined paraphrase corpora and dynamically create simpliﬁcations at inference time. We then scale our unsupervised paraphrase mining approach to create automatically aligned paraphrase corpora in different languages.
+Sequences Extraction Sentence Simpliﬁcation consists of multiple rewriting operations, some of which spanning over multiple sentences (e.g. sentence splitting or sentence fusion). To allow for these types of operations to be represented in our data, we extract sequences of multiple sentences from raw documents. As we detail in Section 4.1 these sequences are further ﬁltered to remove noisy text with too much punctuation, or low language model probability for example. In the following these series of multiple consecutive sentences are termed sequences.
+We extract these sequences from CCNET (Wenzek et al., 2019). CCNET is an extraction of Common Crawl,2 an open source snapshot of the web, that has been split into different languages using fasttext language identiﬁcation (Joulin et al., 2017) and various language modeling ﬁltering techniques to identify high quality, clean sentences. For English and French, we extract 1 billion sequences from CCNET. For Spanish we extract 650 millions sequences, the maximum for this language in CCNET after ﬁltering out noisy text.
+Creating a Sequence Index Using Embeddings To automatically mine our paraphrase corpora, we ﬁrst compute n-dimensional sentence embeddings
+2https://commoncrawl.org
+
+Query
+Mined
+Query Mined Query Mined Query Mined Query Mined
+
+For insulation, it uses foam-injected polyurethane which helps ensure the quality of the ice produced by the machine. It comes with an easy to clean air ﬁlter. It has polyurethane for insulation which is foam-injected. This helps to maintain the quality of the ice it produces. The unit has an easy to clean air ﬁlter.
+Here are some useful tips and tricks to identify and manage your stress. Here are some tips and remedies you can follow to manage and control your anxiety.
+As cancer cells break apart, their contents are released into the blood. When brain cells die, their contents are partially spilled back into the blood in the form of debris.
+The trail is ideal for taking a short hike with small children or a longer, more rugged overnight trip. It is the ideal location for a short stroll, a nature walk or a longer walk.
+Thank you for joining us, and please check out the site. Thank you for calling us. Please check the website.
+
+Table 1: Examples of Mined Paraphrases. Paraphrases, although sometimes not preserving the entire meaning, display various rewriting operations, such as lexical substitution, compression or sentence splitting.
+
+WIKILARGE
+English French Spanish
+
+Type
+Supervised
+Mined Mined Mined
+
+# Sequence Pairs
+296,402
+1,194,945 1,360,422 996,609
+
+# Avg. Tokens per Sequence
+21.7 (orig.) 16.0 (simp.)
+22.3 18.7 22.8
+
+Table 2: Statistics of mined paraphrase training corpora compared to standard supervised WIKILARGE.
+
+for each of our sequences using the LASER toolkit (Artetxe et al., 2018). LASER is a multilingual sentence embedding model that is trained to map sentences of similar meaning to the same location in the embedding space. We use the faiss librairy (Johnson et al., 2019) to create an index with all these sentence embeddings. faiss indexes are a type of data structure that can store a large amount of vectors and provide a fast and efﬁcient interface for searching nearest neighbors within the index.
+Mining Paraphrases For each language, after the billion-scale index is created, we use the same 1 billion sequences as queries to identify potential paraphrases in the index. Each sequence is queried against the index and returns a set of top-k nearest neighbor sequences according to the semantic LASER embedding space using L2 distance3. These nearest neighbors are candidate paraphrases of the query sentence. We apply additional ﬁlters to remove poor quality alignments where the sequences are not paraphrases, for example when they are almost identical, when they are contained in one another, or when they were extracted from two consecutive and overlapping sliding windows
+3The original LASER implementation uses cosine similarity instead of L2 distance.
+
+of the same original document. Table 1 displays some examples of the resulting mined paraphrases in English while Table 2 reports statistics of the mined corpora in English, French and Spanish.
+3.2 Simplifying with ACCESS
+We train our models on paraphrase data to produce simpliﬁcations by leveraging advancements in controllable text generation, speciﬁcally applying the ACCESS control mechanism (Martin et al., 2020).
+Training with Control Tokens At training time, the model is provided with control tokens that give oracle information on the target sequence, such as the amount of compression of the target sequence relative to the source sequence. For example, when the target sequence is 80% of the size of the original sequence, we provide the <NumChars 80%> control token. This encourages the model to rely on the oracle control tokens. At inference time it can then control the generation by selecting a given target control token value.
+Choosing Control Values at Inference In our experiments, We want the generations to best reﬂect the simpliﬁcation typologies of each dataset. To this end, we select the control values that achieve the best SARI on the validation set using hyperparameter search, and keep those values ﬁxed for all sentences in the test set. We repeat this process for each evaluation dataset.
+3.3 Leveraging Unsupervised Pretraining
+Unsupervised pretraining has recently demonstrated large improvements on generative tasks, by using sequence-to-sequence models as denoising auto-encoders on large quantities of raw data
+
+density
+
+Compression levels
+4 3 2 1 00 1 2
+
+WordRank ratio
+10 8 6 4 2 0 0.8 1.0 1.2
+
+0.008 0.006 0.004 0.002 0.000 0
+
+Target length
+100 200
+
+Replace-only Levenshtein similarity
+
+8
+
+Wikilarge
+
+6
+
+Mined
+
+4
+
+2
+
+300 0 0.4 0.6 0.8 1.0
+
+Figure 2: Density of several text features in WIKILARGE and our mined data. The WordRank ratio is a measure of lexical complexity reduction (Martin et al., 2020). Replace-only Levenshtein similarity only considers replace operations in the traditional Levenshtein similarity and assigns 0 weights to insertions and deletions.
+
+(Lewis et al., 2019; Liu et al., 2020) by training with noising functions such as span-based masking (Fan et al., 2019a; Joshi et al., 2020) or shufﬂing sentence order. We leverage these pretrained models to further extend our unsupervised approach to text simpliﬁcation. For English, we ﬁnetune pretrained generative model BART (Lewis et al., 2019) on our newly created mined training corpora. BART is a pretrained sequence-to-sequence model that can be seen as a generalization of other recent pretrained models such as BERT (Devlin et al., 2018) and GPT2 (Radford et al.).
+For non-English languages, we use its multilingual generalization MBART (Liu et al., 2020). MBART was pretrained using the BART objective on 25 languages and showed large performance gains for low-resource machine translation.
+4 Experimental Setting
+We assess the performance of our approach on three languages: English, French, and Spanish.
+4.1 Mining Details
+Sequence Extraction We only consider documents from the HEAD split in CCNET— this represents the third of the data with the best perplexity using a language model. We extract sequences from raw documents using the NLTK sentence tokenizer (Bird and Loper, 2004) and generate all possible sequences of adjacent sentences with lengths between 10 and 300 characters. We further ﬁlter these sequences to remove those with low probability according to a 3-gram Kneser-Ney language model trained with kenlm (Heaﬁeld, 2011). We also ﬁlter sequences with too much punctuation.
+Paraphrase Mining We compute LASER embeddings of dimension 1024 and reduce dimensionality with a 512 PCA followed by random rotation. We further compress them using 8 bit scalar
+
+quantization. The compressed embeddings are then stored in a faiss inverted ﬁle index with 32,768 cells (nprobe=16). These embeddings are used to mine pairs of paraphrases. We return the top-8 nearest neighbors, and keep those with L2 distance lower than 0.05 and relative distance compared to other top-8 nearest neighbors lower than 0.6.
+Paraphrases Filtering The resulting paraphrases are ﬁltered to remove almost identical paraphrases by enforcing a case-insensitive character-level Levenshtein distance (Levenshtein, 1966) greater or equal to 20%. We remove paraphrases that come from the same document to avoid aligning sequences that overlapped each other in the original text. We also remove paraphrases where one of the sequence is contained in the other. We further ﬁlter out any sequence that is present in our evaluation datasets.
+4.2 Training details
+We implement our models with fairseq (Ott et al., 2019). All our models are Transformers (Vaswani et al., 2017) based on BART Large, keeping the optimization procedure and hyperparameters ﬁxed (Lewis et al., 2019). We either randomly initialize weights for the standard sequence-tosequence experiments or initialize with pretrained BART for the BART experiments. For controllable generation, we use the open-source ACCESS implementation (Martin et al., 2018). We use the same control parameters as the original paper, namely length, Levenshtein similarity, lexical complexity, and syntactic complexity.4
+In all our experiments, we report scores averaged over 5 random seeds evaluated on the test set with
+4We modify the Levenshtein similarity parameter to only consider replace operations, by assigning a 0 weight to insertions and deletions. This change helps decorrelate the Levenshtein similarity control token from the length control token and produced better results in preliminary experiments.
+
+95% conﬁdence intervals.
+4.3 Baselines
+In addition to that of previous work, we report results for several basic baselines, which are useful for languages where previous work does not exist.
+Identity baseline The original sequence is the simpliﬁcation.
+Truncation baseline The original sequence is truncated by keeping the ﬁrst 80% of words. It proves to be a strong baseline in practice, as measured by standard text simpliﬁcation metrics.
+Pivot baseline We use machine translation to provide a baseline for languages for which no simpliﬁcation corpora are available. The complex nonEnglish sentence is translated to English, simpliﬁed with our best English simpliﬁcation system, and then translated back into the source language. For French and Spanish translation, we use CCMATRIX (Schwenk et al., 2019b) to train Transformer models with LayerDrop (Fan et al., 2019b). We use the BART+ACCESS model trained on MINED+ WIKILARGE as the English simpliﬁcation model. While pivoting creates potential errors from inaccurate or unnatural translations, recent improvements of neural translation systems on high resource languages nevertheless makes this a strong baseline.
+Reference We report reference scores for English because multiple references are available for each original sentence. We compute these scores in a leave-one-out scenario where each reference is evaluated against all the others and then scores are averaged over all references.5
+4.4 Evaluation Metrics
+SARI Sentence simpliﬁcation is commonly evaluated with SARI (Xu et al., 2016), which compares model generated simpliﬁcations with the source sequence and gold references. It averages F1 scores for addition, keep, and deletion operations. We compute SARI with the EASSE6 simpliﬁcation evaluation suite (Alva-Manchego et al., 2019)7.
+5To avoid creating a discrepancy in terms of number of references between this setting where we leave one reference out and when we evaluate the models with all references, we compensate by duplicating one of the other references at random so that the total number of references is unchanged.
+6https://github.com/feralvam/easse 7We use the latest version of SARI implemented in EASSE which ﬁxes bugs and inconsistencies from the traditional implementation of SARI. As a consequence, we also recompute
+
+BLEU We report BLEU scores for completeness, but these should be carefully interpreted. They have been found to correlate poorly with human judgments of simplicity (Sulem et al., 2018). Furthermore, the identity baseline achieves very high BLEU scores on some datasets (e.g. 92.81 on ASSET or 99.36 on TURKCORPUS), which underlines the weaknesses of this metric.
+FKGL Finally, we report readability scores using the Flesch-Kincaid Grade Level (FKGL) (Kincaid et al., 1975), a linear combination of sentence lengths and word lengths.
+4.5 Evaluation Data
+English To evaluate our models in English, we use ASSET (Alva-Manchego et al., 2020a) and TURKCORPUS (Xu et al., 2016). TURKCORPUS (sometimes known as WIKILARGE evaluation set) and ASSET were created using the same 2000 valid and 359 test source sentences. TURKCORPUS contains 8 reference simpliﬁcations per source sentence and ASSET contains 10 references per source. TURKCORPUS’s simpliﬁcations mostly consist in small lexical paraphrases. ASSET is a generalization of TURKCORPUS with a more varied set of rewriting operations. ASSET simpliﬁcations are also considered simpler than simpliﬁcations in TURKCORPUS by human judges.
+French For French, we use the ALECTOR dataset (Gala et al., 2020) for evaluation. ALECTOR is a collection of literary (tales, stories) and scientiﬁc (documentary) texts along with their manual document-level simpliﬁed versions. These documents were extracted from material available to French primary school pupils.
+Most of these documents were simpliﬁed line by line, each line consisting of a few sentences. For each original document, we align each line that contains less than 6 sentences with the closest line in its simple counterpart, using the LASER embedding space. The resulting alignments are split into validation and test by randomly sampling the documents for the validation (450 samples) and rest for test (416 samples).
+Spanish For Spanish we use the SIMPLEXT Corpus from (Saggion et al., 2015). The SIMPLEXT Corpus is a set of 200 news articles that
+scores from previous systems that we compare to. We do so by using the system predictions provided by the respective authors, and available in EASSE.
+
+PBMT-R (Wubben et al., 2012) UNTS (Surya et al., 2019) Dress-LS (Zhang and Lapata, 2017) DMASS-DCSS (Zhao et al., 2018) ACCESS (Martin et al., 2020)
+Identity Baseline Truncate Baseline Reference Seq2Seq Seq2Seq BART+ACCESS MBART+ACCESS BART+ACCESS BART+ACCESS
+
+Data
+PWKP (Wikipedia) UNSUP. DATA WIKILARGE WIKILARGE WIKILARGE
+— — — WIKILARGE MINED WIKILARGE MINED MINED WIKILARGE + MINED
+
+SARI
+34.63 35.19 36.59 38.67 40.13
+20.73 29.85 44.87±0.36 32.71±1.55 38.03±0.63 43.63±0.71 41.11±0.7 42.65±0.23 44.15±0.56
+
+ASSET BLEU
+79.39 76.14 86.39 71.44 75.99
+92.81 84.94 68.95±1.33 88.56±1.06 61.76±2.19 76.28±4.3 77.22±2.12 66.23±4.31 72.98±4.27
+
+FKGL
+8.85 7.60 7.66 7.73 7.29
+10.02 7.91 6.49±0.15 8.62±0.34 9.41±0.07 6.25±0.42 7.18±0.21 8.23±0.62 6.05±0.51
+
+SARI
+
+TURKCORPUS
+
+BLEU
+
+FKGL
+
+38.04
+
+82.49
+
+8.85
+
+36.29
+
+76.44
+
+7.60
+
+36.97
+
+81.08
+
+7.66
+
+39.92
+
+73.29
+
+7.73
+
+41.38
+
+76.36
+
+7.29
+
+26.29 33.1 40.04±0.3 35.79±0.89 38.06±0.47 42.62±0.27 39.40±0.54 40.85±0.15 42.53±0.36
+
+99.36 88.82 73.56±1.18 90.24±2.52 63.70±2.43 78.28±3.95 77.05±3.02 63.76±4.26 78.17±2.2
+
+10.02 7.91 8.77±0.08 8.63±0.34 9.43±0.07 6.98±0.95 8.65±0.4 8.79±0.3 7.60±1.06
+
+Table 3: Unsupervised Sentence Simpliﬁcation for English. We display SARI, BLEU and FKGL on TURKCORPUS and ASSET English evaluation datasets.
+
+Original Simpliﬁed Original Simpliﬁed Original
+Simpliﬁed Original
+Simpliﬁed
+Original Simpliﬁed Original
+Simpliﬁed
+
+It is particularly famous for the cultivation of kiwifruit. It is famous for growing the kiwifruit.
+History Landsberg prison, which is in the town’s western outskirts, was completed in 1910. The Landsberg prison, which is near the town, was built in 1910.
+In 2004, Roy was selected as the greatest goaltender in NHL history by a panel of 41 writers, coupled with a simultaneous fan poll. In 2004, Roy was chosen as the greatest goaltender in NHL history by a group of 41 writers.
+The name ”hornet” is used for this and related species primarily because of their habit of making aerial nests (similar to the true hornets) rather than subterranean nests. The name ”hornet” is used for this and related species because they make nests in the air (like the true hornets) rather than in the ground.
+Nocturnes is an orchestral composition in three movements by the French composer Claude Debussy. Nocturnes is a piece of music for orchestra by the French composer Claude Debussy.
+This book by itself is out of print having been published along with nine short stories in the collection The Worthing Saga (1990). This book by itself is out of print. It was published along with nine short stories in 1990.
+
+Table 4: Examples of Generated Simpliﬁcations. We show simpliﬁcations generated by our best unsupervised model: BART+ACCESS trained on mined data only. Bold highlights differences between original and simpliﬁed.
+
+were manually simpliﬁed by trained experts for people with learning disabilities. We split the dataset by documents into a valid (460 samples) and test set (449 samples). SIMPLEXT Corpus contains simpliﬁcations with a high editing ratio, where the original sentence is strongly rephrased and compressed compared to other evaluation datasets.
+5 Results
+We now assess the quality of our mined data and the improvements brought up by unsupervised pretraining for simplifying English, French and Spanish.
+5.1 English Simpliﬁcation
+We compare models trained on our mined corpus of 1.2 million English paraphrase pairs (see Table 2) with models trained with the standard simpliﬁcation dataset WIKILARGE. We also compare to other state-of-the-art supervised models (Wubben
+
+et al., 2012; Zhang and Lapata, 2017; Zhao et al., 2018; Martin et al., 2020) and the only previously published unsupervised model (Surya et al., 2019).
+Using Seq2Seq Models on Mined Data When training a Transformer sequence-to-sequence model (Seq2Seq) on WIKILARGE compared to the mined corpus, we ﬁnd that our models trained on the mined data perform better by 5.32 SARI on ASSET and 2.25 SARI on TURKCORPUS (see Table 3). It is surprising that a model trained solely on a paraphrase corpus might achieve such good results on simpliﬁcation benchmarks. Multiple works have shown that simpliﬁcation models suffered from not making enough modiﬁcations to the source sentence and showed that forcing models to rewrite the input was beneﬁcial (Wubben et al., 2012; Martin et al., 2020). We speculate that this might explain why our sequence-to-sequence
+
+Identity Baseline Truncate Baseline Pivot Baseline Seq2Seq MBART+ACCESS
+
+Data
+— — — MINED MINED
+
+ALECTOR (French)
+
+SARI
+
+BLEU
+
+FKGL
+
+26.16 33.44 33.48±0.37 39.25±0.64 41.73±0.67
+
+64.39 50.32 20.68±0.74 41.79±1.47 45.83±2.55
+
+3.73 2.29 3.92±0.24 3.63±0.17 3.15±0.16
+
+SIMPLEXT Corpus (Spanish)
+
+SARI
+
+BLEU
+
+FKGL
+
+6.08 18.24 34.53±1.83 25.66±0.52 28.56±1.61
+
+8.16 7.65 0.94±1.37 6.00±0.17 6.90±0.32
+
+17.72 14.69 5.94±2.02 15.89±0.11 12.62±0.8
+
+Table 5: Unsupervised Text Simpliﬁcation in French and Spanish. We display SARI, BLEU and FKGL on the French evaluation dataset ALECTOR and the Spanish evaluation dataset SIMPLEXT Corpus.
+
+model trained on paraphrases achieves these results. Furthermore, when generating a paraphrase, our model might assign higher probabilities to frequent words which might naturally operate lexical simpliﬁcations to some extent.
+Adding BART and ACCESS We use mined data to ﬁnetune BART and add the simpliﬁcationbased generative control from ACCESS. When trained on the mined English data and WIKILARGE, BART+ACCESS performs the best in terms of SARI on ASSET (44.15). On TURKCORPUS the best results are achieved by training BART+ACCESS on WIKILARGE (42.62 SARI).
+Using only unsupervised data, we are able to achieve a +2.52 SARI improvement over the previous state of the art on ASSET8. We achieve similar results on TURKCORPUS with 40.85 SARI with no supervision (average over 5 random seeds) versus the previous state of the art of 41.38 SARI (best seed selected on the validation set by the authors).
+Examples of Simpliﬁcations Various examples from our totally unsupervised simpliﬁcation system are shown in Table 4. Examining the simpliﬁcations, we see reduced sentence length, sentence splitting of a complex sentence into multiple shorter sentences, and the use of simpler vocabulary. For example, the word cultivation is changed into growing and aerial nets is simpliﬁed into nests in the air. Additional simpliﬁcations include the removal of less important content and removal of content within parentheses.
+5.2 French and Spanish Simpliﬁcation
+Our unsupervised approach to text simpliﬁcation can be applied to any language provided enough data can be mined. As for English, we ﬁrst create
+8It should be noted that the previous state of the art by Martin et al. (2020) was achieved before the publication of the ASSET dataset. ACCESS, the authors’ controllable sentence simpliﬁcation system might have performed better, were it ﬁnetuned for the ASSET dataset.
+
+a corpus of paraphrases composed of 1.4 million sentences in French and 1.0 million sentences in Spanish (see Table 2). We evaluate the quality of our mined corpus in Table 5. Unlike for English, where supervised training data has been created using Simple English Wikipedia, no such datasets exist for French or Spanish simpliﬁcation. We compare to several baselines, namely the identity, truncation and pivot baselines.
+Using Seq2Seq Models on Mined data Compared to our baselines, training a Transformer sequence-to-sequence model on our mined data achieves stronger results in French and stronger results in Spanish except for the pivot baseline.
+Adding MBART and ACCESS To incorporate multilingual pretraining, we use MBART. MBART was trained on 25 languages rather than the English BART. Similar to what we observed in English, we achieve the best results by combining MBART, ACCESS, and training on mined data. It outperforms our strongest baseline by +8.25 SARI in French but seems to lag behind in Spanish.
+As shown in the English results in Table 3, MBART also suffers a small loss in performance of 1.54 SARI compared to its monolingual English counterpart BART, probably due to the fact that it handles 25 languages instead of one. Using a monolingual version of BART trained for French or Spanish would perform even better.
+Evaluation Metrics Weaknesses in Spanish For Spanish, the pivot baseline achieves the highest SARI, but a very low BLEU of 0.94. Qualitative examination of the pivot simpliﬁcations showed that the generated Spanish simpliﬁcations had very few words in common with the gold standard references —hence the low BLEU— although these predictions were correct simpliﬁcations of the source.
+The SIMPLEXT Corpus contains highly rewritten and compressed simpliﬁcations (average compression ratio of 56% compared to > 85% for eval-
+
+Model
+Seq2Seq Seq2Seq BART+ACCESS BART+ACCESS
+
+Data
+Simpl. Para. Simpl. Para.
+
+ASSET (English)
+
+SARI
+
+BLEU
+
+FKGL
+
+32.46±0.59 38.03±0.63 42.44±0.73 42.65±0.23
+
+87.07±0.28 61.76±2.19 60.18±10.2 66.23±4.31
+
+8.30±0.32 9.41±0.07 7.18±0.68 8.23±0.62
+
+Table 6: Mining Simpliﬁcations vs. Paraphrases. Comparison of models trained on our mined paraphrase corpora or on our mined simpliﬁcation corpora.
+
+# Training Samples
+1K 10K 100K 1.2M (full)
+
+ASSET (English)
+
+SARI
+
+BLEU
+
+FKGL
+
+24.58±0.33 31.51±0.79 41.25±0.76 42.65±0.23
+
+91.91±0.11 89.19±0.52 84.09±1.68 66.23±4.31
+
+9.92±0.02 9.67±0.09 7.75±0.15 8.23±0.62
+
+Table 7: Importance of Large Scale Mining. We ﬁnetune BART+ACCESS on varying amounts of mining.
+
+uation datasets in other languages). And the SARI metric reserves 33% of the score to rewarding “correct” word deletions, which might affect most of the source words in this dataset. As a conﬁrmation, a dummy system that deletes all words from the source (i.e. returns an empty simpliﬁcation), achieves a SARI score of 33.33 and BLEU of 0. This ﬁnding questions the use of SARI in settings with high rates compression and rewriting.
+5.3 Ablations
+Mining Simpliﬁcations vs. Paraphrases In this work, we mined paraphrases to train simpliﬁcation models. We also considered directly mining simpliﬁcations using simpliﬁcation heuristics.
+In order to mine a simpliﬁcation dataset for comparison, we followed the same procedure of querying 1 billion sequences on an index of 1 billion sequences. We then kept only pairs that either contained sentence splits, were compressed by reducing sequence length, or that had simpler vocabulary (based on word frequencies). We also removed the paraphrase constraint that enforced sentences to be different enough (Levenshtein distance greater than 20%). We tuned these heuristics to optimize SARI scores on the validation set. The resulting dataset is composed of 2.7 million simpliﬁcation pairs.
+In Table 6, we show that sequence-to-sequence models trained on paraphrases achieve better performance. A similar trend exists with BART and ACCESS, justifying the simpler approach of mining paraphrases instead of simpliﬁcations.
+How Much Mined Data Do You Need? Our proposed method leverages the large quantity of sentences in many languages available on the web to mine millions of paraphrases. We investigate the importance of a scalable mining approach that can create million-sized training corpora for sentence simpliﬁcation. In Table 7, we analyze the performance of training our best model on English, a combination of BART and ACCESS, on different amounts of mined data. By increasing the
+
+Model
+Seq2Seq ACCESS BART BART+ACCESS
+
+ASSET (English)
+
+SARI
+
+BLEU
+
+FKGL
+
+38.03±0.63 39.66±0.36 39.73±0.20 42.65±0.23
+
+61.76±2.19 61.09±1.06 65.00±1.66 66.23±4.31
+
+9.41±0.07 8.31±0.24 9.26±0.09 8.23±0.62
+
+Table 8: Relative Importance of Pretraining and ACCESS. We display SARI, BLEU and FKGL scores on the ASSET evaluation dataset of models trained on our mined paraphrase data.
+
+number of mined pairs, SARI drastically improves, indicating that efﬁcient mining at scale is critical to achieve state of the art performance. Unlike human-created training sets, unsupervised mining with LASER and faiss allows for even larger datasets, and enables this for multiple languages.
+Improvements from Pretraining and Controllable Simpliﬁcation Unlike previous approaches to text simpliﬁcation, we use pretraining to train our simpliﬁcation systems. In a qualitative examination, we found the main improvement from pretraining is increased ﬂuency and meaning preservation in the output generations. For example, in Table 9, the model trained with ACCESS only substituted culturally akin with culturally much like whereas when using BART+ACCESS it was simpliﬁed into the more ﬂuent closely related.
+While our simpliﬁcation models trained on mined data see several million sentences, pretraining methods are typically trained on billions of sentences. We combine pretrained models with controllable simpliﬁcation, which enhances the performance of the simpliﬁcation system in addition to allowing them to adapt to different type of simpliﬁed text given the needs of the end audience.
+Table 8 highlights that while both the BART pretrained model and the ACCESS controllable simpliﬁcation mechanism bring some improvement over standard sequence-to-sequence in terms of SARI, they work best in combination and boost the performance by +4.62 SARI.
+
+Original ACCESS BART+ACCESS
+Original ACCESS BART+ACCESS
+Original ACCESS BART+ACCESS
+
+They are culturally akin to the coastal peoples of Papua New Guinea. They’re culturally much like the Papua New Guinea coastal peoples. They are closely related to coastal people of Papua New Guinea
+Orton and his wife welcomed Alanna Marie Orton on July 12, 2008. Orton and his wife had been called Alanna Marie Orton on July 12. Orton and his wife gave birth to Alanna Marie Orton on July 12, 2008.
+He settled in London, devoting himself chieﬂy to practical teaching. He set up in London and made himself mainly for teaching. He settled in London and devoted himself to teaching.
+
+Table 9: Inﬂuence of BART on Simpliﬁcations. We display some examples of generations that illustrate how BART improves the ﬂuency and meaning preservation of generated simpliﬁcations.
+
+6 Conclusion
+We propose an unsupervised approach to text simpliﬁcation using controllable generation mechanisms and pretraining in combination with large scale mining of paraphrases from the web. This approach is language agnostic and achieves stateof-the-art results, even above previously published results of supervised systems, on three languages: English, French, and Spanish. In future work, we plan to investigate how to scale this approach to more languages and types of simpliﬁcations.
+Acknowledgements
+This work was partly supported by Benot Sagot’s chair in the PRAIRIE institute, funded by the French national agency ANR as part of the “Investissements davenir” programme under the reference ANR-19-P3IA-0001.
+References
+Sandra M Alu´ısio, Lucia Specia, Thiago AS Pardo, Erick G Maziero, and Renata PM Fortes. 2008. Towards brazilian portuguese automatic text simpliﬁcation systems. In Proceedings of the eighth ACM symposium on Document engineering, pages 240–248.
+Fernando Alva-Manchego, Louis Martin, Antoine Bordes, Carolina Scarton, Benot Sagot, and Lucia Specia. 2020a. Asset: A dataset for tuning and evaluation of sentence simpliﬁcation models with multiple rewriting transformations. In Proceedings of the 58th annual meeting of the Association for Computational Linguistics (ACL 2020), Seattle, Washington, USA. To appear.
+Fernando Alva-Manchego, Louis Martin, Carolina Scarton, and Lucia Specia. 2019. Easse: Easier automatic sentence simpliﬁcation evaluation. arXiv preprint arXiv:1908.04567.
+Fernando Alva-Manchego, Carolina Scarton, and Lucia Specia. 2020b. Data-driven sentence simpliﬁca-
+
+tion: Survey and benchmark. Computational Linguistics, (Just Accepted):1–87.
+Alessio Palmero Aprosio, Sara Tonelli, Marco Turchi, Matteo Negri, and Mattia A Di Gangi. 2019. Neural text simpliﬁcation in low-resource conditions using weak supervision. In Proceedings of the Workshop on Methods for Optimizing and Evaluating Neural Language Generation, pages 37–44.
+Mikel Artetxe, Gorka Labaka, and Eneko Agirre. 2018. Unsupervised statistical machine translation. arXiv preprint arXiv:1809.01272.
+Mikel Artetxe and Holger Schwenk. 2019. Massively multilingual sentence embeddings for zeroshot cross-lingual transfer and beyond. Transactions of the Association for Computational Linguistics, 7:597–610.
+Regina Barzilay and Lillian Lee. 2003. Learning to paraphrase: an unsupervised approach using multiple-sequence alignment. In Proceedings of the 2003 Conference of the North American Chapter of the Association for Computational Linguistics on Human Language Technology, pages 16–23.
+Steven Bird and Edward Loper. 2004. NLTK: The natural language toolkit. In Proceedings of the ACL Interactive Poster and Demonstration Sessions, pages 214–217, Barcelona, Spain.
+Jan A Botha, Manaal Faruqui, John Alex, Jason Baldridge, and Dipanjan Das. 2018. Learning to split and rephrase from wikipedia edit history. arXiv preprint arXiv:1808.09468.
+Dominique Brunato, Felice Dell’Orletta, Giulia Venturi, and Simonetta Montemagni. 2015. Design and annotation of the ﬁrst italian corpus for text simpliﬁcation. In Proceedings of The 9th Linguistic Annotation Workshop, pages 31–41.
+Christian Buck and Philipp Koehn. 2016. Findings of the WMT 2016 bilingual document alignment shared task. In Proceedings of the First Conference on Machine Translation, pages 554–563, Berlin, Germany.
+
+John Carroll, Guido Minnen, Yvonne Canning, Siobhan Devlin, and John Tait. 1998. Practical simpliﬁcation of english newspaper text to assist aphasic readers. In Proceedings of the AAAI-98 Workshop on Integrating Artiﬁcial Intelligence and Assistive Technology, pages 7–10.
+William Coster and David Kauchak. 2011. Learning to simplify sentences using wikipedia. In Proceedings of the workshop on monolingual text-to-text generation, pages 1–9.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2018. Bert: Pre-training of deep bidirectional transformers for language understanding. arXiv preprint arXiv:1810.04805.
+Emily Dinan, Angela Fan, Adina Williams, Jack Urbanek, Douwe Kiela, and Jason Weston. 2019. Queens are powerful too: Mitigating gender bias in dialogue generation. arXiv preprint arXiv:1911.03842.
+Richard Evans, Constantin Orasan, and Iustin Dornescu. 2014. An evaluation of syntactic simpliﬁcation rules for people with autism. In Proceedings of the 3rd Workshop on Predicting and Improving Text Readability for Target Reader Populations (PITR), pages 131–140.
+Angela Fan, Claire Gardent, Chloe´ Braud, and Antoine Bordes. 2019a. Using local knowledge graph construction to scale Seq2Seq models to multidocument inputs. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLPIJCNLP), pages 4186–4196, Hong Kong, China.
+Angela Fan, David Grangier, and Michael Auli. 2018. Controllable abstractive summarization. In Proceedings of the 2nd Workshop on Neural Machine Translation and Generation, pages 45–54, Melbourne, Australia.
+Angela Fan, Edouard Grave, and Armand Joulin. 2019b. Reducing transformer depth on demand with structured dropout. arXiv preprint arXiv:1909.11556.
+Nu´ria Gala, Ana¨ıs Tack, Ludivine Javourey-Drevet, Thomas Franc¸ois, and Johannes C Ziegler. 2020. Alector: A parallel corpus of simpliﬁed french texts with alignments of misreadings by poor and dyslexic readers. In Language Resources and Evaluation for Language Technologies (LREC).
+Isao Goto, Hideki Tanaka, and Tadashi Kumano. 2015. Japanese news simpliﬁcation: Task design, data set construction, and analysis of simpliﬁed text. Proceedings of MT Summit XV, pages 17–31.
+Kenneth Heaﬁeld. 2011. Kenlm: Faster and smaller language model queries. In Proceedings of the sixth workshop on statistical machine translation, pages 187–197.
+
+Jeff Johnson, Matthijs Douze, and Herve´ Je´gou. 2019. Billion-scale similarity search with gpus. IEEE Transactions on Big Data.
+Mandar Joshi, Danqi Chen, Yinhan Liu, Daniel S Weld, Luke Zettlemoyer, and Omer Levy. 2020. Spanbert: Improving pre-training by representing and predicting spans. Transactions of the Association for Computational Linguistics, 8:64–77.
+Armand Joulin, Edouard Grave, Piotr Bojanowski, and Tomas Mikolov. 2017. Bag of tricks for efﬁcient text classiﬁcation. In Proceedings of the 15th Conference of the European Chapter of the Association for Computational Linguistics, pages 427–431.
+Tomoyuki Kajiwara and M Komachi. 2018. Text simpliﬁcation without simpliﬁed corpora. The Journal of Natural Language Processing, 25:223–249.
+Akihiro Katsuta and Kazuhide Yamamoto. 2019. Improving text simpliﬁcation by corpus expansion with unsupervised learning. In 2019 International Conference on Asian Language Processing (IALP), pages 216–221. IEEE.
+David Kauchak. 2013. Improving text simpliﬁcation language modeling using unsimpliﬁed text data. In Proceedings of the 51st annual meeting of the association for computational linguistics, pages 1537– 1546.
+J. Peter Kincaid, Robert P Fishburne Jr., Richard L. Rogers, and Brad S. Chissom. 1975. Derivation of new readability formulas (automated readability index, fog count and ﬂesch reading ease formula) for navy enlisted personnel.
+Philipp Koehn, Francisco Guzma´n, Vishrav Chaudhary, and Juan Pino. 2019. Findings of the wmt 2019 shared task on parallel corpus ﬁltering for lowresource conditions. In Proceedings of the Fourth Conference on Machine Translation, pages 54–72.
+Philipp Koehn, Huda Khayrallah, Kenneth Heaﬁeld, and Mikel L. Forcada. 2018. Findings of the WMT 2018 shared task on parallel corpus ﬁltering. In Proceedings of the Third Conference on Machine Translation: Shared Task Papers, pages 726–739, Belgium, Brussels.
+Vladimir I Levenshtein. 1966. Binary codes capable of correcting deletions, insertions, and reversals. In Soviet physics doklady, volume 10, pages 707–710.
+Mike Lewis, Yinhan Liu, Naman Goyal, Marjan Ghazvininejad, Abdelrahman Mohamed, Omer Levy, Ves Stoyanov, and Luke Zettlemoyer. 2019. Bart: Denoising sequence-to-sequence pre-training for natural language generation, translation, and comprehension. arXiv preprint arXiv:1910.13461.
+Xianggen Liu, Lili Mou, Fandong Meng, Hao Zhou, Jie Zhou, and Sen Song. 2019. Unsupervised paraphrasing by simulated annealing. arXiv preprint arXiv:1909.03588.
+
+Yinhan Liu, Jiatao Gu, Naman Goyal, Xian Li, Sergey Edunov, Marjan Ghazvininejad, Mike Lewis, and Luke Zettlemoyer. 2020. Multilingual denoising pre-training for neural machine translation. arXiv preprint arXiv:2001.08210.
+Louis Martin, Samuel Humeau, Pierre-Emmanuel Mazare´, E´ ric de La Clergerie, Antoine Bordes, and Benoˆıt Sagot. 2018. Reference-less quality estimation of text simpliﬁcation systems. In Proceedings of the 1st Workshop on Automatic Text Adaptation (ATA), pages 29–38, Tilburg, the Netherlands.
+Louis Martin, Benoˆıt Sagot, E´ ric de la Clergerie, and Antoine Bordes. 2020. Controllable sentence simpliﬁcation. In Proceedings of the 12th International Conference on Language Resources and Evaluation (LREC 2020).
+Dragos Stefan Munteanu and Daniel Marcu. 2005. Improving machine translation performance by exploiting non-parallel corpora. Computational Linguistics, 31(4):477–504.
+Myle Ott, Sergey Edunov, Alexei Baevski, Angela Fan, Sam Gross, Nathan Ng, David Grangier, and Michael Auli. 2019. fairseq: A fast, extensible toolkit for sequence modeling. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics (Demonstrations), pages 48–53, Minneapolis, Minnesota.
+Gustavo H Paetzold and Lucia Specia. 2016. Unsupervised lexical simpliﬁcation for non-native speakers. In Proceedings of the Thirtieth AAAI Conference on Artiﬁcial Intelligence, Phoenix, Arizona, USA.
+Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, and Ilya Sutskever. Language models are unsupervised multitask learners.
+Luz Rello, Ricardo Baeza-Yates, Stefan Bott, and Horacio Saggion. 2013. Simplify or help?: text simpliﬁcation strategies for people with dyslexia. In Proceedings of the 10th International CrossDisciplinary Conference on Web Accessibility, page 15. ACM.
+Horacio Saggion, Sanja Sˇ tajner, Stefan Bott, Simon Mille, Luz Rello, and Biljana Drndarevic. 2015. Making it simplext: Implementation and evaluation of a text simpliﬁcation system for spanish. ACM Transactions on Accessible Computing (TACCESS), 6(4):1–36.
+Holger Schwenk, Vishrav Chaudhary, Shuo Sun, Hongyu Gong, and Francisco Guzma´n. 2019a. Wikimatrix: Mining 135m parallel sentences in 1620 language pairs from wikipedia. arXiv preprint arXiv:1907.05791.
+Holger Schwenk, Guillaume Wenzek, Sergey Edunov, Edouard Grave, and Armand Joulin. 2019b. Ccmatrix: Mining billions of high-quality parallel sentences on the web. arXiv preprint arXiv:1911.04944.
+
+Abigail See, Stephen Roller, Douwe Kiela, and Jason Weston. 2019. What makes a good conversation? how controllable attributes affect human judgments. arXiv preprint arXiv:1902.08654.
+Sanja Sˇ tajner, Iacer Calixto, and Horacio Saggion. 2015. Automatic text simpliﬁcation for spanish: Comparative evaluation of various simpliﬁcation strategies. In Proceedings of the international conference recent advances in natural language processing, pages 618–626.
+Elior Sulem, Omri Abend, and Ari Rappoport. 2018. Semantic structural evaluation for text simpliﬁcation. In Proceedings of the 2018 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, pages 685–696.
+Sai Surya, Abhijit Mishra, Anirban Laha, Parag Jain, and Karthik Sankaranarayanan. 2019. Unsupervised neural text simpliﬁcation. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics, pages 2058–2068, Florence, Italy.
+Jrg Tiedemann. 2012. Parallel Data, Tools and Interfaces in OPUS. In Proceedings of the Eight International Conference on Language Resources and Evaluation (LREC’12), Istanbul, Turkey.
+Sara Tonelli, Alessio Palmero Aprosio, and Francesca Saltori. 2016. Simpitiki: a simpliﬁcation corpus for italian. Proceedings of the Third Italian Conference on Computational Linguistics.
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Ł ukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. In I. Guyon, U. V. Luxburg, S. Bengio, H. Wallach, R. Fergus, S. Vishwanathan, and R. Garnett, editors, Advances in Neural Information Processing Systems 30, pages 5998–6008.
+Guillaume Wenzek, Marie-Anne Lachaux, Alexis Conneau, Vishrav Chaudhary, Francisco Guzman, Armand Joulin, and Edouard Grave. 2019. Ccnet: Extracting high quality monolingual datasets from web crawl data. arXiv preprint arXiv:1911.00359.
+John Wieting and Kevin Gimpel. 2018. ParaNMT50M: Pushing the limits of paraphrastic sentence embeddings with millions of machine translations. In Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics, pages 451– 462, Melbourne, Australia.
+Kristian Woodsend and Mirella Lapata. 2011. Learning to simplify sentences with quasi-synchronous grammar and integer programming. In Proceedings of the 2011 Conference on Empirical Methods in Natural Language Processing, pages 409–420, Edinburgh, Scotland, UK.
+
+Sander Wubben, Antal Van Den Bosch, and Emiel Krahmer. 2012. Sentence simpliﬁcation by monolingual machine translation. In Proceedings of the 50th Annual Meeting of the Association for Computational Linguistics, pages 1015–1024.
+Wei Xu, Chris Callison-Burch, and Courtney Napoles. 2015. Problems in current text simpliﬁcation research: New data can help. Transactions of the Association for Computational Linguistics, pages 283– 297.
+Wei Xu, Courtney Napoles, Ellie Pavlick, Quanze Chen, and Chris Callison-Burch. 2016. Optimizing statistical machine translation for text simpliﬁcation. Transactions of the Association for Computational Linguistics, 4:401–415.
+Xingxing Zhang and Mirella Lapata. 2017. Sentence simpliﬁcation with deep reinforcement learning. In Proceedings of the 2017 Conference on Empirical Methods in Natural Language Processing, pages 584–594, Copenhagen, Denmark.
+Sanqiang Zhao, Rui Meng, Daqing He, Andi Saptono, and Bambang Parmanto. 2018. Integrating transformer and paraphrase rules for sentence simpliﬁcation. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing, pages 3164–3173, Brussels, Belgium.
+Yanbin Zhao, Lu Chen, Zhi Chen, and Kai Yu. 2020. Semi-supervised text simpliﬁcation with back-translation and asymmetric denoising autoencoders. In Proceedings of the Thirty-Fourth AAAI Conference on Artiﬁcial Intelligence, New York, New York, USA.
+Zhemin Zhu, Delphine Bernhard, and Iryna Gurevych. 2010. A monolingual tree-based translation model for sentence simpliﬁcation. In Proceedings of the 23rd International Conference on Computational Linguistics (Coling 2010), pages 1353–1361, Beijing, China.
+

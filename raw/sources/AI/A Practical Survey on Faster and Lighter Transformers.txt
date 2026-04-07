@@ -1,0 +1,846 @@
+A Practical Survey on Faster and Lighter Transformers
+
+Quentin Fournier Polytechnique Montre´al
+Quebec H3T 1J4 quentin.fournier@polymtl.ca
+
+Gae´tan Marceau Caron Mila - Quebec AI Institute
+Quebec H2S 3H1 gaetan.marceau.caron@mila.quebec
+
+Daniel Aloise Polytechnique Montre´al
+Quebec H3T 1J4 daniel.aloise@polymtl.ca
+
+arXiv:2103.14636v1 [cs.LG] 26 Mar 2021
+
+Abstract—Recurrent neural networks are effective models to process sequences. However, they are unable to learn long-term dependencies because of their inherent sequential nature. As a solution, Vaswani et al. introduced the Transformer, a model solely based on the attention mechanism that is able to relate any two positions of the input sequence, hence modelling arbitrary long dependencies. The Transformer has improved the stateof-the-art across numerous sequence modelling tasks. However, its effectiveness comes at the expense of a quadratic computational and memory complexity with respect to the sequence length, hindering its adoption. Fortunately, the deep learning community has always been interested in improving the models’ efﬁciency, leading to a plethora of solutions such as parameter sharing, pruning, mixed-precision, and knowledge distillation. Recently, researchers have directly addressed the Transformer’s limitation by designing lower-complexity alternatives such as the Longformer, Reformer, Linformer, and Performer. However, due to the wide range of solutions, it has become challenging for the deep learning community to determine which methods to apply in practice to meet the desired trade-off between capacity, computation, and memory. This survey addresses this issue by investigating popular approaches to make the Transformer faster and lighter and by providing a comprehensive explanation of the methods’ strengths, limitations, and underlying assumptions.
+Index Terms—Deep Learning, Transformer, Self-Attention, Survey.
+I. INTRODUCTION
+Sequences arise naturally in a wide range of domains, notably in natural language, biology, and software executions. Rumelhart et al. [1] introduced a family of models called recurrent neural networks (RNNs) based on the idea of parameter sharing to process variable-length sequences as illustrated in Figure 1. Unfortunately, vanilla RNNs often suffer from vanishing or exploding gradient, which prevent them from learning long-term dependencies. To mitigate this limitation, Hochreiter and Schmidhuber [2] introduced the now widely popular long short-term memory (LSTM) network, which circumvents the gradient issues with paths through time. Cho et al. [3] later improved over the LSTM with the simpler gated recurrent unit (GRU).
+Recurrent neural networks output a vector at every timestep. Therefore, the output sequence must have the same length as the input sequence as depicted in Figure 1. Depending on the task, this property of RNNs may be too restrictive: for instance, question answering requires outputting a sequence whose size is often different from that of the input. Sutskever
+
+et al. [4] addressed this limitation by introducing the sequenceto-sequence framework in which a ﬁrst network (encoder) processes the entire input sequence and returns its last hidden representation h(n), effectively encoding the input into a ﬁxedsize vector called context. The context then serves as the initial state for a second network (decoder), which generates the output sequence. Figure 2 illustrates the sequence-to-sequence framework.
+In practice, the hidden representation’s ﬁxed-size nature hinders the effectiveness of recurrent neural networks [5]. Indeed, as the input sequence is processed, the relevant information is iteratively stored into the hidden representation that is either too large or too small. In the latter case, information is lost, which may signiﬁcantly impact the model’s performance. Bahdanau et al. [6] introduced an alignment mechanism called inter-attention to overcome the memory compression issue in the sequence-to-sequence framework. This attention mechanism computes a different representation of the input for each output step, effectively allowing the decoder to “look at” the relevant part(s) of the input for each output step. Thereby, the inter-attention alleviates the encoder’s burden to encode all information about the input sequence into a ﬁxedsize vector. Formally, the context is the weighted sum of the encoder’s hidden representations hi for i = 1, . . . , n where the weights are computed with a feed-forward neural network. For a comprehensive survey of the attention mechanism, we refer the reader to Galassi et al. [7] and Weng [8]. Figure 3 illustrates the inter-attention framework.
+Moreover, recurrent neural networks do not scale efﬁciently to longer sequences due to their iterative nature [9]. In particular, RNNs struggle to learn dependencies between distant positions. One measure of this limitation is the relative effective context length (RECL) introduced by Dai et al. [10]. The RECL is the largest context length that leads to a substantial relative gain over the best model; in other words, increasing the context length over the RECL yields a negligible increase in performance over the best model. The authors estimated that the relative effective context length of LSTMs on natural language data is limited to approximately 400 words. Besides, Khandelwal et al. [11] empirically observed that LSTMs sharply model recent positions but only vaguely remembering the distant past.
+This inherent limitation of recurrent neural networks has
+
+Decoder
+
+...
+
+...
+
+...
+
+...
+
+Fig. 1. The computational graph of a recurrent neural network. The input and output sequences are depicted in blue and red, respectively. The position, also known as the time-step, is indicated in superscript. The weight matrices W , U , and V are shared across all positions. Figure reproduced from [17].
+
+Encoder
+
+...
+
+Decoder
+
+Encoder
+
+...
+
+...
+
+_
+Fig. 2. The sequence-to-sequence framework where the encoder and decoder are recurrent neural networks. The context h(n) is shown in red. Figure reproduced from [17].
+
+Fig. 3. The inter-attention mechanism. The attention weight αi(t) depicts the strength with which the i-th encoder hidden representation h(i) contributes to the context of t-th decoder step. Figure reproduced from [17].
+2000
+
+prevented them from being successfully applied to domains that require processing extremely long sequences such as DNA. To overcome this limitation, Vaswani et al. [9] introduced the Transformer, a sequence-to-sequence model build without recurrences. Instead, the Transformer relies solely on the attention mechanism: the inter-attention between the encoder and decoder (see Figure 3), and the self-attention, also known as intra-attention, within the encoder and decoder. The self-attention’s main advantage is its ability to relate any two positions of the input sequence regardless of their distance, thus allowing for a signiﬁcant increase in performance on a wide range of tasks, including natural language processing (NLP) [12, 13, 9], computer vision [14, 15], and biological sequence analysis [16]. As of this paper’s writing, the Transformer has become the de facto model for many state-of-theart sequence processing tasks. Since its publication in June 2017, Vaswani et al. [9] paper has been cited more than 17,000 times, and the Transformer is at the core of more than 1,800 publications on arXiv only (see Figure 4), as of February 2021.
+The Transformer’s capacity comes at the cost of a quadratic computational and memory complexity with respect to the sequence length. Therefore, training large Transformers is prohibitively long. For instance, Liu et al. [18] introduced RoBERTa, which was pre-trained on 1024 high-end V100 graphics processing units (GPUs) for approximately a day. Although a few large pre-trained Transformers have been publicly released, ﬁne-tuning them on the tasks of interest is still computationally expensive. Furthermore, the sequence lengths are restricted by the amount of memory available. Typically, a GPU with 16 GB of memory handles sentences of 512 words. Consequently, there exists an actual need for lighter and faster Transformers as only a few large organizations can
+
+1500
+1000
+500 Vaswani et al.
+Attention is All You Need 0 2017 2018 2019 2020 2021
+Fig. 4. The cumulative count of publications on arXiv that contain the word “Transformer” in their abstract or title from the categories “Machine Learning” and “Computation and Language”.
+afford to train massive models. As of the writing of this paper, the largest dense Transformer is GPT-3 [12] which requires 355 years to train on a V100 GPU, costing around 4,600,000$ of cloud instances1.
+Over the years, numerous approaches have been proposed to reduce the computational and memory costs2 of neural networks, many of which have been applied to Transformers. In this paper, such methods are referred to as general since they apply – and have been applied – to a wide range of models. General methods are often orthogonal, and consequently, several of them may be combined to precisely ﬁnetune the network’s capacity, computational cost, and memory usage. General methods, however, may be insufﬁcient as the model complexity remains unchanged. Therefore, many works
+1https://lambdalabs.com/blog/demystifying-gpt-3 2We consider the cost to be a precise measurement and the complexity to be the order, that is, the growth rate of the function. For instance, a memory cost of 5n + 1 bytes corresponds to a linear complexity O(n) with respect to n.
+
+introduced lower-complexity variations of the Transformer, referred to as x-formers in Tay et al. [19] survey.
+The remainder of this survey is organized as follows. Section II formally introduces the Transformer’s architecture and the origin of the quadratic complexity. Section III investigates the popular general methods that have been applied to Transformers to reduce the computations and memory footprint, and Section IV explores the recent lower-complexity Transformers. Section V provides a discussion on the broader impact of lighter and faster Transformers, the limitations of the different approaches and the current evaluation methodology, and points out potential future research directions. Finally, Section VI concludes this survey.
+
+II. TRANSFORMER
+
+The Transformer is a sequence-to-sequence model and therefore comprises an encoder and a decoder. This section formally introduces the Transformer’s architecture, the attention mechanism, and the reason for its quadratic complexity.
+
+A. Encoder
+
+The Transformer’s encoder is a function deﬁned as the composition of L identical layers or blocks, each composed of two sub-layers. The ﬁrst sub-layer is the self-attention mechanism which allows the encoder to focus on the relevant part of the sequence for each position, similarly to the interattention depicted in Figure 3. The second sub-layer is a simple fully connected feed-forward network applied independently and identically to every position (position-wise). The feedforward network increases the encoder’s expressiveness and transforms the self-attention’s output for the next layer.
+Inspired by ResNet [20], a skip connection or residual connection is applied around each sub-layer to create a direct path for the gradient to ﬂow through the network. Notably, residual connections make the training of very deep neural networks more stable. Additionally, both sub-layers’ outputs are normalized after the residual connection with the layer normalization technique introduced by Lei Ba et al. [21]. Normalization is a widely adopted technique in deep learning that enables faster and more stable training. Although the rationale behind normalization’s empirical success is not yet fully understood [22], it has been theorized that the main reason is a smoother optimization landscape, and to a lesser extent, a reduction in internal covariance shift [23]. Figure 5 depicts the computational graph of an encoder’s layer.
+Let X = {x(1), . . . , x(n)} ∈ Rn×d denote the input sequence comprising n vectors of dimension d. In natural language processing, X would typically represent a sentence or a paragraph, and x(i) would be its i-th word or subword embedding. Each encoder’s layer is given by:
+
+XA = LayerNorm(Attention(X) + X)
+
+(1)
+
+XB = LayerNorm(FFN(XA) + XA)
+
+(2)
+
+where X and XB are the layer’s input and output, respec-
+
+tively. The layer normalization is given by:
+
+x−µ
+
+LayerNorm(x) = g √
+
++b
+
+(3)
+
+σ2 +
+
+where :
+
+1d
+
+d
+
+21
+
+2
+
+µ= d
+
+xi and σ = d
+
+(xi − µ)
+
+i=1
+
+i=1
+
+and denotes the element-wise (Hadamard) product; the gain g and the bias b are learned parameters of dimension d, and is a small constant used in practice for numerical stability. Note that the layer normalization is deﬁned for a vector since it is applied position-wise, that is, independently and identically to every position or row. Finally, the positionwise feed-forward network is given by:
+
+FFN(x) = max(0, xW 1 + b1)W 2 + b2
+
+(4)
+
+where W 1 ∈ Rd×df and W 2 ∈ Rdf ×d, and where df is the dimension of the hidden layer.
+
+B. Decoder
+The decoder is also composed of L identical layers. Note that although it is common for the decoder to have the same number of layers as the encoder, one may adjust their depth independently. Each decoder’s layer comprises three sub-layers. The ﬁrst sub-layer is the self-attention mechanism as in the encoder, except that future positions are masked. Indeed, the encoder is allowed to look at future positions since the input sequence is entirely available. The decoder, however, cannot look at future positions since they have not yet been predicted. Therefore, the i-th position may only attend to positions less than i. The second sub-layer is the inter-attention mechanism, which helps the decoder focus on the relevant parts of the input, such as depicted in Figure 3. Finally, the third sub-layer is a simple feed-forward network. As for the encoder, a residual connection and a layer normalization are applied to each sub-layer.
+Note that when the task does not require the sequenceto-sequence framework, such as sentiment analysis, which predicts whether a sentence is positive, the decoder may be safely omitted. One of the most popular encoder-only Transformers is the Bidirectional Encoder Representations from Transformers or BERT [13], a state-of-the-art language model that learns contextualized embeddings. Nonetheless, many tasks still require the sequence-to-sequence framework, most notably autoregressive tasks such as machine translation.
+
+C. Self-Attention
+Given three matrices Q, K, and V commonly referred to as “queries”, “keys”, and “values”, respectively, the attention outputs the weighted sum of the values by the compatibility score between the queries and keys. Intuitively, if the i-th query has a large compatibility score with the j-th key, then the j-th value greatly contributes to the i-th attention output. The attention mechanism may be written as:
+
+Attention(Q, K, V ) = Score(Q, K)V
+
+(5)
+
+MatMul Softmax Scale MatMul
+
+Encoder's layer
+LayerNorm FFN
+LayerNorm Attention
+
+outputs Decoder's layer
+LayerNorm FFN
+LayerNorm
+Attention
+LayerNorm
+Attention
+
+inputs
+
+inputs
+
+Fig. 5. The computational graph of the Transformer [9]. From left to right, the scaled dot-product attention, the encoder, and the decoder. Note that both the encoder and decoder comprise L layers, of which only one is depicted.
+
+In the case of the inter-attention, the queries are the decoder’s hidden representations, and the keys and values are the encoder’s outputs. In the case of the self-attention, the three matrices are linear projections of the layer’s input.
+
+Q = XW Q, K = XW K, V = XW V
+
+(6)
+
+where Q, K, V ∈ Rn×d and W Q, W K , W V ∈ Rd×d. In the original paper, the Transformer’s self-attention is the
+scaled dot-product self-attention. The dot product refers to the computation of the compatibility score between a single query and a single key. In practice, however, the compatibility scores are computed simultaneously for every query and key by multiplying Q with K . Indeed, the (i, j) entry of the QK multiplication is equal to the dot product of the ith query with the j-th key. In order to obtain a probability distribution over the positions, each row of QK is passed through a Softmax function deﬁned as follows:
+exi j=1 Softmax(x)i = n exj for i = 1, . . . , n (7)
+where x ∈ Rn. Since the dot product grows large in magnitude for large values of d, thereby pushing the√Softmax into a region of small gradients, a scaling factor d is introduced. Therefore, the scaled dot-product self-attention is given by:
+
+QK Attention(Q, K, V ) = Softmax √ V (8)
+d
+
+Figure 5 illustrates the computational graph of the scaled dotproduct self-attention, which will be subsequently referred to as attention for the sake of brevity.
+
+The attention presented above may not be ﬂexible enough if the relevant information for the task is scattered across different regions of the input space. That is due in part to the Softmax being exponential which ampliﬁes the differences between the values. As a result, only a few attention weights are large, that is, only a few positions are strongly attended. This limitation is addressed by jointly learning multiple independent attention instances called heads. Vaswani et al. [9] proposed the multi-head attention, which simply concatenates the head outputs before linearly projecting them. Formally, the Transformer’s multi-head attention is given by:
+
+MultiHead(Q, K, V ) = [head1; ...; headh]W O (9)
+
+QW iQ(KW iK ) V
+
+headi = Softmax
+
+√
+
+V Wi
+
+(10)
+
+dk
+
+where W iQ ∈ Rd×dk , W iK ∈ Rd×dk , W Vi ∈ Rd×dv are the matrices that project the queries, keys, and values into the i-th subspace, respectively; W O ∈ Rhdv×d is the matrix that computes a linear transformation of the heads. Typically,
+dk = d/h where h is the number of heads. For the sake of
+clarity, methods that modify the attention will be explained in
+the context of a single head (see Equation 8).
+
+D. Complexity
+Intuitively, the quadratic complexity emerges from the computation of the compatibility score between every pair of positions. More precisely, the QK multiplication requires n2 computations and memory. Such attention is said to be full since any output position is able to attend to any input position. The attention pattern is visualized with a connectivity matrix
+
+Output indices
+
+Input indices
+Fig. 6. The connectivity matrix of the full attention. The i-th output position attends to the j-th input position if, and only if, the cell (i, j) is coloured. The diagonal is highlighted to ease the reading.
+S, which indicates the input positions that each output position is able to attend (see Figure 6).
+III. GENERAL APPROACHES
+Computational resources have always been a limiting factor for deep learning models [24]. Therefore, numerous approaches have been proposed throughout the years to design faster and lighter models. This section introduces some of the most popular techniques that apply to virtually all neural networks.
+Gradient Checkpointing [25]: Intermediate results computed during the forward pass, also referred to as activations, are required to compute the gradients during the backward pass; therefore, they are stored in memory. Activations typically account for most of the memory during training: given an l-layer network, the number of intermediate results is proportional to the number of layers (O(l)). With gradient checkpointing, also known as rematerialization, activations are stored only for a subset of the layers. However, they must be recomputed during the backward pass, trading memory for computations. In the extreme case where no activations are stored, the memory usage becomes constant (O(1)) at the cost of a quadratic number of computations with respect to the number of layers (O(l2)). Chen et al. [25] designed a scheme to select the preserved va√lues that reduces the memory requirement from O(l) to O( l) at the cost of a single additional forward pass per mini-batch. OpenAI implementation of gradient checkpointing [26] claims an impressive 10× reduction in memory at the cost of a 20% increase in computation time.
+Micro-Batching [27]: Increasing model capacity and data throughput are efﬁcient strategies for improving performances in deep learning. However, increasing data throughput requires transferring large mini-batches to the accelerators’ memory3, which is also used to store the model. One way to partially avoid the trade-off between mini-batch size and model size is to use model parallelism. GPipe [27] is a model parallelism library that enables users to distribute a model by grouping layers into cells assigned to accelerators. To avoid the communication bottleneck between accelerators due to the forward
+3An accelerator denotes any device that accelerates computation, such as a graphics or tensor processing unit.
+
+and backward operations, the authors proposed a novel batchsplitting algorithm that further splits the mini-batch into microbatches. As soon as the ﬁrst accelerator ﬁnishes the forward operation of the layers assigned to it for a micro-batch, it sends the result over the communication link and starts processing the next micro-batch. After ﬁnishing the last micro-batch’s forward operation, the accelerators wait for the ﬁrst microbatch’s backwards operation results. This waiting time can be used to recompute the forward operation and further reduce memory usage, known as rematerialization. Finally, once the backward operation is completed on the last micro-batch, the algorithm sums all micro-batch’s gradients to obtain the mini-batch’s gradient (see Figure 7). However, the result is not exact with layers that compute statistics across all minibatch examples, such as a batch normalization layer [28]. Finally, GPipe is compatible with data parallelism, where multiple mini-batches are processed in parallel. With GPipe, the authors trained a 6B-parameter Transformer composed of 64 encoder and decoder layers, a feed-forward hidden dimension of 16,384, and 32 attention heads distributed over 16 accelerators to do neural machine translation over 100 languages, achieving better than bilingual model performance for all languages at the time.
+Reversible Layers [29]: Activations of reversible layers can be reconstructed exactly from the next layer; therefore, activations must only be stored for one layer and their memory cost becomes independent of the network’s depth. More formally, each reversible layer takes as input (x1, x2) and outputs (y1, y2) such that:
+
+y1 = x1 + f (x2) and y2 = x2 + g(y1)
+
+(11)
+
+Each layer’s activations are easily reconstructed as follows:
+
+x1 = y2 − g(y1) and x2 = y1 − f (x2)
+
+(12)
+
+Nonetheless, reversible layers add numerical errors that accumulate over multiple layers and may degrade the model performance. Therefore, they are not suited for very deep networks.
+Gradient checkpointing, micro-batching, and reversible layers trade with various degrees computations for memory. This trade-off is sometimes necessary: although computation bottlenecks entail longer running times, memory bottlenecks are critical. Indeed, inference, and by extension, training, requires storing in memory at least one example and the model parameters. Whenever the memory is insufﬁcient, most deep learning libraries return an out of memory error.
+Parameter Sharing: A simple approach to reduce the number of trainable parameters is to impose sets of parameters to be equal in different parts of the network. In other words, the same parameters are used for multiple operations but need to be stored only once in memory. Such a technique is often referred to as parameter sharing, weight tying, or weight replication. As explained in Section I and illustrated in Figure 1, recurrent neural networks are built around this idea of parameter sharing to process variable-length sequences. Parameter sharing has also been applied to Transformers. For
+
+Loss Device 3
+
+Waiting
+
+Update
+
+Device 2
+
+Waiting
+
+Update
+
+Device 1
+
+Waiting
+
+Update
+
+Gradients
+
+Time
+
+Fig. 7. Micro-Batching applied to a model distributed across three devices [27]. Fi and Bi denotes the sequential forward and backward operations, respectively, performed by the i-th device. Computation on a device may start as soon as the previous device in the computational graph has processed the ﬁrst micro-batch. Therefore, micro-batching reduces the waiting time of each device at the cost of inter-device communications. Note that the model update is done synchronously at the end.
+
+instance, the Linformer [30] shared projection matrices across heads and layers, and the Reformer [31] shared its queries and keys, that is, W Q = W K . Both authors investigated the impact of parameter sharing and concluded that it did not degrade their respective models’ performance on their tasks. Lan et al. [32] shared all parameters between layers, which drastically reduced the number of parameters but also decreased the performance by up to 2.5% on average. They observed that sharing only the attention parameters resulted in a slight drop in performance of 0.7% on average. The decrease in performance is to be expected since parameter sharing reduces the number of free parameters, hence the model’s capacity.
+Pruning [24]: Smaller neural networks are not only faster and lighter, but they are also more likely to generalize better than larger models because they presumably extract the true underlying explanatory factors without redundancy. To reduce the model size, weights with a small saliency, that is, whose deletion have a small effect on the loss, may be removed from large models after training. Methods that consider individual weights are said to be unstructured, and methods that consider pieces of the network structure such as attention heads or layers are said to be structured. Many structured and unstructured pruning schemes have been proposed, several of which have been applied to Transformers. For instance, Sajjad et al. [33] reduced the size of BERT by 40% by dropping complete layers while retaining between 97 and 98% of its original performance, and Michel et al. [34] pruned away between 20% and 40% of BERT attention heads without any signiﬁcant loss in performance. Recently, the success of the lottery ticket hypothesis has brought a new justiﬁcation to pruning neural networks. As introduced by Frankle and Carbin [35], the lottery ticket hypothesis states that a “randomlyinitialized, dense neural network contains a subnetwork that is initialized such that – when trained in isolation – it can match the test accuracy of the original network after training for at most the same number of iterations.”. Prasanna et al.
+
+TABLE I
+MULTIPLE KNOWLEDGE DISTILLATIONS OF BERTBASE . SPEED-UPS ARE EVALUATED ON GPUS.
+
+Model BERTBASE [13] DistilBERT [39] MiniBERT [40] TinyBERT [41]
+
+Compression 1.0× 1.7× 6.0× 7.5×
+
+Speed-up 1.0× 1.6×
+2.6 − 4.3× 9.4×
+
+Mean Relative Performance
+100% 97% 97 − 99% 97%
+
+[36] successfully veriﬁed this hypothesis on BERT, even noticing that BERT worst subnetworks remain highly trainable. Nonetheless, pruning has two limitations: a large model must be trained, and unstructured pruning schemes produce sparse models unoptimized for modern GPUs and tensor processing units (TPUs).
+Knowledge Distillation [37, 38]: The knowledge of a large model or an ensemble of models (teacher) is transferred to a single smaller model (student) by training the student to reproduce the teacher’s outputs or its internal behaviour. The cumbersome teacher is then discarded, and the student is used at inference time. Given a parameter budget, networks trained with knowledge distillation usually outperform models directly trained on the task. Sanh et al. [39], Tsai et al. [40], and Jiao et al. [41] applied different knowledge distillation schemes on the original BERT [13] to obtain lighter and faster models called DistilBERT, MiniBERT, and TinyBERT, respectively. Table I reports the models compression, speed-up, and performance. Although knowledge distillation achieves impressive compression ratios and performance trade-offs, a large teacher model still needs to be trained, and the student may perform signiﬁcantly worse than the teacher. For instance, BERTBASE achieves an accuracy of 52.8% on the CoLA task [42], while DistilBERT and TinyBERT only achieve 32.8% and 44.1%, respectively, according to Jiao et al. [41].
+Mixed-Precision [43]: Modern GPUs and TPUs perform at
+
+least twice as many half-precision (16 bits) ﬂoat operations as single-precision (32 bits) ones. A popular approach to accelerate training and reduce memory consumption is storing and computing the weights, activations, and gradients in halfprecision. A master copy of the weights is stored in singleprecision for numerical stability and minimal performance loss. Thanks to NVIDIA’s Automatic Mixed-Precision included in some of the most popular deep learning libraries, namely TensorFlow, PyTorch, and MXNet, using mixed precision can be as simple as adding one line of code. Jacob et al. [44] improved over this approach by quantizing both weights and activations as 8-bit integers and biases as 32-bit integers, effectively allowing inference to be performed using integer-only arithmetics. Formally, given a parameter matrix W , N -bit quantization rounds each parameter to one of 2N codewords. Speciﬁcally, the parameter Wi,j is mapped to the nearest codeword computed as follows:
+
+ˆ
+
+Wi,j
+
+Wi,j = round
+
++z −z ×s
+
+(13)
+
+s
+
+where : max W − min W
+s = 2N − 1
+
+min W and z = round
+s
+
+In order to mitigate the performance loss associated with the low-precision approximation, Quantization Aware Training (QAT) [44] quantizes the parameters during training. Since quantization is not differentiable, gradients are approximated with a straight-through approximator [45]. Notably, Zafrir et al. [46] quantized all matrix product operations in BERT fully connected and embedding layers during training, reducing the memory footprint by 4× while retaining 99% of the original accuracy on the GLUE [47] and SQuAD [48] tasks. Stock et al. [49] achieved an even higher compression ratio with iterative product quantization (iPQ), which replaces vectors of weights by their assigned centroid, and quantization of those centroids. The authors reduced the size of a 16-layer Transformer by 25×, making the model only 14 MB, while retaining 87% of the original performance on the Wikitext103 [50] benchmark. It is interesting to note that while pruning and knowledge distillation achieve faster and lighter models by reducing the number of parameters, mixed-precision and quantization instead reduce the number of bits per parameter.
+Mixture of Experts [51]: The core idea is to train multiple networks called experts, each of which specializes only in a subset of the data, and a manager or router, which forward the input to the corresponding experts. A single network is used in practice, whose layers are composed of multiple subsets of parameters (experts), effectively resulting in a sparsely activated model as illustrated in Figure 8. Increasing the number of experts keeps the computational cost constant since the model always select the same number of experts for each input regardless of the number of experts. Therefore, the mixture of experts (MoE) approach allows for massive models and is particularly efﬁcient for distributed systems in which experts are spread across devices. In that case, the number
+
+Encoder's layer
+LayerNorm Switch FFN
+LayerNorm Attention
+
+FFN1
+
+FFN2
+
+FFN3
+
+Router
+
+FFN1
+
+FFN2
+
+FFN3
+
+Router
+
+Fig. 8. The computational graph of a single layer of the Switch Transformer’s encoder [52]. The Transformer’s feed-forward network (FFN) has been replaced by a Switch FFN which independently routes each position to an expert. The expert’s output is multiplied by the gate value. Note that the computational cost is independent of the number of experts since a single expert is active for each position.
+of experts, and therefore parameters, scales with the number of devices available. Despite these advantages, the mixture of experts has not yet been widely adopted as the method is complex to deploy in practice. It imposes a communication cost between the devices, a computation cost to select the experts for each input position, and makes training unstable. Recently, Fedus et al. [52] introduced the Switch Transformer based on a carefully crafted mixture of experts. Notably, given a ﬁxed amount of computation per input position, the Switch Transformer reached the same quality threshold as a vanilla Transformer ﬁve times faster (wall-clock time) on average. Additionally, when trained further, the Switch Transformer outperformed the vanilla baseline. However, this approach assumes that multiple regimes whose input to output relations differ produce the data.
+Sample-Efﬁcient Objective [53]: Large neural networks, especially Transformers, beneﬁt from being pre-trained with an unsupervised objective before being ﬁne-tuned on the task of interest, also called the downstream task. The core idea is to leverage large unlabelled datasets that are easy to automatically collect in order to learn the data underlying explanatory factors and ultimately improve the model performance. Concretely, pre-training initializes the network’s weights in a “good” region of space. Let us consider the example of pre-training with the left-to-right language model for sentiment analysis, whose objective is to predict whether a sentence is positive. A large neural network ﬁrst learns to predict the next word given the previous ones (pre-training). By doing so, the model discovers the relations between words without requiring labels. The same model is then trained on sentiment analysis with a smaller labelled dataset (ﬁne-tuning).
+Recently, Devlin et al. [13] popularized the Cloze procedure [54] for pre-training under the name of masked language model (MLM), which independently estimates the probability of masked words given the rest of the sequence. Practically, 15% of the words are randomly selected, of which 80% are masked, 10% are replaced by a random word, and 10% are left unchanged. This task is analogous to the reconstruction of corrupted input. Figure 9 illustrates the masked language
+
+chef
+
+prediction
+
+Generator (large Transformer)
+
+the MASK cooks bird meal masked sequence
+
+the
+
+chef
+
+cooks
+
+a
+
+meal
+
+Fig. 9. The masked language model objective [13]. The masked words are depicted in red. The model makes a prediction only for the masked words; thus, MLM is computationally inefﬁcient.
+
+original
+
+rep.
+
+original
+
+rep.
+
+original
+
+prediction
+
+Discriminator (large Transformer)
+
+the
+
+man
+
+cooks
+
+one
+
+meal
+
+Generator (small Transformer)
+
+sample
+
+the MASK cooks MASK meal masked sequence
+
+the
+
+chef
+
+cooks
+
+a
+
+meal
+
+Fig. 10. The replaced token detection objective [53]. A plausible alternative of each masked word is sampled from a small generator network. Then a discriminator predicts whether each word has been replaced.
+
+model objective.
+Clark et al. [53] introduced the replaced token detection objective to speed up pre-training; a small network (generator) ﬁrst generates a plausible alternative for each masked word, then the large model (discriminator) predicts whether each word has been replaced (see Figure 10). While the masked language model makes a prediction only for the masked works, the replaced token detection makes a prediction for every word. Therefore, the latter is more computationally efﬁcient than the former; in other words, less pre-training computations are required to achieve the same performance on downstream tasks.
+Architecture Search: One of the most challenging goals in deep learning is to automatically design networks. Indeed, the problem of ﬁnding architectures that achieve the best performance with the fewest operations and lowest memory footprint in a discrete search space is an NP-hard combinatorial optimization problem. Over the years, multiple approaches to Neural Architecture Search (NAS) have been proposed, including reinforcement learning [55], evolutionary algorithms [56], and bilevel optimization [57]. Notably, Zoph et al. [58] demonstrated that NAS is able to surpass humandesigned architectures on ImageNet by 1.2% top-1 accuracy while using 28% fewer computations. Nonetheless, neural architecture search methods are computationally expensive
+
+as they usually require training each candidate model from scratch. As a solution, Pham et al. [59] proposed Efﬁcient NAS (ENAS), which constrains all candidates to be subgraphs of a single computational graph, that is, to share parameters. Therefore, the ENAS’s controller decides which operations are activated and relies on the models’ ability to adapt, similarly to dropout [60]. Efﬁcient NAS reduces the search computational budget by 1, 000× over the original NAS [55]. Alternatively, Liu et al. [57] proposed the Differentiable Architecture Search (DARTS), which casts the NAS problem as a differentiable bilevel optimization problem. The ﬁrst level consists of a continuous relaxation of the discrete search space using a Softmax function over a list of candidate operations, and the second level involves the model’s weights. However, the bilevel formulation requires training the weights to convergence to evaluate the architecture gradient. To avoid this substantial cost, the authors made the approximation of taking a single gradient step of the weights for one gradient step of the architecture parameters. The authors obtain comparable performances to non-differentiable NAS methods on ImageNet in the mobile setting using only 4 GPU-days, compared to 3,150 for evolutionary algorithms [56] and 2,000 for NAS [58]. Differentiable Architecture Search obtained comparable results to ENAS with a similar computational budget. We refer the reader to Elsken et al. [61] survey for further detail on architecture search methods.
+Nevertheless, neural architecture search methods are challenging to apply on Transformers due to the memory requirements and training time. Therefore, recent works introduced methods better suited for the Transformer. So et al. [62] modiﬁed the tournament selection evolutionary architecture search [56] with Progressive Dynamic Hurdles (PDH), which dynamically allocates resources to more promising architectures according to their performances. With PDH, the authors optimized transformer architectures directly on the WMT’14 En-De task [63] which requires 10 hours of computations on a Google TPU v2 for the base Transformer model. Training directly on this dataset is essential since the authors did not ﬁnd a smaller surrogate dataset that transfers well, such as CIFAR-10 for ImageNet. The Evolved Transformer performs matched the vanilla Transformer’s performance with only 78% of its parameter. Recently, Tsai et al. [64] proﬁled the Transformer’s components on a TPU v2 and observed that some mechanisms substantially impact inference time: attention queries, keys, and values dimensions, width and depth of feed-forward layers, number of attention heads, and layer normalization mean computation. By decomposing these components into building blocks and using binary variables, the authors perform a one-shot search for both the architecture and the parameters with a single loss. They optimized this loss with gradient descent on a continuous relaxation of the binary variables and used a policy gradient. Tsai et al. [64] was able to make miniBERT 1.7× faster with a performance drop smaller than 0.3%. Compared to the original BERT, this is 33 to 36× faster.
+Neural architecture search is a promising tool to design
+
+lighter and faster Transformers automatically. Nonetheless, NAS imposes a high computational and memory cost, which may be avoided by carefully engineering the architecture instead. For instance, the Lite Transformer [65] leverages the Long-Short Range Attention (LSRA), where a convolutional layer is applied in parallel to the self-attention in order to learn the local dependencies separately. The carefully handcrafted Lite Transformer outperforms the Evolved Transformer [62] for the mobile NLP setting while requiring about 14, 000× less GPU time.
+Conditional Computing [66]: Although large models are necessary for hard examples, smaller models are likely to perform as well, if not better, on simpler ones. For instance, many words such as “car” are easy to translate, while a few such as “can” require careful consideration of the context4. As of this survey’s writing, most architectures apply a ﬁxed number of operations to all examples regardless of their difﬁculty. A more efﬁcient approach would be to reduce the amount of computation for simple examples. As a solution, Bengio [66] introduced conditional computing, which dynamically adapts the model’s computational graph as a function of the input.
+One way to implement conditional computing is with a mixture of experts, as introduced previously. In that case, only a subset of the parameters is used for a given input, making the computational graph sparse and the computation time almost constant with respect to the model size. Another approach consists of keeping the number of parameters constant and letting the model adjust its computation time separately for each input (according to the input’s value). This approach is called Adaptive Computation Time (ACT) [67] and uses a recurrent mechanism to transform the representations until a halting probability exceeds a given threshold. The model learns to control this probability to minimize both the prediction error and the number of iterations called the ponder cost, which prevents the model from using an inﬁnite amount of computation before making a prediction. One shortcoming of the Adaptive Computation Time is its sensitivity to the ponder cost, which controls the trade-off between speed and accuracy.
+Dehghani et al. [68] applied ACT to a Transformer with a recurrent mechanism for the architecture’s depth. To implement this mechanism, the authors deﬁned recurrent encoder and decoder blocks similar to the original Transformer, except that each block send its output as input. Note that a ﬁxed number of recurrent steps is equivalent to a Transformer with tied parameters across all layers. By integrating ACT to each input position, the model stops the recurrent mechanism dynamically, and the representations associated with halted positions are copied until computation terminates. With this new architecture called Universal Transformer, the authors claimed that it is computationally universal given enough memory. This property may help Transformers to generalize to sequences longer than the ones seen during training. The authors obtained state-of-the-art results on algorithmic and language under-
+4Depending on the context, the word “can” has various meanings, including “be able to”, “may”, “jail”, and “metal container”. See https://www. wordreference.com/deﬁnition/can.
+
+standing tasks. ACT and the Universal Transformer apply the same layers iteratively, which may not be sufﬁciently ﬂexible. Elbayad et al. [69] addressed this limitation with the DepthAdaptive Transformer (DAT), which applies different layers at every depth. The DAT matches the performance of a welltuned Transformer baseline while reducing the computation by up to 76%. However, the authors did not provide a comparison between the Universal Transformer and their DAT.
+In the same way that complex examples may require more computations, some may require access to a longer context. As a solution, Sukhbaatar et al. [70] dynamically adjusted the attention span, that is, the context length, by learning to mask the compatibility scores depending on the input. Their approach achieved state-of-the-art on text8 and enwik8 [71] while requiring signiﬁcantly fewer computations. Alternatively, Li et al. [72] introduced the Decoder-end Adaptive Computation Steps (DACS), which monotonically computes halting probabilities along with the encoder states and stops the decoder computations in order to produce an output when the accumulation of probabilities exceeds a given threshold. In other words, each decoder step only looks at the necessary information as measured by the halting probabilities instead of looking at the entire input sequence.
+IV. SPECIFIC APPROACHES
+This section investigates the recent modiﬁcations of the Transformer’s architecture. Some approaches only consider autoregressive tasks, such as the left-to-right language model, and in that case, the connectivity matrix is lower triangular as it is not permitted to attend to future positions. Whenever possible, such works have been extended to the more general case where attending to future positions is allowed in order to ease the comparison between the different approaches.
+Recurrence [10]: The block-wise approach splits the input sequence into small non-overlapping subsequences called windows, blocks, or chunks, which are processed independently; therefore, the maximum dependency length is equal to that of the subsequence. To leverage information from previous windows, Dai et al. [10] introduced the Transformer-XL, which relies on segment-based recurrence between windows. Although this model achieves a RECL four times greater than the vanilla Transformer with the same parameter budget, it is incapable of capturing long-term dependencies since the gradients are propagated only inside the current window. Furthermore, this model is only compatible with autoregressive tasks. This technique is analogous to truncated back-propagation through time (BPTT), except that a sequence of hidden states is considered instead of the previous one. Figure 11 illustrates the segment-based recurrence of the Transformer-XL.
+Sparse Attention [73, 74, 75, 16, 76]: A conceptually simple way of reducing the complexity of the full attention is to make the attention matrices sparse. Child et al. [74] introduced t√he Sparse Transformer which reduced the complexity to O(n n) with two different sparse attention patterns: strided and ﬁxed. Strided attention allows the i-th output position to
+
+Fixed (no gradient)
+
+Fixed (no gradient)
+
+Current window
+
+Previous window (considered)
+
+Current window
+
+Previous window (not considered)
+
+Previous window (considered)
+
+Current window
+
+Fig. 11. Segment-based recurrence, which is similar to truncated BPTT. The window size is equal to two, and only the previous window is considered. For the sake of clarity, parameters from and to states that do not contribute are omitted.
+
+Input indices
+
+Input indices
+
+Input indices
+
+Input indices
+
+Output indices
+
+Output indices
+
+Output indices Output indices
+
+Fig. 12. The connectivity matrices of the Sparse Transformer Child et al. [74]. (Left) Strided attention with a stride of 3. (Right) Fixed attention with a stride of 3 and c = 1.
+
+Layer 1 Input indices
+
+Layer 2 Input indices
+
+Output indices
+
+Output indices
+
+attend to the j-th input position if one of the two following conditions is satisﬁed:
+(i + s) > j > (i − s) or (i − j) mod s = 0, (14) √
+where the stride s is chosen to be close to n. Similarly, ﬁxed attention allows i to attend to j if one of the two following conditions is satisﬁed:
+ﬂoor(j/s) = ﬂoor(i/s) or (j mod s) ≥ (s − c), (15)
+where c is an hyperparameter. Figure 12 illustrates the strided and ﬁxed attention patterns.
+Wang et al. [75] introduced the Cascade Transformer, which relies on window attention whose size grows exponentially with the number of layers. More speciﬁcally, the number of cascade connections at the layer l is equal to 2.b.ml −1, where b is the base window size and m is the cardinal number; therefore reducing the complexity to O(n.b.ml). Cascade attention is well suited for shallow networks, but its complexity tends to that of the full attention in deep networks as depicted by the connectivity matrices in Figure 13.
+Qiu et al. [77] introduced BlockBERT, which relies on the block-wise attention: the input sequence is split into nb non-overlapping blocks, and positions in block i are only allowed to attend to positions in block π(i), where π denotes a permutation. The author chose to generate the permutations by simply shifting the positions. For instance, the possible permutations of {1, 2, 3} are {1, 2, 3}, {3, 1, 2}, and {2, 3, 1}. The permutation {2, 3, 1} means that the ﬁrst block attends
+
+Layer 3
+
+Layer 4
+
+Fig. 13. The connectivity matrices of the Cascade attention [75] for the ﬁrst
+four layers with a base window b = 1 and a cardinal number m = 2. For instance, the window size of the third layer (l = 2) is equal to 2×b×ml−1 =
+7.
+
+to the second block, the second block attends to the third block, and the third block attends to the ﬁrst block. In the mutlihead setting, a different permutation5 is assigned to each head. More formally, the output position i is only allowed to attend to input j if the following condition is satisﬁed:
+
+π (i − 1)nb + 1 = (j − 1)nb + 1 (16)
+
+n
+
+n
+
+Figure 14 illustrates the connectivity matrix of the block-wise attention where a sequence of length n = 12 is split into nb = 3 blocks. Although the block-wise attention reduces the memory and computational cost by a factor nb, the complexity remains quadratic with respect to the sequence length.
+In order to increase the ﬂexibility of the block-wise attention, Tay et al. [76] introduced the sparse Sinkhorn attention, which is equivalent to the block-wise attention whose keys
+
+5Note that if the number of heads is greater than the number of permutations, multiple heads must be assigned the same permutation.
+
+Input indices
+
+Input indices
+
+Input indices
+
+Input indices
+
+Output indices Output indices
+
+Output indices Output indices
+
+Input indices
+
+Fig. 16. The connectivity matrices of two sparse attention schemes. (Left) Longformer [73]. (Right) BigBird [16]. The attention is the combination of window attention (blue), global attention (green), and random attention (orange).
+
+Output indices
+
+Output indices
+
+Fig. 14. The connectivity matrices of the block-wise attention [77] for nb = 3 blocks. The corresponding permutations are written below the connectivity matrices.
+Input indices
+Fig. 15. The connectivity matrix of the sparse Sinkorn attention [76].
+have been sorted in a block-wise fashion. In other words, the permutations are learned. More speciﬁcally, the sparse Sinkhorn attention transforms the input sequence X ∈ Rn×d into X ∈ Rnb×d where nb is the number of blocks, and where Xi is equal the sum of the input in that block. A simple feed-forward network then learns a mapping Ri ∈ Rnb from the i-th block Xi to all blocks. In order to obtain a sorting matrix from R ∈ Rnb×nb , that is, a matrix comprising only 0s and 1s, and whose rows and column sum to one, the rows and columns are iteratively normalized. The sorting matrix is then used to permute the keys, effectively learning which block to attend (see Figure 15). The sparse Sinkhorn attention reduces the complexity to O(b2), where b is the number of blocks. Nonetheless, since the block size is constant in the original paper, the complexity remains quadratic with respect to the sequence length. Additionally, the authors proposed a truncated version of the sparse Sinkhorn attention, which selects a few keys after sorting them, further reducing the complexity to O(n).
+Beltagy et al. [73] introduced the Longformer which further reduced the complexity to O(n) using a combination of sliding window and global attentions (see Figure 16). The assumption behind the sliding window attention is that the most useful
+
+information is located in each position’s neighbourhood.√The sliding window attention is limited in that it requires O( n) layers to model long-range dependencies. Thus, a few preselected tokens have a global attention: they can attend to every position and be attended by every position. Consequently, the maximum path length between any two positions is equal to 2. Zaheer et al. [16] introduced BigBird, which also achieves a linear complexity using a combination of random, sliding window, and global attentions (see Figure 16). The authors proved that their sparse factorization preserves the theoretical properties of Transformers with the full-attention: the model is both a universal approximator of sequence functions and Turing complete. However, BigBird without random attention outperformed BigBird with it in most of their experiments.
+Locality-Sensitive Hashing [31]: The Softmax function is dominated by the largest values, i.e., by the keys and queries that have the largest dot product. Therefore, the attention may be approximated by only comparing the most similar keys and queries. Kitaev et al. [31] introduced the Reformer, which selects the set of keys that the query can attend to using an angular multi-round locality-sensitive hashing (LSH). Such hashing scheme has a high probability of assigning the same value to similar vectors. Formally, queries and keys are shared (Q = K) and bucketed using multiple hash values obtained as follows:
+
+p = [x R; −x R]
+
+(17)
+
+h(x) = argmax(pi)
+
+(18)
+
+i
+
+where ; denotes the concatenation operation, and where x ∈ Rd is a query/key and R ∈ Rd×b/2 is a random matrix. Output positions are only allowed to attend to input positions that are
+in the same bucket. They are, however, not allowed to attend
+to themselves because the dot product of a vector with himself
+will almost always be greater than the dot product with other
+positions.
+The authors chose a constant bucket size lB, resulting in a number of buckets nB = n/lB. The attention complexity is O(nB × lB2 ) which simpliﬁes as O(n). This does not take into account the computation of the hash values for each position. As only log nB bits are required to encode nB buckets, the complexity of computing hash values is given by O(n log nB),
+
+Input indices (sorted by bucket)
+
+Output indices (sorted by bucket)
+
+Fig. 17. The connectivity matrix of the Reformer [31]. Queries and keys are bucketed using LSH then sorted by their bucket. Therefore, the i-th row of the connectivity matrix may not correspond to the i-th position in the input sequence. Units can only attend other units in the same bucket, but not themselves because queries and keys are equal. The colour represents buckets.
+
+which simpliﬁes as O(n log n). Consequently, the complexity of the Reformer’s attention is O(n log n).
+Low-Rank Factorization [30, 78]: Wang et al. [30] introduced the Linformer, a linear complexity model that approximates the full attention with a low-rank factorization. The author observed and demonstrated that √the self-attention activation matrix, that is, Softmax QK / d , is approxi-
+mately low rank and therefore can be efﬁciently approximated by ﬁrst projecting each key to a lower dimension before performing the dot product, thereby saving time and memory. More formally, the low-rank attention:
+
+QK
+
+Attention(X) = Softmax √
+
+V
+
+(19)
+
+d
+
+n×n
+
+n×d
+
+Q(EK)
+
+≈ Softmax √
+
+F V (20)
+
+d
+
+n×k
+
+k×d
+
+where E, F ∈ Rk×n, with k n, are two linear projection matrices learned during training. The authors showed that E and F could be shared across heads and layers with virtually no performance penalty.
+Tay et al. [78] introduced a family of models called Synthesizers that learn the compatibility scores without computing the pairwise dot products. For instance, the Dense Synthesizer learns the compatibility scores with a simple position-wise feed-forward network. Formally, the Dense Synthesizer’s attention is given by:
+
+F (X) = max(0, XW 1 + b1)W 2 + b2
+
+(21)
+
+Attention(X) = Softmax(F (X))G(X)
+
+(22)
+
+where W 1 ∈ Rn×d and W 2 ∈ Rd×d, and where G(·) : Rn×d → Rn×d is a projection of the input akin to the values. In order to improve the efﬁciency, the authors proposed the Factorized Dense Synthesizer which ﬁrst project the input X
+with two feed-forward networks:
+
+A = FA(X) ∈ Rn×a
+
+(23)
+
+B = FB(X) ∈ Rn×b
+
+(24)
+
+such that a × b = n. Then, two tiling functions HA(·) : Rn×a → Rn×(a.b) and HB(·) : Rn×b → Rn×(b.a) are applied to A and B, respectively. Note that a tiling function simply
+repeats a vector multiple times. Finally, the attention of the
+Factorized Dense Synthesizer is given by:
+
+Attention(X) = Softmax(HA(A)HB(B) )G(X) (25)
+
+Additionally, the authors proposed a baseline called the Factorized Random Synthesizer, whose compatibility scores are independent of the input. Formally, the Factorized Random Synthesizer’s attention is given by:
+
+Attention(X) = Softmax(R1R2 )G(X)
+
+(26)
+
+where R1, R2 ∈ Rn×k are two low-rank matrices learned during training. Although the Synthesizers eliminate the need to compute the pairwise dot products, which speed up the model in practice, the complexity remains quadratic with respect to the sequence length.
+The Nystro¨mformer [79] relies on the Nystro¨m method to generate a low-rank approximation of the Softmax matrix. However, applying the Nystro¨m method directly to the Softmax would require to compute the QK product, which requires O(n2) computations and memory. As a solution, the Nystro¨mformer selects two subsets K˜ and Q˜ of columns, called landmarks, from K and Q, respectively. The authors applied the segment-means approach, which computes the landmarks as the averages over predeﬁned√spans of keys and queries. Let SAB denotes Softmax(AB / d) for any matrix A and B. The Nystro¨mformer approximates the Softmax matrix as:
+
+QK
+
++
+
+Softmax √
+
+≈ SQK˜ SQ˜K˜ SQ˜K
+
+(27)
+
+d
+
+where the superscript + denotes the Moore-Penrose inverse
+typically computed with the singular value decomposition
+(SVD). Since the SVD is inefﬁcient on GPU, the authors relied on an iterative method that approximate SQ˜K˜ + as Z+. Finally, the Nystro¨mformer’s attention is given by:
+
+Attention(X) ≈ SQK˜ Z+SQ˜K V
+
+(28)
+
+which can be efﬁciently encoded in a computational graph. Provided that the number of landmarks is constant and
+much smaller than the sequence length, the Nystro¨mformer complexity is O(n). Depending on the number of landmarks and the sequence length, the authors reported substantial gains over the Linformer and Longformer on the masked language model and sentence order prediction objectives. Additionally, the representations learned by the Nystro¨mformer appear to transfer as well as BERT to different NLP tasks. Nonetheless, a more extensive evaluation of the Nystro¨mformer remains necessary.
+Kernel Attention [80, 81]: A kernel K(·, ·) is a function that takes two vectors as arguments and returns the product of their projection by a feature map φ(·):
+
+K(x, y) = φ(x) φ(y)
+
+(29)
+
+Katharopoulos et al. [81] interpreted the Softmax as a kernel, decomposed it as an inner product in the right space, and rearrange the computations in a clever way to reduce the complexity. More speciﬁcally, the self-attention of a given query Qi may be rewritten using a mapping φ(·):
+
+Attention Qi, K, V = Softmax Qi K V
+
+(30)
+
+j=1 n exp Qi Kj V j j=1 = n exp Qi Kj (31)
+
+j=1 n φ Qi φ Kj V j = n (32)
+j=1 φ Qi φ Kj
+
+φ Qi
+
+j=1 n φ Kj V j
+
+= n (33)
+
+φ Qi
+
+j=1 φ Kj
+
+√ where the scaling factor d has been omitted for the sake of readability. The authors noted that j=1 n φ Kj V j and
+j=1 n φ Kj must only be computed a single time, therefore
+reducing the complexity from quadratic to linear both in terms
+
+of memory and computation. The vectorized formulation of the
+
+numerator makes it simpler to see:
+
+φQ φK V
+
+(34)
+
+n×p
+
+p×n n×d
+
+where the mapping φ(·) : Rd → Rp is applied position-wise. Unfortunately, the feature map of the exponential kernel is inﬁnite dimensional. Hence, any ﬁnite kernel is an approximation of the attention matrix and may be interpreted as a lowrank factorization. However, they are presented separately here due to their conceptual difference. Katharopoulos et al. [81] approximated the attention matrix in the linear Transformer with the feature map φ(x) = elu(x) + 1, where the function elu(·) denotes the exponential linear unit given by:
+
+elu(x) = α(ex − 1), x < 0 (35)
+
+x,
+
+x≥0
+
+where α is an hyperparameter. The linear Transformer performed on par with the vanilla Transformer on autoregressive image generation, but poorly on automatic speech recognition.
+Choromanski et al. [80] later demonstrated that the exponential is equivalent to a kernel with a randomized mapping:
+
+||x||2 exp(x y) = Ew∼N (0,Id) exp w x 2
+||y||2 (36) exp w y
+2
+
+Consequently, the authors introduced the Performer, which approximates the attention by means of a kernel with the following feature mapping:
+
+exp(−||x||2/2) φ(x) = √2p exp w1 x ; . . . ; exp wp x ; (37)
+exp − w1 x ; . . . ; exp − wp x
+
+where w ∼ N (0, Id) such that all wi are exactly orthogonal. The hyperparameter p corresponds to the number of random features and controls the quality of the approximation.
+V. GENERAL DISCUSSION
+A. Shortcomings
+The self-attention is a relatively new mechanism that has been quickly and widely adopted due to its remarkable empirical success. Nonetheless, the self-attention inner workings are not yet fully understood, and many questions remain unanswered, including why the self-attention works, what it learns, and whether it is interpretable. Answering those questions is crucial to designing faster and lighter Transformers that are competitive with the vanilla model. As of this paper’s writing, the deep learning community actively investigates self-attention and have proposed preliminary answers to the aforementioned questions. For instance, evidence supporting both the self-attention interpretability [82, 83] and noninterpretability [84] have been published. Tay et al. [78] empirically evaluated the dot product impact on natural language processing tasks and concluded that query-keys interaction is “useful but not that important”. Kitaev et al. [31] investigated the impact of sharing queries and keys, and concluded that “it turns out that sharing QK does not affect the performance of Transformer”.
+Despite our current limited understanding of the selfattention, a wide range of faster and lighter Transformers have been introduced in a short amount of time, each claiming comparable or superior performance to the vanilla Transformer. Since there is no consensus on how to evaluate the proposed approaches [19], researchers often have to evaluate their method on a small range of tasks. However, different tasks may require different assumptions, which means that one method may work well on a speciﬁc task but poorly on others. For instance, Tay et al. [78] showed that a simple Synthesizer is highly competitive with the vanilla Transformer across a range of natural language processing tasks, including machine translation, language modelling, text generation, and GLUE benchmark. However, Tay et al. [19] later showed that the vanilla Transformer outperforms the Synthesizer on the more difﬁcult Long-Range Arena benchmark. Long-Range Arena [19] is a suite of ﬁve general and challenging tasks designed to evaluate how well Transformers capture longterm dependencies from different modalities such as text, natural and synthetic images, and mathematical expressions. Table II compiles the Long-Range Arena results of the models discussed in the survey. For a complete description of the objectives and datasets, we refer the reader to the original paper.
+Furthermore, due to Transformers large training cost, researchers often evaluate their approach against a limited number of models on the tasks of interests. For instance, [31] only evaluated the Reformer against three distinct vanilla Transformers [9, 85] on three tasks. Standardized suites of benchmarks such as GLUE and the recent Long-Range Arena allow researchers and practitioners to evaluate only their
+
+method and compare it against a public leaderboard. Consequently, we highly recommend that researchers consider such benchmarks.
+Although standardized benchmarks such as Long-Range Arena would help compare the models, the results should be taken with caution since the performance highly depends on the model size and hyperparameters, and the number of steps per second is highly dependent on the implementation and hardware. Furthermore, it is difﬁcult to isolate the beneﬁt of a single modiﬁcation since most methods also rely on one or many general techniques. For instance, the Switch Transformer uses a mixture of experts, mixed-precision, expert dropout, knowledge distillation, and a careful initialization, the Linformer uses mixed-precision, and the Reformer uses reversible layers.
+Recently, there has been a race to lower the complexity of the Transformer. However, the complexity by itself does not tell the complete story. For instance, the Reformer achieves an asymptotic complexity of O(n log n) but is signiﬁcantly slower than the vanilla Transformer on small sequences as shown in Table II. This slow down is caused by large constants that are not shown in the complexity.
+Additionally, there is a distinction between the theoretical complexity and what is achievable in practice. For instance, sparse matrix multiplication may reduce the complexity from quadratic to linear in theory. However, it is well known that GPUs and TPUs are not designed to perform such operations efﬁciently [86]. In practice, sparse matrix multiplication is often slower than dense ones. We encourage researchers to explicitly report the complexity as well as the number of ﬂoating operations (FLOPs), the wall-clock time, and the memory footprint of their method.
+Nonetheless, a clear trend emerges from Long-Range Arena: sparse attention is the best performing approach, kernel attention is the fastest, and low-rank factorization is the lightest. The two best performing models are BigBird and Longformer, both based on the sparse attention, with BigBird outperforming the vanilla Transformer; the two fastest models are the Performer and the linear Transformer, both based on kernel attention; the lightest model is the Linformer which uses lowrank factorization.
+B. Future Research Directions
+Since the deep learning renaissance associated with greedy layer-wise unsupervised pre-training [87], there has been a clear trend to scale neural networks, including Transformers, to leverage ever-larger datasets and ultimately improve the performance. Notably, Radford et al. [88] introduced a large Transformer called GPT-2 and evaluated various model sizes on language modelling tasks in a zero-shot setting. The authors reported that the performance signiﬁcantly increased with the model size ranging from 117M to 1.5B parameters. Recently, Brown et al. [12] introduced GPT-3 based on the GPT-2 architecture and considered an even wider span of model sizes, ranging from 125M to 175B parameters. The authors reported that the model performance smoothly increased with the
+
+model size in most cases and suggested that this trend should extend to even larger models. Furthermore, Devlin et al. [13] investigated the effect of BERT size on the GLUE benchmark and concluded that “larger models lead to a strict accuracy improvement across all four datasets, even for MRPC which only has 3,600 labeled training examples, and is substantially different from the pre-training tasks”. The aforementioned observations motivate scaling Transformers further, which may be achieved by increasing the resources or designing more efﬁcient models.
+An interesting research direction orthogonal to scaling is to improve the generalization capability of deep learning models with structural inductive biases. A recent structural inductive bias inspired by independent mechanisms in the causality literature consists of designing an architecture that learns sparsely interacting modules, each specializing in a different mechanism [89]. Ideally, individual modules should be robust to changes in aspects of the world that are unrelated to this module, such as in the case of distributional shift. Lamb et al. [90] applied this idea to Transformers by introducing the Transformers with Independent Mechanisms (TIM). The authors observed that TIM layers could be combined with the mixture of experts approach, allowing the switching to be speciﬁc to distinct aspects of the data. Combining scaling with conditional computing and the independent mechanisms prior appears to be promising to tackle more complex tasks in the cyber-physical world.
+Nonetheless, in a recent paper, Narang et al. [91] investigated the impact of numerous modiﬁcations to the Transformer architecture, including changes in activation, normalization, depth, embeddings, and Softmax, on three NLP benchmarks, namely SuperGLUE [92], XSum [93], and WebQ [94]. The authors also evaluated several methods studied in this paper, including parameter sharing, Synthesizers, the Switch Transformer, and the Universal Transformer. They observed that no modiﬁcations was able to signiﬁcantly improve the performance. After ruling out various explanations, the authors conjectured that “modiﬁcations to the Transformer architecture often do not transfer across implementations and applications”, which may explain why no modiﬁcation has been widely adopted. Consequently, designing universally beneﬁcial mechanisms is a necessary research direction to achieve lighter and faster practical models.
+C. Broader Impact
+There is no doubt that larger neural networks tend to perform better than smaller ones. Consequently, scaling up existing architectures has become a popular trend in deep learning. Nevertheless, computational resources are ﬁnite and deploying new hardware on a large scale takes time and money. Therefore, there is a real need for lighter and faster models to better use the existing infrastructures and continue increasing the models’ size. In particular, the Transformer has been shown to scale exceptionally well [12, 88]. Thus, lighter and faster Transformers, which enable ever-more massive models, are likely to achieve new state-of-the-art. As of this
+
+TABLE II LONG-RANGE ARENA BENCHMARK [19]. RESULTS HAVE BEEN COMPILED FROM THE ORIGINAL PAPER.
+
+Models
+Transformer [9] Sparse Transformer [74] Longformer [73] BigBird [16] Sinkhorn Transformer [76] Reformer [31] Linformer [30] Synthesizer [78] Linear Transformer [81] Performer [80]
+
+Average score (%)
+54.39 51.24 53.46 55.01 51.39 50.67 51.36 51.39 50.55 51.41
+
+Steps per second
+
+1K
+
+4K
+
+8.1
+
+1.4
+
+7.4
+
+1.5
+
+9.1
+
+5.3
+
+4.4
+
+1.1
+
+9.3
+
+7.7
+
+8.7
+
+1.9
+
+9.1
+
+7.8
+
+9.5
+
+8.0
+
+Peak memory (GB)
+
+1K
+
+4K
+
+0.85
+
+9.48
+
+0.77
+
+2.88
+
+0.47
+
+1.48
+
+0.48
+
+2.28
+
+0.37
+
+0.99
+
+0.65
+
+6.99
+
+0.37
+
+1.03
+
+0.37
+
+1.06
+
+paper’s writing, the largest dense Transformer is GPT-3 [12] with 175 billion parameters, and the largest sparse Transformer is the Switch Transformer [52] with up to 1.6 trillion parameters. However, the Switch Transformer’s performance did not scale accordingly to its size. The authors suggested that the model may require more computations.
+Additionally, lower-complexity Transformers enable novel applications as extremely long sequences cannot be processed in a reasonable amount of time by the quadratic complexity vanilla Transformer. For instance, Choromanski et al. [80] observed the Performer’s potential impact on biology, and Zaheer et al. [16] evaluated BigBird on genomics tasks that take fragments of DNA as input. Huang et al. [95] was able to generate minute-long musical compositions with a Transformer that leverage the block-wise approach and an efﬁcient computation of the relative attention. Note that contrary to the attention introduced by [9], the relative attention [96] explicitly models the input positions. The range of application will surely expand as researchers design ever-lighter and faster Transformers.
+Computational resources are not only ﬁnite but also expensive. Consequently, there are severe inequalities between research groups and between companies. Indeed, many researchers do not have access to GPU or TPU farms, and most companies cannot afford to spend thousands or millions of dollars on dedicated hardware, especially if deep learning is not their primary focus. At this time, the resources disparities have increased dramatically to a point where only a few parties can afford to train massive state-of-the-art models. A prime example of this cleavage is the Transformer. Indeed, the largest Transformers are so expensive to train, even for large companies such as Microsoft, that they are only trained once. For instance, Brown et al. [12] noticed an issue in their pre-processing after training GPT-3. As the author explained, they could not re-train their model due to the massive cost, and therefore published their results with a known issue. Resources inequalities also hinder creativity as researchers with great ideas may not be able to implement them, and reinforce the vicious “rich get richer” circle, where well-funded groups and companies that have access to more resources are more likely to achieve state-of-the-art results and receive more fundings [97].
+
+Recent researches made it clear that the world must cut carbon dioxide (CO2) emissions in half over the next decade to limit global warming. The large-scale infrastructures used by the deep learning community consume a considerable amount of electricity, which is mainly produced by non-renewable sources such as coal or gas [98]. Strubell et al. [97] estimated that training a single Transformer with a neural architecture search generates up to 284,000 kg of CO2. For reference, the average American emits 16,400 kg of CO2 per year, and the average car emits about 57,200 kg during its lifetime6 (fuel included). The authors estimated that training a single instance of BERT [13] on GPU produces about the same amount of CO2 as a trans-American ﬂight. Although lighter and faster models require fewer resources and therefore produce less carbon dioxide, they are also more accessible, so we would expect more models to be trained. Overall, it is difﬁcult to know whether lighter and faster Transformers will positively impact the environment. Nonetheless, researchers and practitioners ought to have in mind the signiﬁcant environmental impact of their experiments.
+VI. CONCLUSION
+Transformers have quickly become the de facto model for processing sequences, achieving state-of-the-art in most natural language processing tasks at the cost of quadratic complexity. As a result, researchers have leveraged numerous techniques to mitigate this computational burden. In this survey, we investigated the popular methods to make Transformers lighter and faster, and we discussed their strengths and limitations. Our goal is to help researchers and practitioners determine adequate approaches and ultimately design efﬁcient models that best suit their resources while achieving the expected performance. Additionally, we highlighted promising future research directions for this exciting architecture. Finally, we discussed the great impacts of Transformers, including improving the state-of-the-art, extending the range of applications, increasing the equity between researchers, and potentially reducing the environmental impact.
+6A product lifetime or lifecycle typically includes material production, manufacturing, usage, and end-of-life disposal.
+
+ACKNOWLEDGMENT
+We would like to gratefully acknowledge the Natural Sciences and Engineering Research Council of Canada (NSERC), Prompt, Ericsson, Ciena, and EffciOS for funding this research.
+REFERENCES
+[1] D. E. Rumelhart, P. Smolensky, J. L. McClelland, and G. E. Hinton, Schemata and Sequential Thought Processes in PDP Models. Cambridge, MA, USA: MIT Press, 1986, p. 7–57.
+[2] S. Hochreiter and J. Schmidhuber, “Long short-term memory,” Neural Computation, vol. 9, no. 8, pp. 1735– 1780, 1997.
+[3] K. Cho, B. van Merrie¨nboer, C. Gulcehre, D. Bahdanau, F. Bougares, H. Schwenk, and Y. Bengio, “Learning phrase representations using RNN encoder–decoder for statistical machine translation,” in Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP). Doha, Qatar: Association for Computational Linguistics, Oct. 2014, pp. 1724–1734. [Online]. Available: https://www.aclweb. org/anthology/D14-1179
+[4] I. Sutskever, O. Vinyals, and Q. V. Le, “Sequence to sequence learning with neural networks,” in Advances in Neural Information Processing Systems 27, Z. Ghahramani, M. Welling, C. Cortes, N. D. Lawrence, and K. Q. Weinberger, Eds. Curran Associates, Inc., 2014, pp. 3104–3112.
+[5] J. Cheng, L. Dong, and M. Lapata, “Long short-term memory-networks for machine reading,” in Proceedings of the 2016 Conference on Empirical Methods in Natural Language Processing. Austin, Texas: Association for Computational Linguistics, Nov. 2016, pp. 551–561. [Online]. Available: https://www.aclweb.org/anthology/ D16-1053
+[6] D. Bahdanau, K. Cho, and Y. Bengio, “Neural machine translation by jointly learning to align and translate,” in 3rd International Conference on Learning Representations, ICLR 2015, San Diego, CA, USA, May 7-9, 2015, Conference Track Proceedings, Y. Bengio and Y. LeCun, Eds., 2015. [Online]. Available: http: //arxiv.org/abs/1409.0473
+[7] A. Galassi, M. Lippi, and P. Torroni, “Attention in natural language processing,” IEEE Transactions on Neural Networks and Learning Systems, p. 1–18, 2020. [Online]. Available: http://dx.doi.org/10.1109/TNNLS. 2020.3019893
+[8] L. Weng, “Attention? attention!” lilianweng.github.io/lillog, 2018. [Online]. Available: http://lilianweng.github. io/lil-log/2018/06/24/attention-attention.html
+[9] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” in Advances in Neural Information Processing Systems 30, I. Guyon, U. V. Luxburg, S. Bengio, H. Wallach,
+
+R. Fergus, S. Vishwanathan, and R. Garnett, Eds. Curran Associates, Inc., 2017, pp. 5998– 6008. [Online]. Available: http://papers.nips.cc/paper/ 7181-attention-is-all-you-need.pdf [10] Z. Dai, Z. Yang, Y. Yang, J. Carbonell, Q. Le, and R. Salakhutdinov, “Transformer-XL: Attentive language models beyond a ﬁxed-length context,” in Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics. Florence, Italy: Association for Computational Linguistics, Jul. 2019, pp. 2978–2988. [Online]. Available: https://www.aclweb.org/anthology/ P19-1285 [11] U. Khandelwal, H. He, P. Qi, and D. Jurafsky, “Sharp nearby, fuzzy far away: How neural language models use context,” in Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers). Melbourne, Australia: Association for Computational Linguistics, Jul. 2018, pp. 284–294. [Online]. Available: https: //www.aclweb.org/anthology/P18-1027 [12] T. Brown, B. Mann, N. Ryder, M. Subbiah, J. D. Kaplan, P. Dhariwal, A. Neelakantan, P. Shyam, G. Sastry, A. Askell, S. Agarwal, A. Herbert-Voss, G. Krueger, T. Henighan, R. Child, A. Ramesh, D. Ziegler, J. Wu, C. Winter, C. Hesse, M. Chen, E. Sigler, M. Litwin, S. Gray, B. Chess, J. Clark, C. Berner, S. McCandlish, A. Radford, I. Sutskever, and D. Amodei, “Language models are few-shot learners,” in Advances in Neural Information Processing Systems, H. Larochelle, M. Ranzato, R. Hadsell, M. F. Balcan, and H. Lin, Eds., vol. 33. Curran Associates, Inc., 2020, pp. 1877–1901. [Online]. Available: https://proceedings.neurips.cc/paper/2020/ﬁle/ 1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf [13] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “BERT: Pre-training of deep bidirectional transformers for language understanding,” in Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers). Minneapolis, Minnesota: Association for Computational Linguistics, Jun. 2019, pp. 4171–4186. [Online]. Available: https://www.aclweb.org/anthology/ N19-1423 [14] N. Carion, F. Massa, G. Synnaeve, N. Usunier, A. Kirillov, and S. Zagoruyko, “End-to-end object detection with transformers,” in Computer Vision – ECCV 2020, A. Vedaldi, H. Bischof, T. Brox, and J.-M. Frahm, Eds. Cham: Springer International Publishing, 2020, pp. 213– 229. [15] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly, J. Uszkoreit, and N. Houlsby, “An image is worth 16x16 words: Transformers for image recognition at scale,” in International Conference on Learning Representations, 2021. [Online]. Available:
+
+https://openreview.net/forum?id=YicbFdNTTy [16] M. Zaheer, G. Guruganesh, K. A. Dubey,
+J. Ainslie, C. Alberti, S. Ontanon, P. Pham, A. Ravula, Q. Wang, L. Yang, and A. Ahmed, “Big bird: Transformers for longer sequences,” in Advances in Neural Information Processing Systems, H. Larochelle, M. Ranzato, R. Hadsell, M. F. Balcan, and H. Lin, Eds., vol. 33. Curran Associates, Inc., 2020, pp. 17 283–17 297. [Online]. Available: https://proceedings.neurips.cc/paper/2020/ﬁle/ c8512d142a2d849725f31a9a7a361ab9-Paper.pdf [17] Q. Fournier, D. Aloise, S. Vahid Azhari, and F. Tetreault, “On Improving Deep Learning Trace Analysis with System Call Arguments,” arXiv e-prints, p. arXiv:2103.06915, Mar. 2021, to appear in: Proceedings of the 18th International Conference on Mining Software Repositories. [18] Y. Liu, M. Ott, N. Goyal, J. Du, M. Joshi, D. Chen, O. Levy, M. Lewis, L. Zettlemoyer, and V. Stoyanov, “Roberta: A robustly optimized BERT pretraining approach,” CoRR, vol. abs/1907.11692, 2019. [Online]. Available: http://arxiv.org/abs/1907.11692 [19] Y. Tay, M. Dehghani, S. Abnar, Y. Shen, D. Bahri, P. Pham, J. Rao, L. Yang, S. Ruder, and D. Metzler, “Long range arena : A benchmark for efﬁcient transformers,” in International Conference on Learning Representations, 2021. [Online]. Available: https:// openreview.net/forum?id=qVyeW-grC2k [20] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” in 2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2016, pp. 770–778. [21] J. Lei Ba, J. R. Kiros, and G. E. Hinton, “Layer Normalization,” arXiv e-prints, p. arXiv:1607.06450, Jul. 2016. [22] Z. Li, K. Lyu, and S. Arora, “Reconciling modern deep learning with traditional optimization analyses: The intrinsic learning rate,” in Advances in Neural Information Processing Systems, H. Larochelle, M. Ranzato, R. Hadsell, M. F. Balcan, and H. Lin, Eds., vol. 33. Curran Associates, Inc., 2020, pp. 14 544–14 555. [Online]. Available: https://proceedings.neurips.cc/paper/2020/ﬁle/ a7453a5f026fb6831d68bdc9cb0edcae-Paper.pdf [23] S. Santurkar, D. Tsipras, A. Ilyas, and A. Madry, “How does batch normalization help optimization?” in Advances in Neural Information Processing Systems, S. Bengio, H. Wallach, H. Larochelle, K. Grauman, N. Cesa-Bianchi, and R. Garnett, Eds., vol. 31. Curran Associates, Inc., 2018. [Online]. Available: https://proceedings.neurips.cc/paper/2018/ﬁle/ 905056c1ac1dad141560467e0a99e1cf-Paper.pdf [24] Y. LeCun, J. S. Denker, and S. A. Solla, “Optimal brain damage,” in Advances in Neural Information Processing Systems 2, D. S. Touretzky, Ed. MorganKaufmann, 1990, pp. 598–605. [Online]. Available: http: //papers.nips.cc/paper/250-optimal-brain-damage.pdf
+
+[25] T. Chen, B. Xu, C. Zhang, and C. Guestrin, “Training deep nets with sublinear memory cost,” CoRR, vol. abs/1604.06174, 2016. [Online]. Available: http://arxiv. org/abs/1604.06174
+[26] OpenAI, “Saving memory using gradient-checkpointing,” https://github.com/openai/gradient-checkpointing, 2013.
+[27] Y. Huang, Y. Cheng, A. Bapna, O. Firat, D. Chen, M. Chen, H. Lee, J. Ngiam, Q. V. Le, Y. Wu, and z. Chen, “Gpipe: Efﬁcient training of giant neural networks using pipeline parallelism,” in Advances in Neural Information Processing Systems, H. Wallach, H. Larochelle, A. Beygelzimer, F. d'Alche´-Buc, E. Fox, and R. Garnett, Eds., vol. 32. Curran Associates, Inc., 2019. [Online]. Available: https://proceedings.neurips.cc/paper/2019/ﬁle/ 093f65e080a295f8076b1c5722a46aa2-Paper.pdf
+[28] S. Ioffe and C. Szegedy, “Batch normalization: Accelerating deep network training by reducing internal covariate shift,” in Proceedings of the 32nd International Conference on Machine Learning, ser. Proceedings of Machine Learning Research, F. Bach and D. Blei, Eds., vol. 37. Lille, France: PMLR, 07–09 Jul 2015, pp. 448–456. [Online]. Available: http://proceedings.mlr.press/v37/ioffe15.html
+[29] A. N. Gomez, M. Ren, R. Urtasun, and R. B. Grosse, “The reversible residual network: Backpropagation without storing activations,” in Advances in Neural Information Processing Systems, I. Guyon, U. V. Luxburg, S. Bengio, H. Wallach, R. Fergus, S. Vishwanathan, and R. Garnett, Eds., vol. 30. Curran Associates, Inc., 2017. [Online]. Available: https://proceedings.neurips.cc/paper/2017/ﬁle/ f9be311e65d81a9ad8150a60844bb94c-Paper.pdf
+[30] S. Wang, B. Z. Li, M. Khabsa, H. Fang, and H. Ma, “Linformer: Self-Attention with Linear Complexity,” arXiv e-prints, p. arXiv:2006.04768, Jun. 2020.
+[31] N. Kitaev, L. Kaiser, and A. Levskaya, “Reformer: The efﬁcient transformer,” in International Conference on Learning Representations, 2020. [Online]. Available: https://openreview.net/forum?id=rkgNKkHtvB
+[32] Z. Lan, M. Chen, S. Goodman, K. Gimpel, P. Sharma, and R. Soricut, “Albert: A lite bert for self-supervised learning of language representations,” in International Conference on Learning Representations, 2020. [Online]. Available: https://openreview.net/forum?id=H1eA7AEtvS
+[33] H. Sajjad, F. Dalvi, N. Durrani, and P. Nakov, “On the Effect of Dropping Layers of Pre-trained Transformer Models,” arXiv e-prints, p. arXiv:2004.03844, Apr. 2020.
+[34] P. Michel, O. Levy, and G. Neubig, “Are sixteen heads really better than one?” in Advances in Neural Information Processing Systems, H. Wallach, H. Larochelle, A. Beygelzimer, F. d'Alche´-Buc, E. Fox, and R. Garnett, Eds., vol. 32. Curran Associates, Inc., 2019. [Online]. Available: https://proceedings.neurips.cc/paper/2019/ﬁle/ 2c601ad9d2ff9bc8b282670cdd54f69f-Paper.pdf
+[35] J. Frankle and M. Carbin, “The lottery ticket
+
+hypothesis: Finding sparse, trainable neural networks,” in International Conference on Learning Representations, 2019. [Online]. Available: https://openreview.net/forum? id=rJl-b3RcF7 [36] S. Prasanna, A. Rogers, and A. Rumshisky, “When BERT Plays the Lottery, All Tickets Are Winning,” in Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP). Online: Association for Computational Linguistics, Nov. 2020, pp. 3208–3229. [Online]. Available: https: //www.aclweb.org/anthology/2020.emnlp-main.259 [37] J. Ba and R. Caruana, “Do deep nets really need to be deep?” in Advances in Neural Information Processing Systems, Z. Ghahramani, M. Welling, C. Cortes, N. Lawrence, and K. Q. Weinberger, Eds., vol. 27. Curran Associates, Inc., 2014. [Online]. Available: https://proceedings.neurips.cc/paper/2014/ﬁle/ ea8fcd92d59581717e06eb187f10666d-Paper.pdf [38] G. Hinton, O. Vinyals, and J. Dean, “Distilling the Knowledge in a Neural Network,” arXiv e-prints, p. arXiv:1503.02531, Mar. 2015. [39] V. Sanh, L. Debut, J. Chaumond, and T. Wolf, “Distilbert, a distilled version of BERT: smaller, faster, cheaper and lighter,” CoRR, vol. abs/1910.01108, 2019. [Online]. Available: http://arxiv.org/abs/1910.01108 [40] H. Tsai, J. Riesa, M. Johnson, N. Arivazhagan, X. Li, and A. Archer, “Small and practical BERT models for sequence labeling,” in Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP). Hong Kong, China: Association for Computational Linguistics, Nov. 2019, pp. 3632–3636. [Online]. Available: https://www.aclweb.org/anthology/D19-1374 [41] X. Jiao, Y. Yin, L. Shang, X. Jiang, X. Chen, L. Li, F. Wang, and Q. Liu, “TinyBERT: Distilling BERT for natural language understanding,” in Findings of the Association for Computational Linguistics: EMNLP 2020. Online: Association for Computational Linguistics, Nov. 2020, pp. 4163–4174. [Online]. Available: https://www.aclweb.org/anthology/ 2020.ﬁndings-emnlp.372 [42] A. Warstadt, A. Singh, and S. R. Bowman, “Neural network acceptability judgments,” Transactions of the Association for Computational Linguistics, vol. 7, pp. 625–641, Mar. 2019. [Online]. Available: https: //www.aclweb.org/anthology/Q19-1040 [43] P. Micikevicius, S. Narang, J. Alben, G. Diamos, E. Elsen, D. Garcia, B. Ginsburg, M. Houston, O. Kuchaiev, G. Venkatesh, and H. Wu, “Mixed precision training,” in International Conference on Learning Representations, 2018. [Online]. Available: https://openreview.net/forum?id=r1gs9JgRZ [44] B. Jacob, S. Kligys, B. Chen, M. Zhu, M. Tang, A. Howard, H. Adam, and D. Kalenichenko, “Quantization and training of neural networks for efﬁcient
+
+integer-arithmetic-only inference,” in 2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2018, pp. 2704–2713. [45] Y. Bengio, “Estimating or propagating gradients through stochastic neurons,” CoRR, vol. abs/1305.2982, 2013. [Online]. Available: http://arxiv.org/abs/1305.2982 [46] O. Zafrir, G. Boudoukh, P. Izsak, and M. Wasserblat, “Q8BERT: quantized 8bit BERT,” CoRR, vol. abs/1910.06188, 2019. [Online]. Available: http: //arxiv.org/abs/1910.06188 [47] A. Wang, A. Singh, J. Michael, F. Hill, O. Levy, and S. Bowman, “GLUE: A multitask benchmark and analysis platform for natural language understanding,” in Proceedings of the 2018 EMNLP Workshop BlackboxNLP: Analyzing and Interpreting Neural Networks for NLP. Brussels, Belgium: Association for Computational Linguistics, Nov. 2018, pp. 353–355. [Online]. Available: https://www.aclweb.org/anthology/W18-5446 [48] P. Rajpurkar, J. Zhang, K. Lopyrev, and P. Liang, “SQuAD: 100,000+ questions for machine comprehension of text,” in Proceedings of the 2016 Conference on Empirical Methods in Natural Language Processing. Austin, Texas: Association for Computational Linguistics, Nov. 2016, pp. 2383–2392. [Online]. Available: https://www.aclweb.org/anthology/D16-1264 [49] P. Stock, A. Fan, B. Graham, E. Grave, R. Gribonval, H. Jegou, and A. Joulin, “Training with quantization noise for extreme model compression,” in International Conference on Learning Representations, 2021. [Online]. Available: https://openreview.net/forum?id=dV19Yyi1fS3 [50] S. Merity, C. Xiong, J. Bradbury, and R. Socher, “Pointer sentinel mixture models,” in 5th International Conference on Learning Representations, ICLR 2017, Toulon, France, April 24-26, 2017, Conference Track Proceedings. OpenReview.net, 2017. [Online]. Available: https://openreview.net/forum?id=Byj72udxe [51] R. A. Jacobs, M. I. Jordan, S. J. Nowlan, and G. E. Hinton, “Adaptive mixtures of local experts,” Neural Computation, vol. 3, pp. 79–87, 1991. [52] W. Fedus, B. Zoph, and N. Shazeer, “Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efﬁcient Sparsity,” arXiv e-prints, p. arXiv:2101.03961, Jan. 2021. [53] K. Clark, M.-T. Luong, Q. V. Le, and C. D. Manning, “Electra: Pre-training text encoders as discriminators rather than generators,” in International Conference on Learning Representations, 2020. [Online]. Available: https://openreview.net/forum?id=r1xMH1BtvB [54] W. L. Taylor, ““cloze procedure”: A new tool for measuring readability,” Journalism Quarterly, vol. 30, no. 4, pp. 415–433, 1953. [Online]. Available: https: //doi.org/10.1177/107769905303000401 [55] B. Zoph and Q. V. Le, “Neural architecture search with reinforcement learning,” in 5th International
+
+Conference on Learning Representations, ICLR 2017, Toulon, France, April 24-26, 2017, Conference Track Proceedings. OpenReview.net, 2017. [Online]. Available: https://openreview.net/forum?id=r1Ue8Hcxg [56] E. Real, A. Aggarwal, Y. Huang, and Q. V. Le, “Regularized evolution for image classiﬁer architecture search,” in The Thirty-Third AAAI Conference on Artiﬁcial Intelligence, AAAI 2019, The ThirtyFirst Innovative Applications of Artiﬁcial Intelligence Conference, IAAI 2019, The Ninth AAAI Symposium on Educational Advances in Artiﬁcial Intelligence, EAAI 2019, Honolulu, Hawaii, USA, January 27 - February 1, 2019. AAAI Press, 2019, pp. 4780–4789. [Online]. Available: https://doi.org/10.1609/aaai.v33i01.33014780 [57] H. Liu, K. Simonyan, and Y. Yang, “DARTS: differentiable architecture search,” in 7th International Conference on Learning Representations, ICLR 2019, New Orleans, LA, USA, May 6-9, 2019. OpenReview.net, 2019. [Online]. Available: https://openreview.net/forum?id=S1eYHoC5FX [58] B. Zoph, V. Vasudevan, J. Shlens, and Q. V. Le, “Learning transferable architectures for scalable image recognition,” in 2018 IEEE Conference on Computer Vision and Pattern Recognition, CVPR 2018, Salt Lake City, UT, USA, June 18-22, 2018. IEEE Computer Society, 2018, pp. 8697–8710. [Online]. Available: http://openaccess.thecvf.com/content cvpr 2018/html/Zoph Learning Transferable Architectures CVPR 2018 paper.html [59] H. Pham, M. Y. Guan, B. Zoph, Q. V. Le, and J. Dean, “Efﬁcient neural architecture search via parameter sharing,” in Proceedings of the 35th International Conference on Machine Learning, ICML 2018, Stockholmsma¨ssan, Stockholm, Sweden, July 10-15, 2018, ser. Proceedings of Machine Learning Research, J. G. Dy and A. Krause, Eds., vol. 80. PMLR, 2018, pp. 4092–4101. [Online]. Available: http://proceedings.mlr.press/v80/pham18a.html [60] N. Srivastava, G. E. Hinton, A. Krizhevsky, I. Sutskever, and R. Salakhutdinov, “Dropout: a simple way to prevent neural networks from overﬁtting,” J. Mach. Learn. Res., vol. 15, no. 1, pp. 1929–1958, 2014. [Online]. Available: http://dl.acm.org/citation.cfm?id=2670313 [61] T. Elsken, J. H. Metzen, and F. Hutter, “Neural architecture search: A survey,” Journal of Machine Learning Research, vol. 20, no. 55, pp. 1–21, 2019. [Online]. Available: http://jmlr.org/papers/v20/18-598. html [62] D. R. So, Q. V. Le, and C. Liang, “The evolved transformer,” in Proceedings of the 36th International Conference on Machine Learning, ICML 2019, 9-15 June 2019, Long Beach, California, USA, ser. Proceedings of Machine Learning Research, K. Chaudhuri and R. Salakhutdinov, Eds., vol. 97. PMLR, 2019, pp. 5877–5886. [Online]. Available: http://proceedings.mlr. press/v97/so19a.html
+
+[63] O. Bojar, C. Buck, C. Federmann, B. Haddow, P. Koehn, J. Leveling, C. Monz, P. Pecina, M. Post, H. SaintAmand, R. Soricut, L. Specia, and A. s. Tamchyna, “Findings of the 2014 workshop on statistical machine translation,” in Proceedings of the Ninth Workshop on Statistical Machine Translation. Baltimore, Maryland, USA: Association for Computational Linguistics, Jun. 2014, pp. 12–58. [Online]. Available: http://www.aclweb. org/anthology/W/W14/W14-3302
+[64] H. Tsai, J. Ooi, C.-S. Ferng, H. W. Chung, and J. Riesa, “Finding Fast Transformers: One-Shot Neural Architecture Search by Component Composition,” arXiv e-prints, p. arXiv:2008.06808, Aug. 2020.
+[65] Z. Wu, Z. Liu, J. Lin, Y. Lin, and S. Han, “Lite transformer with long-short range attention,” in International Conference on Learning Representations, 2020. [Online]. Available: https://openreview.net/forum? id=ByeMPlHKPH
+[66] Y. Bengio, “Deep learning of representations: Looking forward,” in Statistical Language and Speech Processing - First International Conference, SLSP 2013, Tarragona, Spain, July 29-31, 2013. Proceedings, ser. Lecture Notes in Computer Science, A. Dediu, C. Mart´ınVide, R. Mitkov, and B. Truthe, Eds., vol. 7978. Springer, 2013, pp. 1–37. [Online]. Available: https: //doi.org/10.1007/978-3-642-39593-2 1
+[67] A. Graves, “Adaptive computation time for recurrent neural networks,” CoRR, vol. abs/1603.08983, 2016. [Online]. Available: http://arxiv.org/abs/1603.08983
+[68] M. Dehghani, S. Gouws, O. Vinyals, J. Uszkoreit, and L. Kaiser, “Universal transformers,” in International Conference on Learning Representations, 2019. [Online]. Available: https://openreview.net/forum?id= HyzdRiR9Y7
+[69] M. Elbayad, J. Gu, E. Grave, and M. Auli, “Depth-adaptive transformer,” in 8th International Conference on Learning Representations, ICLR 2020, Addis Ababa, Ethiopia, April 26-30, 2020. OpenReview.net, 2020. [Online]. Available: https://openreview.net/forum?id=SJg7KhVKPH
+[70] S. Sukhbaatar, E. Grave, P. Bojanowski, and A. Joulin, “Adaptive attention span in transformers,” in Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics. Florence, Italy: Association for Computational Linguistics, Jul. 2019, pp. 331–335. [Online]. Available: https://www.aclweb.org/anthology/ P19-1032
+[71] M. Mahoney, “Large text compression benchmark,” 2011. [Online]. Available: http://mattmahoney.net/dc/ text.html
+[72] M. Li, C. Zorila, and R. Doddipatla, “Transformer-based Online Speech Recognition with Decoder-end Adaptive Computation Steps,” arXiv e-prints, p. arXiv:2011.13834, Nov. 2020.
+[73] I. Beltagy, M. E. Peters, and A. Cohan, “Longformer: The Long-Document Transformer,” arXiv e-prints, p.
+
+arXiv:2004.05150, Apr. 2020. [74] R. Child, S. Gray, A. Radford, and I. Sutskever,
+“Generating long sequences with sparse transformers,” CoRR, vol. abs/1904.10509, 2019. [Online]. Available: http://arxiv.org/abs/1904.10509 [75] C. Wang, Z. Ye, A. Zhang, Z. Zhang, and A. J. Smola, “Transformer on a Diet,” arXiv e-prints, p. arXiv:2002.06170, Feb. 2020. [76] Y. Tay, D. Bahri, L. Yang, D. Metzler, and D.-C. Juan, “Sparse Sinkhorn attention,” in Proceedings of the 37th International Conference on Machine Learning, ser. Proceedings of Machine Learning Research, H. D. III and A. Singh, Eds., vol. 119. PMLR, 13– 18 Jul 2020, pp. 9438–9447. [Online]. Available: http://proceedings.mlr.press/v119/tay20a.html [77] J. Qiu, H. Ma, O. Levy, W.-t. Yih, S. Wang, and J. Tang, “Blockwise self-attention for long document understanding,” in Findings of the Association for Computational Linguistics: EMNLP 2020. Online: Association for Computational Linguistics, Nov. 2020, pp. 2555–2565. [Online]. Available: https://www.aclweb. org/anthology/2020.ﬁndings-emnlp.232 [78] Y. Tay, D. Bahri, D. Metzler, D.-C. Juan, Z. Zhao, and C. Zheng, “Synthesizer: Rethinking SelfAttention in Transformer Models,” arXiv e-prints, p. arXiv:2005.00743, May 2020. [79] Y. Xiong, Z. Zeng, R. Chakraborty, M. Tan, G. Fung, Y. Li, and V. Singh, “Nystro¨mformer: A Nystro¨m-Based Algorithm for Approximating Self-Attention,” arXiv eprints, p. arXiv:2102.03902, Feb. 2021. [80] K. M. Choromanski, V. Likhosherstov, D. Dohan, X. Song, A. Gane, T. Sarlos, P. Hawkins, J. Q. Davis, A. Mohiuddin, L. Kaiser, D. B. Belanger, L. J. Colwell, and A. Weller, “Rethinking attention with performers,” in International Conference on Learning Representations, 2021. [Online]. Available: https://openreview.net/forum?id=Ua6zuk0WRH [81] A. Katharopoulos, A. Vyas, N. Pappas, and F. Fleuret, “Transformers are RNNs: Fast autoregressive transformers with linear attention,” in Proceedings of the 37th International Conference on Machine Learning, ser. Proceedings of Machine Learning Research, H. D. III and A. Singh, Eds., vol. 119. PMLR, 13– 18 Jul 2020, pp. 5156–5165. [Online]. Available: http://proceedings.mlr.press/v119/katharopoulos20a.html [82] S. Wiegreffe and Y. Pinter, “Attention is not not explanation,” in Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP). Hong Kong, China: Association for Computational Linguistics, Nov. 2019, pp. 11–20. [Online]. Available: https://www. aclweb.org/anthology/D19-1002 [83] S. Serrano and N. A. Smith, “Is attention interpretable?” in Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics. Florence,
+
+Italy: Association for Computational Linguistics, Jul. 2019, pp. 2931–2951. [Online]. Available: https://www. aclweb.org/anthology/P19-1282 [84] S. Jain and B. C. Wallace, “Attention is not explanation,” CoRR, vol. abs/1902.10186, 2019. [Online]. Available: http://arxiv.org/abs/1902.10186 [85] M. Ott, S. Edunov, D. Grangier, and M. Auli, “Scaling neural machine translation,” in Proceedings of the Third Conference on Machine Translation: Research Papers. Brussels, Belgium: Association for Computational Linguistics, Oct. 2018, pp. 1–9. [Online]. Available: https://www.aclweb.org/anthology/W18-6301 [86] A. Buluc and J. R. Gilbert, “Challenges and advances in parallel sparse matrix-matrix multiplication,” in 2008 37th International Conference on Parallel Processing, 2008, pp. 503–510. [87] I. Goodfellow, Y. Bengio, and A. Courville, Deep Learning. MIT Press, 2016, http://www.deeplearningbook.org. [88] A. Radford, J. Wu, R. Child, D. Luan, D. Amodei, and I. Sutskever, “Language models are unsupervised multitask learners,” 2018. [Online]. Available: https://d4mucfpksywv.cloudfront.net/ better-language-models/language-models.pdf [89] A. Goyal, A. Lamb, J. Hoffmann, S. Sodhani, S. Levine, Y. Bengio, and B. Scho¨lkopf, “Recurrent independent mechanisms,” CoRR, vol. abs/1909.10893, 2019. [Online]. Available: http://arxiv.org/abs/1909.10893 [90] A. Lamb, D. He, A. Goyal, G. Ke, C.-F. Liao, M. Ravanelli, and Y. Bengio, “Transformers with Competitive Ensembles of Independent Mechanisms,” arXiv e-prints, p. arXiv:2103.00336, Feb. 2021. [91] S. Narang, H. W. Chung, Y. Tay, W. Fedus, T. Fevry, M. Matena, K. Malkan, N. Fiedel, N. Shazeer, Z. Lan, Y. Zhou, W. Li, N. Ding, J. Marcus, A. Roberts, and C. Raffel, “Do Transformer Modiﬁcations Transfer Across Implementations and Applications?” arXiv eprints, p. arXiv:2102.11972, Feb. 2021. [92] A. Wang, Y. Pruksachatkun, N. Nangia, A. Singh, J. Michael, F. Hill, O. Levy, and S. Bowman, “Superglue: A stickier benchmark for general-purpose language understanding systems,” in Advances in Neural Information Processing Systems, H. Wallach, H. Larochelle, A. Beygelzimer, F. d'Alche´-Buc, E. Fox, and R. Garnett, Eds., vol. 32. Curran Associates, Inc., 2019. [Online]. Available: https://proceedings.neurips.cc/paper/2019/ﬁle/ 4496bf24afe7fab6f046bf4923da8de6-Paper.pdf [93] S. Narayan, S. B. Cohen, and M. Lapata, “Don’t give me the details, just the summary! topicaware convolutional neural networks for extreme summarization,” in Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing. Brussels, Belgium: Association for Computational Linguistics, Oct. 2018, pp. 1797–1807. [Online]. Available: https://www.aclweb.org/anthology/D18-1206 [94] J. Berant, A. Chou, R. Frostig, and P. Liang, “Semantic parsing on Freebase from question-answer pairs,” in
+
+Proceedings of the 2013 Conference on Empirical Methods in Natural Language Processing. Seattle, Washington, USA: Association for Computational Linguistics, Oct. 2013, pp. 1533–1544. [Online]. Available: https://www.aclweb.org/anthology/D13-1160 [95] C.-Z. A. Huang, A. Vaswani, J. Uszkoreit, I. Simon, C. Hawthorne, N. Shazeer, A. M. Dai, M. D. Hoffman, M. Dinculescu, and D. Eck, “Music transformer,” in International Conference on Learning Representations, 2019. [Online]. Available: https://openreview.net/forum? id=rJe4ShAcF7 [96] P. Shaw, J. Uszkoreit, and A. Vaswani, “Self-attention with relative position representations,” in Proceedings of the 2018 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 2 (Short Papers). New Orleans, Louisiana: Association for Computational Linguistics, Jun. 2018, pp. 464–468. [Online]. Available: https://www.aclweb.org/anthology/N18-2074 [97] E. Strubell, A. Ganesh, and A. McCallum, “Energy and policy considerations for deep learning in NLP,” CoRR, vol. abs/1906.02243, 2019. [Online]. Available: http://arxiv.org/abs/1906.02243 [98] IEA, “World gross electricity production, by source, 2018,” 2018. [Online]. Available: https://www.iea.org/data-and-statistics/charts/ world-gross-electricity-production-by-source-2018
+

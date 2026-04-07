@@ -1,0 +1,1248 @@
+Evaluation of Hierarchical Clustering Algorithms for Document Datasets∗
+
+Ying Zhao
+Department of Computer Science University of Minnesota Minneapolis, MN 55455
+yzhao@cs.umn.edu
+
+George Karypis
+Department of Computer Science University of Minnesota Minneapolis, MN 55455
+karypis@cs.umn.edu
+
+ABSTRACT
+Fast and high-quality document clustering algorithms play an important role in providing intuitive navigation and browsing mechanisms by organizing large amounts of information into a small number of meaningful clusters. In particular, hierarchical clustering solutions provide a view of the data at different levels of granularity, making them ideal for people to visualize and interactively explore large document collections.
+In this paper we evaluate different partitional and agglomerative approaches for hierarchical clustering. Our experimental evaluation showed that partitional algorithms always lead to better clustering solutions than agglomerative algorithms, which suggests that partitional clustering algorithms are well-suited for clustering large document datasets due to not only their relatively low computational requirements, but also comparable or even better clustering performance. We present a new class of clustering algorithms called constrained agglomerative algorithms that combine the features of both partitional and agglomerative algorithms. Our experimental results showed that they consistently lead to better hierarchical solutions than agglomerative or partitional algorithms alone.
+Categories and Subject Descriptors
+H.2.8 [Database Applications]: Data mining; H.3.3 [Information Search and Retrieval]: Clustering
+General Terms
+Algorithms
+∗This work was supported by NSF CCR-9972519, EIA-9986042, ACI-9982274, ACI-0133464, by Army Research Ofﬁce contract DA/DAAG55-98-1-0441, by the DOE ASCI program, and by Army High Performance Computing Research Center contract number DAAH04-95-C-0008. Related papers are available via WWW at URL: http://www.cs.umn.edu/˜karypis
+Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for proﬁt or commercial advantage and that copies bear this notice and the full citation on the ﬁrst page. To copy otherwise, to republish, to post on servers or to redistribute to lists, requires prior speciﬁc permission and/or a fee. CIKM’02, November 4–9, 2002, McLean, Virginia, USA. Copyright 2002 ACM 1-58113-492-4/02/0011 ...$5.00.
+
+Keywords
+Hierarchical Clustering, Agglomerative Clustering, Partitional Clustering
+1. INTRODUCTION
+Hierarchical clustering solutions, which are in the form of trees called dendrograms, are of great interest for a number of application domains. Hierarchical trees provide a view of the data at different levels of abstraction. The consistency of clustering solutions at different levels of granularity allows ﬂat partitions of different granularity to be extracted during data analysis, making them ideal for interactive exploration and visualization. In addition, there are many times when clusters have subclusters, and the hierarchical structure are indeed a natural constrain on the underlying application domain (e.g., biological taxonomy, phylogenetic trees) [9].
+Hierarchical clustering solutions have been primarily obtained using agglomerative algorithms [25, 17, 10, 11, 16], in which objects are initially assigned to its own cluster and then pairs of clusters are repeatedly merged until the whole tree is formed. However, partitional algorithms [20, 14, 22, 5, 31, 13, 27, 2, 8] can also be used to obtain hierarchical clustering solutions via a sequence of repeated bisections. In recent years, various researchers have recognized that partitional clustering algorithms are well-suited for clustering large document datasets due to their relatively low computational requirements [6, 18, 1, 26]. However, there is the common belief that in terms of clustering quality, partitional algorithms are actually inferior and less effective than their agglomerative counterparts. This belief is based both on experiments with low dimensional datasets as well was as a limited number of studies in which agglomerative approaches outperformed partitional K -means based approaches. For example, Larsen [18] observed that group average greedy agglomerative clustering outperformed various partitional clustering algorithms in document datasets from TREC and Reuters.
+In light of recent advances in partitional clustering [6, 18, 7, 2, 8], we revisited the question of whether or not agglomerative approaches generate superior hierarchical trees than partitional approaches. The focus of this paper is to compare various agglomerative and partitional approaches for the task of obtaining hierarchical clustering solution. The partitional methods that we compared use different clustering criterion functions to derive the solutions and the agglomerative methods use different schemes for selecting the pair of clusters to merge next. For partitional clustering algorithms, we used six recently studied criterion functions [32] that have been shown to produce high-quality partitional clustering solutions. For agglomerative clustering algorithms, we evaluated three traditional
+
+515
+
+merging criteria (i.e., single-link, complete-link, and group average (UPGMA)) and a new set of merging criteria derived from the six partitional criterion functions. Overall, we compared six partitional methods and nine agglomerative methods.
+In addition to the traditional partitional and agglomerative algorithms, we developed a new class of agglomerative algorithms, in which we introduced intermediate clusters obtained by partitional clustering algorithms to constrain the space over which agglomeration decisions are made. We refer to them as constrained agglomerative algorithms. These algorithms generate hierarchical trees in two steps. First, for each of the intermediate partitional clusters, an agglomerative algorithm builds a hierarchical subtree. Second, the subtrees are combined into a single tree by building an upper tree using these subtrees as leaves.
+We experimentally evaluated the performance of these methods to obtain hierarchical clustering solutions using twelve different datasets derived from various sources. Our experiments showed that partitional algorithms always generate better hierarchical clustering solutions than agglomerative algorithms and that the constrained agglomerative methods consistently lead to better solutions than agglomerative methods alone and in most cases they outperform partitional methods as well. We believe that the observed poor performance of agglomerative algorithms is because of the errors they make during early agglomeration. The superiority of partitional algorithm also suggests that partitional clustering algorithms are well-suited for obtaining hierarchical clustering solutions of large document datasets due to not only their relatively low computational requirements, but also comparable or better performance.
+The rest of this paper is organized as follows. Section 2 provides some information on how documents are represented and how the similarity or distance between documents is computed. Section 3 describes different criterion functions as well as criterion function optimization of hierarchical partitional algorithms. Section 4 describes various agglomerative algorithms and the constrained agglomerative algorithms. Section 5 provides the detailed experimental evaluation of the various hierarchical clustering methods as well as the experimental results of the constrained agglomerative algorithms. Section 6 discusses some important observations from the experimental results. Finally, Section 7 provides some concluding remarks.
+2. PRELIMINARIES
+Through-out this paper we will use the symbols n, m, and k to denote the number of documents, the number of terms, and the number of clusters, respectively. We will use the symbol S to denote the set of n documents that we want to cluster, S1, S2, . . . , Sk to denote each one of the k clusters, and n1, n2, . . . , nk to denote the sizes of the corresponding clusters.
+The various clustering algorithms that are described in this paper use the vector-space model [24] to represent each document. In this model, each document d is considered to be a vector in the term-space. In particular, we employed the t f − id f term weighting model, in which each document can be represented as (tf1 log(n/df1), tf2 log(n/df2), . . . , tfm log(n/dfm )), where tfi is the frequency of the ith term in the document and dfi is the number of documents that contain the ith term. To account for documents of different lengths, the length of each document vector is normalized so that it is of unit length ( dtﬁdf = 1), that is each document is a vector in the unit hypersphere. In the rest of the paper, we will assume that the vector representation for each document has been weighted using tf-idf and it has been normalized so that it is of unit length. Given a set A of documents and their corresponding
+
+vector representations, we deﬁne the composite vector DA to be
+
+DA =
+
+d∈A d, and the centroid vector C A
+
+to be C A
+
+=
+
+DA | A|
+
+.
+
+In the vector-space model, the cosine similarity is the most com-
+
+monly used method to compute the similarity between two documents di and d j , which is deﬁned to be cos(di , d j ) = di d di j . t d j The cosine formula can be simpliﬁed to cos(di , d j ) = di t d j , when
+
+the document vectors are of unit length. This measure becomes one
+
+if the documents are identical, and zero if there is nothing in com-
+
+mon between them (i.e., the vectors are orthogonal to each other).
+
+Vector Properties. By using the cosine function as the mea-
+sure of similarity between documents we can take advantage of
+a number of properties involving the composite and centroid vec-
+tors of a set of documents. In particular, if Si and S j are two sets of unit-length documents containing ni and n j documents respectively, and Di , D j and Ci , C j are their corresponding composite and centroid vectors then the following is true:
+
+1. The sum of the pair-wise similarities between the documents in Si and the document in S j is equal to Di t D j . That is,
+
+cos(dq , dr ) = Di t D j .
+
+(1)
+
+dq ∈Di ,dr ∈D j
+
+2. The sum of the pair-wise similarities between the documents in Si is equal to Di 2. That is,
+
+cos(dq , dr ) = Di 2.
+
+(2)
+
+dq ,dr ∈Di
+
+Note that this equation includes the pairwise similarities involving the same pairs of vectors.
+
+3. HIERARCHICAL PARTITIONAL CLUSTERING ALGORITHM
+Partitional clustering algorithms can be used to compute a hierarchical clustering solution using a repeated cluster bisectioning approach [26, 32]. In this approach, all the documents are initially partitioned into two clusters. Then, one of these clusters containing more than one document is selected and is further bisected. This process continues n − 1 times, leading to n leaf clusters, each containing a single document. It is easy to see that this approach builds the hierarchical agglomerative tree from top (i.e., single allinclusive cluster) to bottom (each document is in its own cluster). In the rest of this section we describe the various aspects of the partitional clustering algorithm that we used in our study.
+3.1 Clustering Criterion Functions
+A key characteristic of most partitional clustering algorithms is that they use a global criterion function whose optimization drives the entire clustering process. For those partitional clustering algorithms, the clustering problem can be stated as computing a clustering solution such that the value of a particular criterion function is optimized.
+The clustering criterion functions that we used in our study can be classiﬁed into four groups: internal, external, hybrid and graphbased. The internal criterion functions focus on producing a clustering solution that optimizes a function deﬁned only over the documents of each cluster and does not take into account the documents assigned to different clusters. The external criterion functions derive the clustering solution by focusing on optimizing a function that is based on how the various clusters are different from each
+
+516
+
+other. The graph based criterion functions model the documents as a graph and use clustering quality measures deﬁned in the graph model. The hybrid criterion functions simultaneously optimize multiple individual criterion functions.
+
+Internal Criterion Functions. The ﬁrst internal criterion func-
+
+tion maximizes the sum of the average pairwise similarities be-
+
+tween the documents assigned to each cluster, weighted according
+
+to the size of each cluster. Speciﬁcally, if we use the cosine func-
+
+tion to measure the similarity between documents, then we want the
+
+clustering solution to minimize the following criterion function:
+
+
+
+
+
+k1
+Á1 = nr 
+
+k cos(d D i , d j ) = r 2 . (3)
+
+r =1
+
+nr2 di ,d j ∈Sr
+
+r=1 nr
+
+The second criterion function is used by the popular vector-space variant of the K -means algorithm [6, 18, 7, 26, 15]. In this algorithm each cluster is represented by its centroid vector and the goal is to ﬁnd the clustering solution that maximizes the similarity between each document and the centroid of the cluster that is assigned to. Speciﬁcally, if we use the cosine function to measure the similarity between a document and a centroid, then the criterion function maximizes the following:
+
+k
+
+k
+
+Á2 =
+
+cos(di , Cr ). =
+
+Dr .
+
+(4)
+
+r =1 di ∈Sr
+
+r =1
+
+Comparing the Á2 criterion function with Á 1 we can see that the essential difference between these criterion functions is that Á 2
+scales the within-cluster similarity by the Dr term as opposed
+to nr term used by Á1. The term Dr is nothing more than the
+square-root of the pairwise similarity between all the document in
+Sr , and will tend to emphasize the importance of clusters (beyond the Dr 2 term) whose documents have smaller pairwise similarities compared to clusters with higher pair-wise similarities. Also
+note that if the similarity between a document and the centroid vec-
+tor of its cluster is deﬁned as just the dot-product of these vectors,
+then we will get back the Á1 criterion function.
+
+External Criterion Functions. It is quite hard to deﬁne exter-
+nal criterion functions that lead to meaningful clustering solutions. For example, it may appear that an intuitive external function may be derived by requiring that the centroid vectors of the different clusters are as mutually orthogonal as possible, i.e., they contain documents that share very few terms across the different clusters. However, for many problems this criterion function has trivial solutions that can be achieved by assigning to the ﬁrst k − 1 clusters a single document that shares very few terms with the rest, and then assigning the rest of the documents to the kth cluster. For this reason, the external function that we will discuss tries to separate the documents of each cluster from the entire collection, as opposed trying to separate the documents among the different clusters. This external criterion function was motivated by multiple discriminant analysis and is similar to minimizing the trace of the between-cluster scatter matrix [9, 28].
+In particular, our external criterion function minimizes
+k
+nr cos(Cr , C),
+r =1
+where C is the centroid vector of the entire collection. From this equation we can see that we try to minimize the cosine between the centroid vector of each cluster to the centroid vector of the entire
+
+collection. By minimizing the cosine we essentially try to increase the angle between them as much as possible. Also note that the contribution of each cluster is weighted based on the cluster size, so that larger clusters will weight heavier in the overall clustering solution. The above expression can be re-written as
+
+k1 nr cos(Cr , C) =
+r=1 D
+
+k Dr t D
+
+nr
+
+,
+
+r=1 Dr
+
+where D is the composite vector of the entire document collection. Note that since 1/ D is constant irrespective of the clustering solution the criterion function can be re-stated as minimize:
+
+k D 1 = nr r t D . (5) r=1 Dr
+
+As we can see from Equation 5, even-though our initial motivation was to deﬁne an external criterion function, because we used the cosine function to measure the separation between the cluster and the entire collection, the criterion function does take into account the within-cluster similarity of the documents (due to the Dr term). Thus, 1 is actually a hybrid criterion function that combines both external and internal characteristics of the clusters.
+
+Hybrid Criterion Functions. In our study, we will focus on
+two hybrid criterion function that are obtained by combining cri-
+terion Á1 with 1, and Á2 with 1, respectively. Formally, these
+functions are deﬁned as
+
+maximize À1 = Á1 , and maximize À2 = Á2 . (6)
+
+1
+
+1
+
+Note that since 1 is minimized, both À1 and À2 need to be max-
+imized as they are inversely related to 1.
+
+Graph Based Criterion Functions. An alternate way of
+viewing the relations between the documents is to use similarity graphs. Given a collection of n documents S, the similarity graph Gs is obtained by modeling each document as a vertex, and having an edge between each pair of vertices whose weight is equal to the similarity between the corresponding documents. Viewing the documents in this fashion, a number of internal, external, or combined criterion functions can be deﬁned that measure the overall clustering quality. In our study we will investigate one such criterion function called MinMaxCut, that was proposed recently [8]. MinMaxCut falls under the category of criterion functions that combine both the internal and external views of the clustering process and is deﬁned as [8]
+
+k
+minimize
+r =1
+
+cut(Sr , S − Sr ) , di ,d j ∈Sr sim(di , d j )
+
+where cut(Sr , S − Sr ) is the edge-cut between the vertices in Sr to the rest of the vertices in the graph S − Sr . The edge-cut between two sets of vertices A and B is deﬁned to be the sum of the edges connecting vertices in A to vertices in B. The motivation behind this criterion function is that the clustering process can be viewed as that of partitioning the documents into groups by minimizing the edge-cut of each partition. However, for reasons similar to those discussed in Section 3.1, such an external criterion may have trivial solutions, and for this reason each edge-cut is scaled by the sum of the internal edges. As shown in [8], this scaling leads to better balanced clustering solutions.
+If we use the cosine function to measure the similarity between the documents, and Equations 1 and 2, then the above criterion
+
+517
+
+function can be simpliﬁed to [32]:
+
+k Dr t D
+
+minimize 1 =
+
+.
+
+(7)
+
+r=1 Dr 2
+
+3.2 Criterion Function Optimization
+Our partitional algorithm uses an approach inspired by the K means algorithm to optimize each one of the above criterion functions, and is similar to that used in [26, 32]. The details of this algorithm are provided in the remaining of this section.
+Initially, a random pair of documents is selected from the collection to act as the seeds of the two clusters. Then, for each document, its similarity to these two seeds is computed, and it is assigned to the cluster corresponding to its most similar seed. This forms the initial two-way clustering. This clustering is then repeatedly reﬁned so that it optimizes the desired clustering criterion function.
+The reﬁnement strategy that we used consists of a number of iterations. During each iteration, the documents are visited in a random order. For each document, di , we compute the change in the value of the criterion function obtained by moving di to one of the other k − 1 clusters. If there exist some moves that lead to an improvement in the overall value of the criterion function, then di is moved to the cluster that leads to the highest improvement. If no such cluster exists, di remains in the cluster that it already belongs to. The reﬁnement phase ends, as soon as we perform an iteration in which no documents moved between clusters. Note that unlike the traditional reﬁnement approach used by K -means type of algorithms, the above algorithm moves a document as soon as it is determined that it will lead to an improvement in the value of the criterion function. This type of reﬁnement algorithms are often called incremental [9]. Since each move directly optimizes the particular criterion function, this reﬁnement strategy always converges to a local minima. Furthermore, because the various criterion functions that use this reﬁnement strategy are deﬁned in terms of cluster composite and centroid vectors, the change in the value of the criterion functions as a result of single document moves can be computed efﬁciently.
+The greedy nature of the reﬁnement algorithm does not guarantee that it will converge to a global minima, and the local minima solution it obtains depends on the particular set of seed documents that were selected during the initial clustering. To eliminate some of this sensitivity, the overall process is repeated a number of times. That is, we compute N different clustering solutions (i.e., initial clustering followed by cluster reﬁnement), and the one that achieves the best value for the particular criterion function is kept. In all of our experiments, we used N = 10. For the rest of this discussion when we refer to the clustering solution we will mean the solution that was obtained by selecting the best out of these N potentially different solutions.
+
+3.3 Cluster Selection
+We experimented with two different methods for selecting which cluster to bisect next. The ﬁrst method uses the simple strategy of bisecting the largest cluster available at that point of the clustering solution. Our earlier experience with this approach showed that it leads to reasonably good and balanced clustering solutions [26, 32]. However, its limitation is that it cannot gracefully operate in datasets in which the natural clusters are of different sizes, as it will tend to partition those larger clusters ﬁrst. To overcome this problem and obtain more natural hierarchical solutions, we developed a method that among the current k clusters, selects the cluster which leads to the k + 1 clustering solution that optimizes the value of the particular criterion function (among the different k choices). Our
+
+experiments showed that this approach performs somewhat better than the previous scheme, and is the method that we used in the experiments presented in Section 5.
+3.4 Computational Complexity
+One of the advantages of our partitional algorithm and that of other similar partitional algorithms, is that it has relatively low computational requirements. A two-way clustering of a set of documents can be computed in time linear on the number of documents, as in most cases the number of iterations required for the greedy reﬁnement algorithm is small (less than 20), and are to a large extend independent on the number of documents. Now if we assume that during each bisection step, the resulting clusters are reasonably balanced (i.e., each cluster contains a fraction of the original documents), then the overall amount of time required to compute all n − 1 bisections is O(n log n).
+
+4. HIERARCHICAL AGGLOMERATIVE CLUSTERING ALGORITHM
+Unlike the partitional algorithms that build the hierarchical solution for top to bottom, agglomerative algorithms build the solution by initially assigning each document to its own cluster and then repeatedly selecting and merging pairs of clusters, to obtain a single all-inclusive cluster. Thus, agglomerative algorithms build the tree from bottom (i.e., its leaves) toward the top (i.e., root).
+
+4.1 Cluster Selection Schemes
+
+The key parameter in agglomerative algorithms is the method used to determine the pairs of clusters to be merged at each step. In most agglomerative algorithms, this is accomplished by selecting the most similar pair of clusters, and numerous approaches have been developed for computing the similarity between two clusters[25, 17, 14, 10, 11, 16]. In our study we used the single-link, complete-link, and UPGMA schemes, as well as, the various partitional criterion functions described in Section 3.1.
+The single-link [25] scheme measures the similarity of two clusters by the maximum similarity between the documents from each cluster. That is, the similarity between two clusters Si and S j is given by
+
+simsingle-link(Si , S j ) = max {cos(di , d j )}.
+
+(8)
+
+di ∈Si , d j ∈S j
+
+In contrast, the complete-link scheme [17] uses the minimum similarity between a pair of documents to measure the same similarity. That is,
+simcomplete-link(Si , S j ) = min {cos(di , d j )}. (9)
+di ∈Si , d j ∈S j
+
+In general, both the single- and the complete-link approaches do not work very well because they either base their decisions on limited amount of information (single-link), or they assume that all the documents in the cluster are very similar to each other (completelink approach). The UPGMA scheme [14] (also known as group average) overcomes these problems by measuring the similarity of two clusters as the average of the pairwise similarity of the documents from each cluster. That is,
+
+1
+
+Di t D j
+
+simUPGMA(Si , S j ) =
+
+cos(di , d j ) =
+
+.
+
+ni n j di ∈Si , d j ∈S j
+
+ni n j
+
+(10)
+
+The partitional criterion functions, described in Section 3.1, can be converted into cluster selection schemes for agglomerative clustering using the general framework of stepwise optimization [9], as
+
+518
+
+follows. Consider an n-document dataset and the clustering solution that has been computed after performing l merging steps. This solution will contain exactly n − l clusters, as each merging step reduces the number of clusters by one. Now, given this (n − l)-way clustering solution, the pair of clusters that is selected to be merged next, is the one that leads to an (n − l − 1)-way solution that optimizes the particular criterion function. That is, each one of the (n − l) × (n − l − 1)/2 pairs of possible merges is evaluated, and the one that leads to a clustering solution that has the maximum (or minimum) value of the particular criterion function is selected. Thus, the criterion function is locally optimized within the particular stage of the agglomerative algorithm. This process continues until the entire agglomerative tree has been obtained.
+4.2 Computational Complexity
+There are two main computationally expensive steps in agglomerative clustering. The ﬁrst step is the computation of the pairwise similarity between all the documents in the data set. The complexity of this step is, in general, O(n2) because the average number of terms in each document is small and independent of n.
+The second step is the repeated selection of the pair of most similar clusters or the pair of clusters that best optimizes the criterion function. A naive way of performing that is to recompute the gains achieved by merging each pair of clusters after each level of the agglomeration, and select the most promising pair. During the lth agglomeration step, this will require O((n − l)2) time, leading to an overall complexity of O(n3). Fortunately, the complexity of this step can be reduced for single-link, complete-link, UPGMA,
+Á1, Á2, 1, and 1. This is because the pair-wise similarities or
+the improvements in the value of the criterion function achieved by merging a pair of clusters i and j does not change during the different agglomerative steps, as long as i or j is not selected to be merged. Consequently, the different similarities or gains in the value of the criterion function can be computed once for each pair of clusters and inserted into a priority queue. As a pair of clusters i and j is selected to be merged to form cluster p, then the priority queue is updated so that any gains corresponding to cluster pairs involving either i or j are removed, and the gains of merging the rest of the clusters with the newly formed cluster p are inserted. During the lth agglomeration step, that involves O(n − l) priority queue delete and insert operations. If the priority queue is implemented using a binary heap, the total complexity of these operations is O((n − l) log(n − l)), and the overall complexity over the n − 1 agglomeration steps is O(n2 log n).
+Unfortunately, the original complexity of O(n3) of the naive ap-
+proach cannot be reduced for the À1 and À2 criterion functions,
+because the improvement in the overall value of the criterion function when a pair of clusters i and j is merged tends to be changed for all pairs of clusters. As a result, they cannot be pre-computed and inserted into a priority queue.
+4.3 Constrained Agglomerative Clustering
+One of the advantages of partitional clustering algorithms is that they use information about the entire collection of documents when they partition the dataset into a certain number of clusters. On the other hand, the clustering decisions made by agglomerative algorithms are local in nature. This has both its advantages as well as its disadvantages. The advantage is that it is easy for them to group together documents that form small and reasonably cohesive clusters, a task in which partitional algorithms may fail as they may split such documents across cluster boundaries early during the partitional clustering process (especially when clustering large collections). However, their disadvantage is that if the documents are not
+
+part of particularly cohesive groups, then the initial merging decisions may contain some errors, which will tend to be multiplied as the agglomeration progresses. This is especially true for the cases in which there are a large number of equally good merging alternatives for each cluster.
+One way of improving agglomerative clustering algorithms by eliminating this type of errors, is to use a partitional clustering algorithm to constrain the space over which agglomeration decisions are made, so that each document is only allowed to merge with other documents that are part of the same partitionally discovered cluster. In this approach, a partitional clustering algorithm is used to compute a k-way clustering solution. Then, each of these clusters is treated as a separate collection and an agglomerative algorithm is used to build a tree for each one of them. Finally, the k different trees are combined into a single tree by merging them using an agglomerative algorithm that treats the documents of each subtree as a cluster that has already been formed during agglomeration. The advantage of this approach is that it is able to beneﬁt from the global view of the collection used by partitional algorithms and the local view used by agglomerative algorithms. An additional advantage is that the computational complexity of constrained clustering is O(k(( nk )2 log( nk )) + k2 log k), where k is the number of interme equals √diate partitional clusters. If k is reasonably large, e.g., k n, the original complexity of O(n2 log n) for agglomerative algorithms is reduced to O(n2/3 log n).
+5. EXPERIMENTAL RESULTS
+We experimentally evaluated the performance of the various clustering methods to obtain hierarchical solutions using a number of different datasets. In the rest of this section we ﬁrst describe the various datasets and our experimental methodology, followed by a description of the experimental results. The datasets as well as the various algorithms are available in the CLUTO clustering toolkit, which can be downloaded from http://www.cs.umn.edu/˜karypis/cluto.
+5.1 Document Collections
+In our experiments, we used a total of twelve different datasets, whose general characteristics are summarized in Table 1. The smallest of these datasets contained 878 documents and the largest contained 4,069 documents. To ensure diversity in the datasets, we obtained them from different sources. For all datasets, we used a stop-list to remove common words, and the words were stemmed using Porter’s sufﬁx-stripping algorithm [23]. Moreover, any term that occurs in fewer than two documents was eliminated.
+
+Table 1: Summary of data sets used to evaluate the various clustering criterion functions.
+
+Data fbis hitech reviews la1 la2 tr31 tr41 re0 re1 k1a k1b wap
+
+Source FBIS (TREC) San Jose Mercury (TREC) San Jose Mercury (TREC) LA Times (TREC) LA Times (TREC) TREC TREC Reuters-21578 Reuters-21578 WebACE WebACE WebACE
+
+# of Docs. 2463 2301 4069 3204 3075 927 878 1504 1657 2340 2340 1560
+
+# of terms 12674 13170 23220 21604 21604 10128 7454 2886 3758 13879 13879 8460
+
+# of classes 17 6 5 6 6 7 10 13 25 20 6 20
+
+The fbis dataset is from the Foreign Broadcast Information Service data of TREC-5 [29], and the classes correspond to the cate-
+
+519
+
+gorization used in that collection. The hitech and reviews datasets were derived from the San Jose Mercury newspaper articles that are distributed as part of the TREC collection (TIPSTER Vol. 3). Each one of these datasets was constructed by selecting documents that are part of certain topics in which the various articles were categorized (based on the DESCRIPT tag). The hitech dataset contained documents about computers, electronics, health, medical, research, and technology; and the reviews dataset contained documents about food, movies, music, radio, and restaurants. In selecting these documents we ensured that no two documents share the same DESCRIPT tag (which can contain multiple categories). The la1 and la2 datasets were obtained from articles of the Los Angeles Times that was used in TREC-5 [29]. The categories correspond to the desk of the paper that each article appeared and include documents from the entertainment, ﬁnancial, foreign, metro, national, and sports desks. Datasets tr31 and tr41 are derived from TREC-5 [29], TREC-6 [29], and TREC-7 [29] collections. The classes of these datasets correspond to the documents that were judged relevant to particular queries. The datasets re0 and re1 are from Reuters-21578 text categorization test collection Distribution 1.0 [19]. We divided the labels into two sets and constructed datasets accordingly. For each dataset, we selected documents that have a single label. Finally, the datasets k1a, k1b, and wap are from the WebACE project [21, 12, 3, 4]. Each document corresponds to a web page listed in the subject hierarchy of Yahoo! [30]. The datasets k1a and k1b contain exactly the same set of documents but they differ in how the documents were assigned to different classes. In particular, k1a contains a ﬁner-grain categorization than that contained in k1b.
+5.2 Experimental Methodology and Metrics
+For each one of the different datasets we obtained hierarchical clustering solutions using the various partitional and agglomerative clustering algorithms described in Sections 3 and 4. The quality of a clustering solution was determined by analyzing the entire hierarchical tree that is produced by a particular clustering algorithm. This is often done by using a measure that takes into account the overall set of clusters that are represented in the hierarchical tree. One such measure is the FScore measure, introduced by [18]. Given a particular class Lr of size nr and a particular cluster Si of size ni , suppose nri documents in the cluster Si belong to Lr , then the FScore of this class and cluster is deﬁned to be
+F(Lr , Si ) = 2 ∗ R(Lr , Si ) ∗ P(Lr , Si ) R(L , r , Si ) + P(Lr , Si )
+where R(Lr , Si ) is the recall value deﬁned as nri /nr , and P(Lr , Si ) is the precision value deﬁned as nri /ni for the class Lr and the cluster Si . The FScore of the class Lr , is the maximum FScore value attained at any node in the hierarchical clustering tree T . That is,
+F(Lr ) = max F(Lr , Si ).
+Si ∈T
+The FScore of the entire clustering solution is then deﬁned to be the sum of the individual class FScore weighted according to the class size.
+c FScore = nr F(Lr ), r=1 n
+where c is the total number of classes. A perfect clustering solution will be the one in which every class has a corresponding cluster containing the exactly same documents in the resulting hierarchical
+
+tree, in which case the FScore will be one. In general, the higher the FScore values, the better the clustering solution is.
+5.3 Comparison of Partitional and Agglomerative Trees
+Our ﬁrst set of experiments was focused on evaluating the quality of the hierarchical clustering solutions produced by various agglomerative algorithms and partitional algorithms. For agglomerative algorithms, nine selection schemes or criterion functions have been tested including the six criterion functions discussed in Section 3.1, and the three traditional selection schemes (i.e., singlelink, complete-link and UPGMA). We named this set of agglomerative methods directly with the name of the criterion function or
+selection scheme, e.g., “Á1 ” means the agglomerative clustering method with Á1 as the criterion function and “UPGMA” means
+the agglomerative clustering method with UPGMA as the selection scheme. We also evaluated various repeated bisection algorithms using the six criterion functions discussed in Section 3.1. We named this set of partitional methods by adding a letter “p” in
+front of the name of the criterion function, e.g., “pÁ 1 ” means the repeated bisection clustering method with Á 1 as the criterion func-
+tion. Overall, we evaluated 15 hierarchical clustering methods. The FScore results for the hierarchical trees for the various datasets
+and methods are shown in Table 2, where each row corresponds to one method and each column corresponds to one dataset. The results in this table are provided primarily for completeness and in order to evaluate the various methods we actually summarized these results in two ways, one is by looking at the average performance of each method over the entire set of datasets, and the other is by comparing each pair of methods to see which method outperforms the other for most of the datasets.
+The ﬁrst way of summarizing the results is to average the FScore for each method over the twelve different datasets. However, since the hierarchical tree quality for different datasets is quite different, we felt that such simple averaging may distort the overall results. For this reason, we used averages of relative FScores as follows. For each dataset, we divided the FScore obtained by a particular method by the largest FScore obtained for that particular dataset over the 15 methods. These ratios represent the degree to which a particular method performed worse than the best method for that particular series of experiments. Note that for different datasets, the method that achieved the best hierarchical tree as measured by FScore may be different. These ratios are less sensitive to the actual FScore values. We will refer to these ratios as relative FScores. Since, higher FScore values are better, all these relative FScore values are less than one. Now, for each method we averaged these relative FScores over the various datasets. A method that has an average relative FScore close to 1.0 will indicate that this method did the best for most of the datasets. On the other hand, if the average relative FScore is low, then this method performed poorly.
+The results of the relative FScores for various hierarchical clustering methods are shown in Table 3. Again, each row of the table corresponds to one method, and each column of the table corresponds to one dataset. The average relative FScore values are shown in the last column labeled “Average”. The entries that are boldfaced correspond to the methods that performed the best, and the entries that are underlined correspond to the methods that performed the best among agglomerative methods or partitional methods.
+A number of observations can be made by analyzing the results
+in Table 3. First, the repeated bisection method with the Á 2 criterion function (i.e., “pÁ2 ”) leads to the best solutions for most of the
+datasets. Over the entire set of experiments, this method is either
+
+520
+
+Table 2: The methods.
+
+FScores for the
+1 1
+À1 À2 Á1 Á2
+UPGMA slink clink p1 p1
+pÀ1 pÀ2 pÁ1 pÁ2
+
+different datasets for the hierarchical clustering
+
+fbis 0.643 0.624 0.629 0.637 0.592 0.639 0.673 0.481 0.609 0.623 0.668 0.686 0.641 0.702 0.681
+
+hitech 0.485 0.471 0.491 0.468 0.480 0.480 0.499 0.393 0.382 0.577 0.512 0.545 0.581 0.481 0.575
+
+k1a 0.544 0.603 0.597 0.579 0.583 0.605 0.646 0.375 0.552 0.670 0.697 0.691 0.693 0.666 0.682
+
+k1b 0.816 0.844 0.872 0.858 0.836 0.896 0.892 0.655 0.764 0.891 0.872 0.889 0.902 0.876 0.882
+
+la1 0.634 0.612 0.642 0.620 0.580 0.648 0.654 0.369 0.364 0.721 0.758 0.761 0.749 0.646 0.801
+
+la2 0.633 0.644 0.613 0.697 0.610 0.681 0.709 0.365 0.449 0.787 0.725 0.742 0.739 0.634 0.766
+
+re0 0.590 0.581 0.603 0.585 0.561 0.587 0.584 0.465 0.495 0.618 0.639 0.628 0.632 0.626 0.633
+
+solutions obtained via
+
+re1 0.655 0.617 0.662 0.660 0.607 0.684 0.695 0.445 0.508 0.758 0.721 0.699 0.723 0.675 0.712
+
+reviews 0.724 0.654 0.651 0.727 0.642 0.689 0.750 0.452 0.513 0.870 0.818 0.746 0.859 0.762 0.821
+
+tr31 0.795 0.796 0.818 0.789 0.756 0.844 0.816 0.532 0.804 0.858 0.892 0.877 0.873 0.769 0.893
+
+various hierarchical
+
+tr41 0.772 0.754 0.728 0.729 0.694 0.779 0.826 0.674 0.758 0.743 0.783 0.811 0.800 0.753 0.833
+
+wap 0.577 0.618 0.629 0.580 0.588 0.618 0.640 0.435 0.569 0.694 0.687 0.672 0.690 0.679 0.714
+
+clustering
+
+Table 3: The relative FScores averaged over the different datasets for the hierarchical clustering solutions obtained via various
+
+hierarchical clustering methods.
+
+fbis hitech k1a k1b
+
+la1
+
+la2
+
+re0
+
+re1 reviews tr31 tr41 wap Average
+
+1
+1
+À1 À2 Á1 Á2
+UPGMA
+
+0.916 0.889 0.896 0.907 0.843 0.910 0.959
+
+0.835 0.811 0.845 0.805 0.826 0.826 0.859
+
+0.780 0.865 0.857 0.831 0.836 0.868 0.927
+
+0.905 0.936 0.967 0.951 0.927 0.993 0.989
+
+0.791 0.764 0.801 0.774 0.724 0.809 0.817
+
+0.804 0.818 0.779 0.886 0.775 0.865 0.901
+
+0.923 0.909 0.944 0.915 0.878 0.919 0.914
+
+0.864 0.814 0.873 0.871 0.801 0.902 0.917
+
+0.832 0.752 0.748 0.836 0.738 0.792 0.862
+
+0.890 0.891 0.916 0.883 0.847 0.945 0.914
+
+0.927 0.905 0.874 0.875 0.833 0.935 0.992
+
+0.808 0.866 0.881 0.812 0.824 0.866 0.896
+
+0.856 0.852 0.865 0.862 0.821 0.886 0.912
+
+slink
+
+0.685 0.676 0.538 0.726 0.461 0.464 0.728 0.587 0.519 0.596 0.809 0.609 0.617
+
+clink
+
+0.868 0.657 0.792 0.847 0.454 0.571 0.775 0.670 0.590 0.900 0.910 0.797 0.736
+
+p1
+
+0.887 0.993 0.961 0.988 0.900 1.000 0.967 1.000 1.000 0.961 0.892 0.972 0.960
+
+p1
+
+0.952 0.881 1.000 0.967 0.946 0.921 1.000 0.951 0.940 0.999 0.940 0.962 0.955
+
+pÀ1
+
+0.977 0.938 0.991 0.986 0.950 0.943 0.983 0.922 0.858 0.982 0.974 0.941 0.954
+
+pÀ2
+
+0.913 1.000 0.994 1.000 0.935 0.939 0.989 0.954 0.987 0.978 0.960 0.966 0.968
+
+pÁ1
+
+1.000 0.828 0.956 0.971 0.806 0.806 0.980 0.890 0.876 0.861 0.904 0.951 0.902
+
+pÁ2
+
+0.970 0.990 0.979 0.978 1.000 0.973 0.991 0.939 0.944 1.000 1.000 1.000 0.980
+
+the best or always within 6% of the best solution. On the average,
+the pÁ2 method outperforms the other partitional methods and ag-
+glomerative methods by 2%–8% and 7%–37%, respectively. Sec-
+ond, the UPGMA method performs the best among agglomerative
+methods followed by the Á2 method. The two methods together
+achieved the best hierarchical clustering solutions among agglom-
+erative methods for all the datasets except re0. On the average,
+the UPGMA and Á2 methods outperform the other agglomerative
+methods by 5%–30% and 2%–27%, respectively. Third, partitional
+methods outperform agglomerative methods. Except for the pÁ 1
+method, each one of the remaining ﬁve partitional methods on the
+average performs better than all the nine agglomerative methods
+by at least 5%. The pÁ1 method performs a little bit worse than
+the UPGMA method and better than the rest of the agglomera-
+tive methods. Fourth, single-link, complete-link and Á 1 performed poorly among agglomerative methods and pÁ 1 performed the worst among partitional methods. Finally, on the average, À1 and À2 are
+the agglomerative methods that lead to the second best hierarchical
+clustering solutions among agglomerative methods. Whereas, pÀ2
+and p 1 are the partitional methods that lead to the second best hierarchical clustering solutions among partitional methods.
+When the relative performance of different methods is close, the
+average relative FScores will be quite similar. Hence, to make the
+comparisons of these methods easier, our second way of summa-
+rizing the results is to create a dominance matrix for the various
+methods. As shown in Table 4, the dominance matrix is a 15 by
+15 matrix, where each row or column corresponds to one method
+and the value in each entry is the number of datasets for which
+
+the method corresponding to the row outperforms the method corresponding to the column. For example, the value in the entry of
+the row Á2 and the column 1 is eight, which means for eight out of the twelve datasets, the Á2 method outperforms the 1 method.
+The values that are close to twelve indicate that the row method outperforms the column method.
+Similar observations can be made by analyzing the results in Table 4. First, partitional methods outperform agglomerative methods. By looking at the left bottom part of the dominance matrix, we can see that all the entries are close to twelve except two entries
+in the row of pÁ1, which means each partitional method performs
+better than agglomerative methods for all or most of the datasets. Second, by looking at the submatrix of the comparisons within agglomerative methods (i.e., the left top part of the dominance matrix), we can see that the UPGMA method performs the best fol-
+lowed by Á2 and À1, and slink, clink and Á1 are the worst set of
+agglomerative methods. Third, from the submatrix of the comparisons within partitional methods (i.e., the right bottom part of the
+dominance matrix), we can see that pÁ2 leads to better solutions
+than the other partitional methods for most of the datasets followed
+by pÀ2, and pÁ1 performed worse than the other partitional meth-
+ods for most of the datasets.
+5.4 Constrained Agglomerative Trees
+Our second set of experiments was focused on evaluating the constrained agglomerative clustering methods. These results were obtained by using the different criterion functions to ﬁnd intermediate partitional clusters, and then using UPGMA as the agglomera-
+
+521
+
+Table 4: Dominance matrix for various hierarchical clustering methods. 1 1 À1 À2 Á1 Á2 UPGMA slink clink p 1 p 1 pÀ1 pÀ2 pÁ1 pÁ2
+
+1
+
+07
+
+4
+
+6
+
+94
+
+1
+
+12
+
+10
+
+2
+
+0
+
+0
+
+1
+
+3
+
+0
+
+1
+
+50
+
+4
+
+5 11 0
+
+0
+
+12
+
+10
+
+2
+
+0
+
+0
+
+0
+
+3
+
+0
+
+À1
+
+88
+
+0
+
+8 12 3
+
+2
+
+12
+
+11
+
+1
+
+0
+
+0
+
+0
+
+2
+
+0
+
+À2
+
+67
+
+4
+
+0
+
+92
+
+1
+
+12
+
+10
+
+1
+
+0
+
+0
+
+0
+
+2
+
+0
+
+Á1
+
+31
+
+0
+
+3
+
+00
+
+0
+
+12
+
+9
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+Á2
+
+8 11 9 10 11 0
+
+3
+
+12
+
+12
+
+3
+
+1
+
+1
+
+0
+
+6
+
+1
+
+UPGMA 11 12 10 11 12 9
+
+0
+
+12
+
+12
+
+3
+
+3
+
+3
+
+2
+
+7
+
+1
+
+slink
+
+00
+
+0
+
+0
+
+00
+
+0
+
+0
+
+2
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+clink
+
+22
+
+1
+
+2
+
+30
+
+0
+
+10
+
+0
+
+1
+
+0
+
+0
+
+0
+
+2
+
+0
+
+p1
+
+10 10 11 11 12 9
+
+9
+
+12
+
+11
+
+0
+
+6
+
+6
+
+4
+
+9
+
+5
+
+p1
+
+12 12 11 12 12 11
+
+9
+
+12
+
+12
+
+6
+
+0
+
+6
+
+5
+
+10
+
+3
+
+pÀ1
+
+12 12 12 12 12 11
+
+9
+
+12
+
+12
+
+6
+
+6
+
+0
+
+5
+
+9
+
+3
+
+pÀ2
+
+11 12 12 12 12 12
+
+10
+
+12
+
+12
+
+8
+
+7
+
+7
+
+0
+
+11
+
+5
+
+pÁ1
+
+9 9 10 10 12 6
+
+5
+
+12
+
+10
+
+3
+
+2
+
+3
+
+1
+
+0
+
+1
+
+pÁ2
+
+12 12 12 12 12 11
+
+11
+
+12
+
+12
+
+7
+
+9
+
+9
+
+7
+
+11
+
+0
+
+tive scheme to construct the ﬁnal hierarchical solutions as described in Section 4.3. UPGMA was selected because it performed the best among the various agglomerative schemes.
+The results of the constrained agglomerative clustering methods are shown in Table 5. Each dataset is shown in a different subtable. There are six experiments performed for each dataset and each of them corresponds to a row. The row labeled “UPGMA” contains the FScores for the hierarchical clustering solutions generated by the UPGMA method with one intermediate cluster, which are the same for all the criterion functions. The rows labeled “10”, “20”, “n/40” and “n/20” contain the FScores obtained by the constrained agglomerative methods using 10, 20, n/40 and n/20 partitional clusters to constrain the solution, where n is the total number of documents in each dataset. The row labeled “rb” contains the FScores for the hierarchical clustering solutions obtained by repeated bisection algorithms with various criterion functions. The entries that are boldfaced correspond to the method that performed the best for a particular criterion function, whereas the entries that are underlined correspond to the best hierarchical clustering solution obtained for each dataset.
+A number of observations can be made by analyzing the results in Table 5. First, for all the datasets except tr41, the constrained agglomerative methods improved the hierarchical solutions obtained by agglomerative methods alone, no matter what partitional clustering algorithm is used to obtain intermediate clusters. The improvement can be achieved even with small number of intermediate clusters. Second, for many cases, the constrained agglomerative methods performed even better than the corresponding partitional methods. Finally, the partitional clustering methods that improved the agglomerative hierarchical results the most are the same partitional clustering methods that performed the best in terms of generating the whole hierarchical trees.
+6. DISCUSSION
+The most important observation from the experimental results is that partitional methods performed better than agglomerative methods. As discussed in Section 4.3, one of the limitations of agglomerative methods is that errors may be introduced during the initial merging decisions, especially for the cases in which there are a large number of equally good merging alternatives for each cluster. Without a high-level view of the overall clustering solution, it is hard for agglomerative methods to make the right decision in such cases. Since the errors will be carried through and may be multiplied as the agglomeration progresses, the resulting hierarchical trees suffer from those early stage errors. This observation is also supported from the experimental results with the constrained
+
+agglomerative algorithms. We can see in this case that once we
+constrain the space over which agglomeration decisions are made,
+even with small number of intermediate clusters, some early stage
+errors can be eliminated. As a result, the constrained agglomera-
+tive algorithms improved the hierarchical solutions obtained by ag-
+glomerative methods alone. Since agglomerative methods can do a
+better job of grouping together documents that form small and rea-
+sonably cohesive clusters than partitional methods, the resulting hi-
+erarchical solutions by the constrained agglomerative methods are
+also better than partitional methods alone for many cases.
+Another surprising observation from the experimental results is
+that Á1 and UPGMA behave very differently. Recall from Sec-
+tion 4.1 that the UPGMA method selects to merge the pair of clus-
+ters with the highest average pairwise similarity. Hence, to some
+extent, via the agglomeration process, it tries to maximize the av-
+erage pairwise similarity between the documents of the discovered
+clusters. On the other hand, the Á1 method tries to ﬁnd a clustering
+solution that maximizes the sum of the average pairwise similarity
+of the documents in each cluster, weighted by the size of the differ-
+ent clusters. Thus, Á1 can be considered as the criterion function
+that UPGMA tries to optimize. However, our experimental results
+showed that Á1 performed signiﬁcantly worse than UPGMA.
+By looking at the FScore values for each individual class, we
+found that for most of the classes Á1 can produce clusters with similar quality as UPGMA. However, Á1 performed poorly for a few large classes. For those classes, Á1 prefers to ﬁrst merge
+in a loose subcluster of a different class, before it merges a tight
+subcluster of the same class. This happens even if the subcluster of
+the same class has higher cross similarity than the subcluster of the
+different class. This observation can be explained by the fact that
+Á1 tends to merge loose clusters ﬁrst, which is shown in the rest of
+this section.
+From their deﬁnitions, the difference between Á1 and UPGMA is that Á1 takes into account the cross similarities as well as in-
+ternal similarities of the clusters to be merged together. Let Si and S j be two of the candidate clusters of size ni and n j , respectively, also let µi and µ j be the average pairwise similarity between the documents in Si and S j , respectively (i.e., µi = Ci t Ci and µ j = C j t C j ), and let ξi j be the average cross similarity between the documents in Si and the documents in S j (i.e., ξi j = ni n j Di ). t D j UPGMA’s merging decisions are based only on ξi j . On the other
+hand, Á1 will merge the pair of clusters that optimizes the overall
+objective functions. The change of the overall objective function
+after merging two clusters Si and S j to obtain cluster Sr is given
+
+522
+
+Table 5: Comparison of UPGMA, constrained agglomerative methods with
+
+and repeated bisection methods with various criterion functions.
+
+Method UPGMA
+
+1 0.673
+
+1 0.673
+
+fbis
+À1
+0.673
+
+À2
+0.673
+
+Á1
+0.673
+
+Á2
+0.673
+
+Method UPGMA
+
+10
+
+0.656 0.659 0.692 0.628 0.709 0.669
+
+10
+
+20
+
+0.658 0.681 0.707 0.681 0.718 0.687
+
+20
+
+n/40
+
+0.683 0.685 0.693 0.691 0.720 0.704
+
+n/40
+
+n/20
+
+0.686 0.699 0.703 0.708 0.721 0.691
+
+n/20
+
+rb
+
+0.623 0.668 0.686 0.641 0.702 0.681
+
+rb
+
+10, 20,
+1 0.499 0.595 0.590 0.554 0.545 0.577
+
+n/40 and n/20
+
+1 0.499 0.535 0.556 0.536 0.535 0.512
+
+hitech
+À1
+0.499 0.568 0.573 0.563 0.543 0.545
+
+intermediate
+
+À2
+0.499 0.587 0.609 0.578 0.562 0.581
+
+Á1
+0.499 0.490 0.517 0.539 0.529 0.481
+
+partitional
+Á2
+0.499 0.583 0.583 0.564 0.561 0.575
+
+clusters,
+
+Method UPGMA 10 20 n/40 n/20 rb
+
+1 0.646 0.680 0.696 0.694 0.692 0.670
+
+1 0.646 0.661 0.673 0.680 0.683 0.697
+
+k1a
+À1
+0.646 0.653 0.688 0.721 0.710 0.691
+
+À2
+0.646 0.691 0.708 0.724 0.714 0.693
+
+Á1
+0.646 0.618 0.633 0.649 0.669 0.666
+
+Á2
+0.646 0.677 0.699 0.700 0.722 0.682
+
+Method UPGMA 10 20 n/40 n/20 rb
+
+1 0.892 0.911 0.908 0.918 0.897 0.891
+
+1 0.892 0.898 0.891 0.896 0.896 0.872
+
+k1b
+À1
+0.892 0.910 0.908 0.915 0.907 0.889
+
+À2
+0.892 0.926 0.925 0.936 0.928 0.902
+
+Á1
+0.892 0.904 0.907 0.893 0.876 0.876
+
+Á2
+0.892 0.908 0.903 0.903 0.899 0.882
+
+Method UPGMA 10 20 n/40 n/20 rb
+
+1 0.654 0.736 0.747 0.737 0.722 0.721
+
+1 0.654 0.704 0.712 0.763 0.730 0.758
+
+la1
+À1
+0.654 0.707 0.709 0.696 0.678 0.761
+
+À2
+0.654 0.743 0.728 0.729 0.737 0.749
+
+Á1
+0.654 0.629 0.665 0.699 0.695 0.646
+
+Á2
+0.654 0.806 0.798 0.783 0.768 0.801
+
+Method UPGMA 10 20 n/40 n/20 rb
+
+1 0.709 0.712 0.794 0.792 0.763 0.787
+
+1 0.709 0.719 0.735 0.772 0.737 0.725
+
+la2
+À1
+0.709 0.714 0.731 0.725 0.738 0.742
+
+À2
+0.709 0.740 0.783 0.789 0.792 0.739
+
+Á1
+0.709 0.672 0.741 0.738 0.764 0.634
+
+Á2
+0.709 0.759 0.765 0.787 0.794 0.766
+
+Method UPGMA 10 20 n/40 n/20 rb
+
+1 0.584 0.622 0.631 0.639 0.633 0.618
+
+1 0.584 0.632 0.639 0.641 0.642 0.639
+
+re0
+À1
+0.584 0.624 0.616 0.626 0.626 0.628
+
+À2
+0.584 0.650 0.646 0.657 0.645 0.632
+
+Á1
+0.584 0.611 0.614 0.586 0.634 0.626
+
+Á2
+0.584 0.629 0.632 0.635 0.645 0.633
+
+Method UPGMA 10 20 n/40 n/20 rb
+
+1 0.695 0.713 0.719 0.713 0.735 0.758
+
+1 0.695 0.741 0.735 0.723 0.714 0.721
+
+re1
+À1
+0.695 0.730 0.728 0.753 0.754 0.699
+
+À2
+0.695 0.723 0.728 0.715 0.708 0.723
+
+Á1
+0.695 0.714 0.708 0.714 0.702 0.675
+
+Á2
+0.695 0.731 0.724 0.719 0.739 0.712
+
+Method UPGMA 10 20 n/40 n/20 rb
+
+1 0.816 0.862 0.882 0.896 0.839 0.858
+
+1 0.816 0.893 0.894 0.894 0.894 0.892
+
+tr31
+À1
+0.816 0.897 0.895 0.891 0.894 0.877
+
+À2
+0.816 0.878 0.866 0.881 0.843 0.873
+
+Á1
+0.816 0.828 0.839 0.847 0.874 0.769
+
+Á2
+0.816 0.897 0.896 0.853 0.853 0.893
+
+Method UPGMA 10 20 n/40 n/20 rb
+
+1 0.826 0.770 0.821 0.805 0.818 0.743
+
+1 0.826 0.797 0.811 0.824 0.782 0.783
+
+tr41
+À1
+0.826 0.809 0.799 0.813 0.793 0.811
+
+À2
+0.826 0.789 0.815 0.821 0.802 0.800
+
+Á1
+0.826 0.863 0.858 0.842 0.802 0.753
+
+Á2
+0.826 0.807 0.848 0.849 0.839 0.833
+
+Method UPGMA 10 20 n/40 n/20 rb
+
+1 0.750 0.870 0.871 0.873 0.862 0.870
+
+1 0.750 0.854 0.847 0.855 0.852 0.818
+
+reviews
+À1
+0.750 0.844 0.846 0.847 0.849 0.746
+
+À2
+0.750 0.866 0.867 0.859 0.858 0.859
+
+Á1
+0.750 0.817 0.815 0.824 0.828 0.762
+
+Á2
+0.750 0.851 0.850 0.852 0.852 0.821
+
+Method UPGMA 10 20 n/40 n/20 rb
+
+1 0.640 0.696 0.677 0.693 0.708 0.694
+
+1 0.640 0.685 0.705 0.700 0.703 0.687
+
+wap
+À1
+0.640 0.684 0.694 0.700 0.689 0.672
+
+À2
+0.640 0.679 0.672 0.686 0.709 0.690
+
+Á1
+0.640 0.639 0.640 0.656 0.672 0.679
+
+Á2
+0.640 0.658 0.672 0.696 0.700 0.714
+
+by,
+
+Á1 =
+
+Dr 2 − nr
+
+Di 2 − ni
+
+Dj 2 nj
+
+= nr µr − ni µi − n j µ j
+
+ni2µi + n2j µ j + 2ni n j ξi j
+
+= (ni + n j )
+
+2
+
+− ni µi − n j µ j
+
+(ni + n j )
+
+= ni n j n (2ξ i + n j i j − µi − µ j ). (11)
+
+From Equation 11, we can see that smaller µi and µ j values will
+result in greater Á1 values, which makes looser clusters easier to
+be merged ﬁrst. For example, consider three clusters S1, S2 and S3. S2 is tight (i.e., µ2 is high) and of the same class as S1, whereas S3 is loose (i.e., µ3 is low) and of a different class. Suppose S2 and S3
+have similar size, which means the value of Á1 will be determined
+mainly by (2ξi j −µi −µ j ), then it is possible that (2ξ13 −µ1 −µ3)
+
+is greater than (2ξ12 − µ1 − µ2) because µ3 is less than µ2, even if S2 is closer to S1 than S3 (i.e., ξ12 > ξ13). As a result, if two classes
+are close and of different tightness, Á1 may merge subclusters from
+each class together at early stages and fail to form proper nodes in the resulting hierarchical tree corresponding to those two classes.
+7. CONCLUDING REMARKS
+In the paper we experimentally evaluated nine agglomerative algorithms and six partitional algorithms to obtain hierarchical clustering solutions for document datasets. We also introduced a new class of agglomerative algorithms by constraining the agglomeration process using clusters obtained by partitional algorithms. Our experimental results showed that partitional methods produced better hierarchical solutions than agglomerative methods, and that the constrained agglomerative methods improved the clustering solutions obtained by agglomerative or partitional methods alone. These results suggest that the poor performance of agglomerative meth-
+
+523
+
+ods may be attributed to the merging errors they make during early stages, which can be eliminated to some extent by introducing partitional constrains.
+8. REFERENCES
+[1] C. C. Aggarwal, S. C. Gates, and P. S. Yu. On the merits of building categorization systems by supervised clustering. In Proc. of the Fifth ACM SIGKDD Int’l Conference on Knowledge Discovery and Data Mining, pages 352–356, 1999.
+[2] D. Boley. Principal direction divisive partitioning. Data Mining and Knowledge Discovery, 2(4), 1998.
+[3] D. Boley, M. Gini, R. Gross, E. Han, K. Hastings, G. Karypis, V. Kumar, B. Mobasher, and J. Moore. Document categorization and query generation on the world wide web using WebACE. AI Review), 11:365–391, 1999.
+[4] D. Boley, M. Gini, R. Gross, E. Han, K. Hastings, G. Karypis, V. Kumar, B. Mobasher, and J. Moore. Partitioning-based clustering for web document categorization. Decision Support Systems (accepted for publication), 1999.
+[5] P. Cheeseman and J. Stutz. Baysian classiﬁcation (autoclass): Theory and results. In U. Fayyad, G. Piatetsky-Shapiro, P. Smith, and R. Uthurusamy, editors, Advances in Knowledge Discovery and Data Mining, pages 153–180. AAAI/MIT Press, 1996.
+[6] D. Cutting, J. Pedersen, D. Karger, and J. Tukey. Scatter/gather: A cluster-based approach to browsing large document collections. In Proceedings of the ACM SIGIR, pages pages 318–329, Copenhagen, 1992.
+[7] I. Dhillon and D. Modha. Concept decomposition for large sparse text data using clustering. Technical Report Research Report RJ 10147, IBM Almadan Research Center, 1999.
+[8] C. Ding, X. He, H. Zha, M. Gu, and H. Simon. Spectral min-max cut for graph partitioning and data clustering. Technical Report TR-2001-XX, Lawrence Berkeley National Laboratory, University of California, Berkeley, CA, 2001.
+[9] R. Duda, P. Hart, and D. Stork. Pattern Classiﬁcation. John Wiley & Sons, 2001.
+[10] S. Guha, R. Rastogi, and K. Shim. CURE: An efﬁcient clustering algorithm for large databases. In Proc. of 1998 ACM-SIGMOD Int. Conf. on Management of Data, 1998.
+[11] S. Guha, R. Rastogi, and K. Shim. ROCK: a robust clustering algorithm for categorical attributes. In Proc. of the 15th Int’l Conf. on Data Eng., 1999.
+[12] E. Han, D. Boley, M. Gini, R. Gross, K. Hastings, G. Karypis, V. Kumar, B. Mobasher, and J. Moore. WebACE: A web agent for document categorization and exploartion. In Proc. of the 2nd International Conference on Autonomous Agents, May 1998.
+[13] E. Han, G. Karypis, V. Kumar, and B. Mobasher. Hypergraph based clustering in high-dimensional data sets: A summary of results. Bulletin of the Technical Committee on Data Engineering, 21(1), 1998.
+[14] A. Jain and R. C. Dubes. Algorithms for Clustering Data. Prentice Hall, 1988.
+[15] G. Karypis and E. Han. Concept indexing: A fast dimensionality reduction algorithm with applications to document retrieval & categorization. Technical Report TR-00-016, Department of Computer Science, University of Minnesota, Minneapolis, 2000. Available on the WWW at URL http://www.cs.umn.edu/˜karypis.
+
+[16] G. Karypis, E. Han, and V. Kumar. Chameleon: A hierarchical clustering algorithm using dynamic modeling. IEEE Computer, 32(8):68–75, 1999.
+[17] B. King. Step-wise clustering procedures. Journal of the American Statistical Association, 69:86–101, 1967.
+[18] B. Larsen and C. Aone. Fast and effective text mining using linear-time document clustering. In Proc. of the Fifth ACM SIGKDD Int’l Conference on Knowledge Discovery and Data Mining, pages 16–22, 1999.
+[19] D. D. Lewis. Reuters-21578 text categorization test collection distribution 1.0. http://www.research.att.com/∼lewis, 1999.
+[20] J. MacQueen. Some methods for classiﬁcation and analysis of multivariate observations. In Proc. 5th Symp. Math. Statist, Prob., pages 281–297, 1967.
+[21] J. Moore, E. Han, D. Boley, M. Gini, R. Gross, K. Hastings, G. Karypis, V. Kumar, and B. Mobasher. Web page categorization and feature selection using association rule and principal component clustering. In 7th Workshop on Information Technologies and Systems, Dec. 1997.
+[22] R. Ng and J. Han. Efﬁcient and effective clustering method for spatial data mining. In Proc. of the 20th VLDB Conference, pages 144–155, Santiago, Chile, 1994.
+[23] M. F. Porter. An algorithm for sufﬁx stripping. Program, 14(3):130–137, 1980.
+[24] G. Salton. Automatic Text Processing: The Transformation, Analysis, and Retrieval of Information by Computer. Addison-Wesley, 1989.
+[25] P. H. Sneath and R. R. Sokal. Numerical Taxonomy. Freeman, London, UK, 1973.
+[26] M. Steinbach, G. Karypis, and V. Kumar. A comparison of document clustering techniques. In KDD Workshop on Text Mining, 2000.
+[27] A. Strehl and J. Ghosh. Scalable approach to balanced, high-dimensional clustering of market-baskets. In Proceedings of HiPC, 2000.
+[28] S. Theodoridis and K. Koutroumbas. Pattern Recognition. Academic Press, 1999.
+[29] TREC. Text REtrieval conference. http://trec.nist.gov, 1999.
+[30] Yahoo! Yahoo! http://www.yahoo.com.
+[31] K. Zahn. Graph-tehoretical methods for detecting and describing gestalt clusters. IEEE Transactions on Computers, (C-20):68–86, 1971.
+[32] Y. Zhao and G. Karypis. Criterion functions for document clustering: Experiments and analysis. Technical Report TR #01–40, Department of Computer Science, University of Minnesota, Minneapolis, MN, 2001. Available on the WWW at http://cs.umn.edu/˜karypis/publications.
+
+524
+

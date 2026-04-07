@@ -1,0 +1,1713 @@
+arXiv:1702.02658v1 [stat.ME] 9 Feb 2017
+
+Estimating the number of clusters using cross-validation
+Wei Fu and Patrick O. Perry Stern School of Business, New York University
+February 10, 2017
+Abstract Many clustering methods, including k-means, require the user to specify the number of clusters as an input parameter. A variety of methods have been devised to choose the number of clusters automatically, but they often rely on strong modeling assumptions. This paper proposes a data-driven approach to estimate the number of clusters based on a novel form of cross-validation. The proposed method diﬀers from ordinary cross-validation, because clustering is fundamentally an unsupervised learning problem. Simulation and real data analysis results show that the proposed method outperforms existing methods, especially in high-dimensional settings with heterogeneous or heavy-tailed noise. In a yeast cell cycle dataset, the proposed method ﬁnds a parsimonious clustering with interpretable gene groupings.
+Keywords: clustering, cross-validation, k-means, model selection, unsupervised learning
+1
+
+1 Introduction
+A clustering procedure segments a collection of items into smaller groups, with the property that items in the same group are more similar to each other than items in diﬀerent groups (Hartigan, 1975). Such procedures are used in two main applicaitons: (a) exploratory analysis, where clusters reveal homogeneous sub-groups within a large sample; (b) data reduction, where high-dimensional item attribute vectors get reduced to discrete cluster labels (Jain et al., 1999).
+With many clustering methods, including the popular k-means clustering procedure, the user must specify k, the number of clusters (Jain, 2010). One popular ad-hoc device for selecting the number of clusters is to use an analogue of the principal components scree plot: plot the within-cluster dispersion Wk, as a function of the number of clusters k, looking for an “elbow” in the plot. This approach is simple and often performs well, but it requires subjective judgment as to where the elbow is located, and as we demonstrate in Appendix A, the approach can easily fail. In this report, we propose a new method to choose the number of clusters automatically.
+The problem of choosing k has been well-studied, and dozens of methods have been proposed (Chiang and Mirkin, 2010; Fujita et al., 2014). The main diﬃculty in choosing k is that clustering is fundamentally an “unsupervised” learning problem, meaning that there is no obvious way to use “prediction ability” to drive the model selection (Hastie et al., 2009). Most existing methods for choosing k instead rely on explicit or implicit assumptions about the data distribution, including it shape, scale, and correlation structure.
+Several authors advocate choosing k by performing a sequence of hypothesis tests with null and alternative hypotheses of the form H0 : k = k0 and H1 : k > k0, starting with k0 = 1 and proceeding sequentially with higher values of k0 until a test fails to reject H0.
+2
+
+The gap statistic method typiﬁes this class of methods, with a test statistic that measures the within-cluster dispersion relative to what is expected under a reference distribution (Tibshirani et al., 2001).
+Other authors have proposed choosing k by using information criteria. For example, Sugar and James (2003) proposed an approach that minimizes the estimated “distortion”, the average distance per dimension. Likewise, Fraley and Raftery (2002)’s model-based method ﬁts Gaussian mixture model models to the data, then selects the number of mixture components, k, using the Bayesian Information Criterion (BIC).
+A third set of approaches is based on the idea of “stability”, that clusters are meaningful if they manifest in multiple independent samples from the same population. Ben-Hur et al. (2001), Tibshirani and Walther (2005), Wang (2010) and Fang and Wang (2012) developed methods based on this idea.
+The procedure we propose in this report is based on a form of cross-validation, and it is adaptive to the characteristics of the data distribution. The essential idea is to devise a way to measure a form of internal prediction error associated each choose of k, and then choose the k with the smallest associated error. We describe this method in detail in Section 2. In Section 3, we prove that our method is self-consistent. Then, in Section 4, we analyze the performance of our method in the presence of Gaussian noise. The theoretical analysis shows that the performance of our method degrades in the presence of correlated noise; to ﬁx this, we propose a correction for correlated noise in Section 5. In Sections 6 and 7, we demonstrate that our method is competitive with other state-of-the-art procedures in both simulated and real data sets. Then, in Section 8, we apply our method to a Yeast cell cycle dataset. We conclude with a short discussion in Section 9.
+3
+
+2 Cross-validation for clustering
+
+2.1 Problem statement
+
+Suppose that we are given a data matrix with N rows and P columns, and we are tasked
+with choosing an appropriate number k of clusters to use for performing k-means clustering
+on the rows of the data matrix. Recall that the k-means procedure takes a set of observa-
+tions {x1, . . . , xn} and ﬁnds a set of k or cluster centers A = {a1, . . . , ak} minimizing the
+within cluster dispersion
+n
+W (A) = min xi − a 2.
+a∈A i=1
+This implicitly deﬁnes a cluster assignment rule
+
+with ties broken arbitrarily.
+
+g(x) = arg min x − ag 2,
+g∈{1,...,k}
+
+We can consider the problem of choosing k, the number of clusters, to be a model
+
+selection problem. In other domains, especially supervised learning problems like regression
+
+and classiﬁcation, cross-validation is popular for performing model selection. In these
+
+settings, the data comes in the form of N predictor-response pairs, (X1, Y1), . . . , (XN , YN ), with Xi ∈ Rp and Yi ∈ Rq. The data can be represented as a matrix with N rows and p + q columns. We partition the data into K hold-out “test” subsets, with K typically chosen
+
+to be 5 or 10. For each “fold” r in the range 1, . . . , K, we permute the rows of the data
+
+matrix to get X, a matrix with the rth test subset as its trailing rows. We partition X as
+
+
+
+
+
+X = Xtrain Xtest
+
+Ytrain . Ytest
+
+We use the training rows [Xtrain Ytrain] to ﬁt a regression model Yˆ = Yˆ (X), and then
+
+evaluate the performance of this model on the test set, computing the cross-validation
+
+4
+
+error Ytest − Yˆ (Xtest) 2 or some variant thereof. We choose the model with the smallest cross-validation error, averaged over all K folds.
+In unsupervised learning problems like factor analysis and clustering, the features of the observations are not naturally partitioned into “predictors” and “responses”, so we cannot directly apply the cross-validation procedure described above. For factor analysis, there are at least two versions of cross-validation. Wold (1978) proposed a “speckled” holdout, where in each fold we leave out a subset of the elements of the data matrix. Wold’s procedure works well empirically, but does not have any theoretical support, and it requires a factor analysis procedure that can handle missing data. Owen and Perry (2009) proposed a scheme called “bi-cross-validation” wherein each fold designates a subset of the data matrix columns to be response and a subset of the rows to be test data. This generalized a procedure due to Gabriel (2002), who proposed holding out a single column and a single row at each fold.
+In the sequel, we extend Gabriel cross-validation to the problem of selecting the number of clusters, k, automatically, and we provide theoretical and empirical support analogous to the consistency results proved by Owen and Perry (2009).
+2.2 Gabriel cross-validation
+Our version of Gabriel cross validation for clustering works by performing a sequence of “folds” over the data. We use these folds to estimate a version of prediction error (crossvalidation error) for each possible value of k; we then choose the value kˆ with the smallest cross-validation error.
+In each fold of our cross-validation procedure, we permute the rows and columns of the data matrix and then partition the rows and columns as N = n + m and P = p + q for positive integers n, m, p, and q. We treat the ﬁrst p columns as “predictors” and the last
+5
+
+q columns as “responses”; similarly, we treat the ﬁrst n rows as “train” observations and
+
+the last m rows as “test” observations. In block form, the permuted data matrix is
+
+
+
+
+
+X = Xtrain Xtest
+
+Ytrain , Ytest
+
+where Xtrain ∈ Rn×p, Ytrain ∈ Rn×q, Xtest ∈ Rm×p, and Ytest ∈ Rm×q. Given such a partition of X, we perform four steps for each value of k, the number of
+clusters:
+
+1. Cluster: Cluster Y1, . . . , Yn, the rows of Ytrain, yielding the assignment rule GˆY : Rq → {1, . . . , k} and the cluster means µ¯Y1 , . . . , µ¯Yk . Set GˆYi = GˆY (Yi) to be the assigned cluster for row i.
+
+2. Classify: Take X1, . . . , Xn, the rows of Xtrain to be predictors, and take GˆY1 , . . . , GˆYn to be corresponding class labels. Use the pairs {(Xi, GˆYi )}ni=1 to train a classiﬁer GˆX : Rp → {1, . . . , k}.
+
+3. Predict: Apply the classiﬁer to Xn+1, . . . , Xn+m, the rows of Xtest, yielding predicted classes GˆXi = GˆX(Xi) for i = n + 1, . . . , n + m. For each value of i in this range, compute predicted response Yˆi = µ¯Y (GˆXi ), where µ¯Y (g) = µ¯Yg .
+
+4. Evaluate: Compute the cross-validation error
+
+n+m
+
+1 CV(k) =
+
+Yi − Yˆi 2,
+
+m
+
+i=n+1
+
+where Yn+1, . . . , Yn+m are the rows of Ytest.
+
+In principle, we could use any clustering and classiﬁcation methods in steps 1 and 2. In this report, we use k-means (Hartigan and Wong, 1979) as the clustering algorithm and develop
+
+6
+
+the theoretical properties of the proposed method based on k-means. For the classiﬁcation step, we compute the mean value of X for each class; we assign an observation to class g if that class has the closest mean (randomly breaking ties between classes). The classiﬁcation step is equivalent to linear discriminant analysis with equal class priors and identity noise covariance matrix.
+To choose the folds, we randomly partition the rows and columns into K and L subsets, respectively. Each fold is indexed by a pair (r, s) of integers, with r ∈ {1, . . . , K} and s ∈ {1, . . . , L}. Fold (r, s) treats the rth row subset as “test”, and the sth column subset as “response”. We typically take K = 5 and L = 2. For the number of clusters, we select the value of k that minimizes the average of CV(k) over all K × L folds (choosing the smallest value of k in the event of a tie).
+In Section 3, we prove that this procedure is self-consistent, in the sense that it recover the correct value of k in the absence of noise. Then, in Section 4, we analyze some of the properties of Gabriel cross-validation in the presence of Gaussian noise.
+3 Self-consistency
+An important property of any estimation procedure is that in the absence of of noise, the procedure correctly estimates the truth. This property is called “self-consistency” (Tarpey and Flury, 1996). We will now show that Gabriel cross-validation is self-consistent. That is, in the absence of noise, the Gabriel cross-validation procedure ﬁnds the optimal number of clusters.
+It will suﬃce to prove self-consistency for a single fold of the cross-validation procedure. As in section 2.2 we assume that the P variables of the data set have been partitioned into p predictor variables represented in vector X and q response variables represented in
+7
+
+vector Y . The N observations have been divided into two sets: n train observations and m test observations. We state the assumptions for the self-consistency result in terms of a speciﬁc split; for the result to hold in general, with high probability, these assumptions would have to hold with high probability for a random split. The following theorem gives conditions for Gabriel cross-validation to recover the true number of clusters in the absence of noise.
+Proposition 1. Let {(Xi, Yi)}i=1 n+m be the data from a single fold of Gabriel cross-validation. For any k, let CV(k) be the cross-validation error for this fold, computed as described in Section 2.2. We will assume that there are K true centers µ(1), . . . , µ(K), with the gth cluster center partitioned as µ(g) = µX(g), µY (g) for g = 1, . . . , K. Suppose that
+(i) Each observation i has a true cluster Gi ∈ {1, . . . , K}. There is no noise, so that Xi = µX(Gi) and Yi = µY (Gi) for i = 1, . . . , n + m.
+(ii) The vectors µX(1), . . . , µX(K) are all distinct.
+(iii) The vectors µY (1), . . . , µY (K) are all distinct.
+(iv) The training set contains at least one member of each cluster: for all g in the range 1, . . . , K, there exists at least one i in the range 1, . . . , n such that Gi = g.
+(v) The test set contains at least one member of each cluster: for all g in the range 1, . . . , K, there exists at least one i in the range n + 1, . . . , n + m such that Gi = g.
+Then CV(k) < CV(K) for k < K, and CV(k) = CV(K) for k > K, so that Gabriel cross-validation correctly chooses k = K.
+The proposition states that our method works well in the absence of noise, when each observation is equal to its cluster center. The essential assumption here is assumption (i),
+8
+
+which states that there is no noise. If we are willing to assume, say, that the cluster centers µ(g) = µX(g), µY (g) for g = 1, . . . , K were randomly drawn from a distribution with a density over Rp+q, then assumptions (ii) and (iii) will hold with probability one for all splits of the data. Likewise, if the clusters are not too small (relative to n and m), then assumptions (iv) and (v) will likely hold for a random split of the data into test and train.
+Proposition 1 follows from Lemmas 1 and 2, which we now state and prove.
+
+Lemma 1. Suppose that the assumptions of Proposition 1 are in force. If k < K, then CV(k) > 0.
+
+Proof. By deﬁnition,
+
+n+m
+
+CV(k) =
+
+Yi − µ¯Y (GˆXi ) 2,
+
+i=n+1
+
+where µ¯Y (g) is the center of cluster g returned from applying k-means to Y1, . . . , Yn. As-
+
+sumptions (i) and (v), imply that as i ranges over the test set n + 1, . . . , n + m, the
+
+response Yi ranges over all distinct values in {µY (1), . . . , µY (K)}. Assumption (iii) implies
+
+that there are exactly K such distinct values. However, there are only k distinct values of
+
+µ¯Y (g). Thus, at least one summand Yi − µ¯Y (GˆXi ) 2 is nonzero. Therefore, CV(k) > 0.
+
+Lemma 2. Suppose that the assumptions of Proposition 1 are in force. If k ≥ K, then CV(k) = 0.
+
+Proof. From assumptions (i), (iii), and (iv), we know the cluster centers gotten from applying k-means to Y1, . . . , Yn must include µY (1), . . . , µY (K). Without loss of generality, suppose that µ¯Y (g) = µY (g) for g = 1, . . . , K. This implies that GˆYi = Gi for i = 1, . . . , n. Thus, employing assumption (i) again, we get that µ¯X(g) = µX(g) for g = 1, . . . , K.
+Since assumption (ii) ensures that µX(1), . . . , µX(K) are all distinct, we must have that GˆXi = Gi for all i = 1, . . . , m + n. In particular, this implies that µ¯Y (GˆXi ) = Yi for i = 1, . . . , m + n, so that CV(k) = 0.
+
+9
+
+4 Analysis under Gaussian noise
+
+4.1 Single cluster in two dimensions
+
+Proposition 1 tells us that the Gabriel cross-validation method recovers the true number of clusters when the noise is negligible. While this result gives us some assurance that the procedure is well-behaved, we can bolster our conﬁdence and gain insight into its workings by analyzing its behavior in the presence of noise. We ﬁrst study the case of a single cluster in two dimensions with correlated Gaussian noise.
+Proposition 2. Suppose that {(Xi, Yi)}i=1 n+m is data from a single fold of Gabriel crossvalidation, where each (X, Y ) pair in R2 is an independent draw from a mean-zero multivariate normal distribution with unit marginal variances and correlation ρ. In this case, the data are drawn from a single cluster; the true number of clusters is 1. If |ρ| < 1/2, and k > 1, then CV(1) < CV(k) with probability tending to one as m and n increase.
+
+Proof. Throughout the proof we will assume that ρ ≥ 0; a similar argument holds with
+
+minor modiﬁcation when ρ < 0. Set GˆY1 , . . . , GˆYn to be the cluster labels gotten from applying k-means to Y1, . . . , Yn.
+Denote the cluster means by µ¯Y1 ≤ µ¯Y2 ≤ · · · ≤ µ¯Yk . Pollard’s (1981) strong consistency theorem for k-means implies that for large n, the cluster centers are close to population
+
+clusters centers a1 < a2 < · · · < ak. Speciﬁcally, µ¯Yj = aj +Op(n−1/2). Since the distribution
+
+of Y is symmetric, the population centers a1, a2, . . . , ak are symmetric about the origin.
+
+For j in 1, . . . , k, set
+
+µ¯Xj =
+
+ni=1 1{GˆYi = j}Xi
+
+n
+
+ˆY
+
+.
+
+i=1 1{Gi = j}
+
+The classiﬁcation rule GˆX is deﬁned by GˆX(X) = arg minj µ¯Xj −X
+
+. Denote the boundaries
+
+between the population clusters as bj = (aj + aj+1)/2 for j = 1, . . . , k − 1. Set b0 = −∞
+
+10
+
+and bk = +∞. Then, µ¯Xj is within Op(n−1/2) of the following expectation:
+
+E(X | bj ≤ Y ≤ bj+1) = E{E(X | Y ) | bj ≤ Y ≤ bj+1}
+
+= E{ρY | bj ≤ Y ≤ bj+1}
+
+= ρ E{Y | bj ≤ Y ≤ bj+1}
+
+= ρaj.
+
+That is, µ¯Xj = ρaj + Op(n−1/2). For j = 1, . . . , k − 1, the boundary between sample the
+
+classiﬁcation based on X to labels j and j + 1 is (µ¯Xj + µ¯Xj+1)/2 = ρbj + Op(n−1/2).
+
+Set GˆXi = GˆX(Xi). The cross-validation error is
+
+n+m
+
+1 CV(k) =
+
+Yi − Yˆi 2
+
+m
+
+i=n+1
+
+1 n+m k =
+m i=n+1 j=1
+
+Yi − µ¯Yj
+
+21{GˆXi = j}
+
+k
+= πj E[ Y − aj 2 | ρbj < X < ρbj+1] + Op(n−1/2) + Op(m−1/2),
+j=1
+
+where πj = Pr(ρbj < X < ρbj+1).
+
+For j = 1, . . . , k, set µˆYj = E[Y | ρbj < X < ρbj+1]. Note that
+
+k
+CV(1) = πj E[ Y − 0 2 | ρbj < X < ρbj+1] + Op(n−1/2) + Op(m−1/2).
+j=1
+
+Thus, the diﬀerence in cross-validation errors is
+
+k
+CV(k) − CV(1) = πjaj(aj − 2µˆYj ) + Op(n−1/2) + Op(m−1/2).
+j=1
+
+For arbitrary j,
+
+µˆYj = E[E(Y | X) | ρbj < X < ρbj+1]
+
+= ρ E[X | ρbj < X < ρbj+1].
+
+11
+
+Since 0 ≤ ρ ≤ 1, in cases where 0 ≤ bj < bj+1, we have that µˆYj ≤ ρaj; similarly, when bj < bj+1 ≤ 0, it follows that µˆYj ≥ ρaj. In either of these two situations, if ρ < 1/2, then
+aj(aj − 2µˆYj ) > 0.
+The last situation to consider is when bj < 0 < bj+1, in which case bj = −bj+1; here, µˆYj = aj = 0. Putting this all together, we have that as n and m tend to inﬁnity, the probability that CV(k) > CV(1) tends to one.
+We conﬁrm the result of Proposition 2 with a simulation. We perform 10 replicates. In each replicate, we generate 20000 observations from a mean-zero bivariate normal distribution with unit marginal variances and correlation ρ. We perform a single 2 × 2 fold of Gabriel cross-validation and report the cross-validation mean squared error for the number of clusters k ranging from 1 to 5. Figure 1 shows the cross-validation errors for all 10 replicates. The simulation demonstrates that in the Gabriel cross-validation criterion chooses the correct answer k = 1 whenever ρ < 0.5; the criterion chooses k ≥ 2 clusters whenever |ρ| > 0.5.
+Intuitively, when the correlation is high, the response feature, Y , looks similar to the predictor feature, X. Prediction error on X always decreases with larger k. Thus, when the correlation is high, the prediction error for Y will also decrease with larger k. This explains why cross-validation breaks down in the presence of strong correlation.
+In Appendix B, using similar techniques to those used to prove Proposition 2, we derive an analogous result for correlated Gaussian noise in more than two dimensions. A similar phenomenon holds: the Gabriel cross-validation method fails when the ﬁrst principal component of the Y variables is strongly correlated with a linear combination of the X variables.
+12
+
+4
+
+3
+
+CV Error
+
+2
+
+1 qqqqqqqqqqqqqqqqqqqqq
+
+0
+
+−1.0
+
+−0.5
+
+0.0
+
+0.5
+
+1.0
+
+Correlation
+
+Clusters
+q1 2 3 4 5
+
+Figure 1: Cross-validation error on 10 replicates, with the number of clusters k ranging from 1 to 5. Data is generated from two-dimensional multivariate normal distribution with correlation ρ. The Gabriel cross-validation criterion chooses the correct answer k = 1 whenever |ρ| < 0.5; the criterion chooses k ≥ 2 clusters whenever |ρ| > 0.5.
+
+13
+
+Proposition 2 tells us that Gabriel cross-validation fails when there is strong correlation between the variables. To get around this, in practice we will transform the data to reduce correlation before performing cross-validation. We detail this approach in Section 5.
+4.2 Two clusters in two dimensions
+We will now analyze a simple two-cluster setting, and derive conditions for Gabriel crossvalidation to correctly prefer k = 2 clusters to k = 1. The main assumption of the proposition is that the cluster centers are not too close. The precise deﬁnition of “too close” is stated in terms of Φ(·) and ϕ(·), the standard normal cumulative distribution function and density, respectively. The inequality is hard to interpret directly, but we show the boundary between “too close” and “well separated” in Fig. 2, after the proof of the proposition.
+Proposition 3. Suppose that {(Xi, Yi)}i=1 n+m is data from a single fold of Gabriel crossvalidation, where each (X, Y ) pair in R2 is an independent draw from an equiprobable mixture of two multivariate normal distributions with identity covariance. Suppose that the ﬁrst mixture component has mean µ = (µX, µY ) and the second has mean −µ = (−µX, −µY ), where µX ≥ 0 and µY ≥ 0. If the cluster centers are well separated, speciﬁcally such that 2ϕ(µY ) + µY + 2µY Φ(µY ) < 4µY Φ(µX), then CV(2) < CV(1) with probability tending to one as m and n increase.
+Proof. There are two clusters: observations from cluster 1 are distributed as N (µ, I) and observations from cluster 2 are distributed as N (−µ, I) where µ = (µX, µY ). Without loss of generality, µX ≥ 0 and µY ≥ 0. Let Gi be the true cluster of observation i where, by assumption,
+Pr(Gi = 1) = Pr(Gi = 2) = 1/2.
+14
+
+After applying k-means to {Yi}ni=1 with k = 2, if n is large enough, then the estimated cluster means µ¯Y1 and µ¯Y2 will be close to E(Y | Y > 0) and E(Y | Y < 0), with errors of size Op(n−1/2). To compute these quantities, let (X1, Y1) ∼ N (µ, I) and (X2, Y2) ∼ N (−µ, I) be draws from the mixture components, and let (X, Y ) be deﬁned such that Pr(X = X1, Y = Y1) = Pr(X = X2, Y = Y2) = 1/2. Then,
+E(Y | Y > 0) = E(Y1 | Y1 > 0) · Pr(Y = Y1 | Y > 0) + E(Y2 | Y2 > 0) · Pr(Y = Y2 | Y > 0) = {µY + ϕ(µY )/Φ(µY )} · Φ(µY ) + [−µY + ϕ(µY )/{1 − Φ(µY )}] · {1 − Φ(µY )} = 2ϕ(µY ) + 2µY Φ(µY ) − µY .
+In the second line, we have used Lemma 3 from Appendix C to compute the conditional expectations; ϕ() and Φ() are the standard normal density and cumulative distribution function, respectively. By symmetry,
+E(Y | Y < 0) = − E(Y | Y > 0). The classiﬁcation rule learned from the training data {(Xi, GˆYi )}ni=1 will have its decision boundary at 0 + Op(n−1/2); that is, in the limit, observations will get classiﬁed as coming from cluster 1 when X > 0. Set a = E(Y | Y > 0). Up to terms of order Op(n−1/2), the cross-validation error from a single observation is distributed as
+(Y − a)21{X > 0} + (Y + a)21{X < 0}.
+Using the fact that conditional on the mixture component, the X and Y coordinates are independent, we can compute the expectation of the ﬁrst summand as
+E[(Y − a)21{X > 0}] = (1/2) E[(Y1 − a)2] Pr(X1 > 0) + (1/2) E[(Y2 − a)2] Pr(X2 > 0) = (1/2)Φ(µX) E(Y1 − a)2 + (1/2){1 − Φ(µX)} E(Y2 − a)2 = (1/2)[1 + Φ(µX)(µY − a)2 + {1 − Φ(µX)}(−µY − a)2].
+15
+
+By a similar calculation, the expectation of the second summand is E[(Y + a)21{X < 0}] = (1/2)[1 + {1 − Φ(µX)}(µY + a)2 + Φ(µX)(−µY + a)2].
+
+Adding the two terms, we get that the expected cross-validation error from a single observation is
+1 + Φ(µX)(µY − a)2 + {1 − Φ(µX)}(µY + a)2 = 1 + (µY )2 + a {a + 2µY − 4µY Φ(µX)}.
+
+Thus, the k = 2 cross-validation error on the test set is
+
+n+m
+
+1 CV(2) =
+
+(Yi − µ¯Y1 )1{GˆXi = 1} 2 + (Yi − µ¯Y2 )1{GˆXi = 2} 2
+
+m i=n+1
+
+= 1 + (µY )2 + a {a + 2µY − 4µY Φ(µX )} + Op(n−1/2) + Op(m−1/2).
+
+When k = 1, the k-means centroid is equal to the sample mean Y¯n = (1/n) i=1 n Yi, approximately equal to E(Y ) = 0, with error of size Op(n−1/2). The cross-validation error
+
+is
+
+n+m
+
+1 CV(1) =
+
+Yi − Y¯n 2 = 1 + (µY )2 + Op(m−1/2) + Op(n−1/2).
+
+m i=n+1
+
+Thus, if a + 2µY − 4µY Φ(µX) < 0, then CV(2) < CV(1) with probability tending to one as
+
+m and n increase. Substituting the expression for E(Y | Y > 0) in place of a, the inequality
+
+holds precisely when 2ϕ(µY ) + µY + 2µY Φ(µY ) < 4µY Φ(µX).
+
+We conﬁrm the result of Proposition 3 with a simulation. We perform 10 replicates for each (µX, µY ) pair, sweeping over a two-dimensional grid of values in the domain [0, 3]×[0, 3], with step size 0.1 in each dimension. In each replicate, we generate N = 20000 observations from an equiprobably mixture of multivariate normal distributions with identity covariance, with one component having mean (µX, µY ) and the other component having
+
+16
+
+3.0
+
+2.5
+
+2.0
+
+1.5
+
+U_y
+
+qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+
+0.0
+
+0.5
+
+1.0
+
+1.5
+
+2.0
+
+2.5
+
+3.0
+
+U_x
+
+1.0
+
+0.5
+
+0.0
+
+Figure 2: Number of times k = 2 is selected out of 10 replicates for each pair of (µX, µY ). The heat map shows the frequency k = 2 is selected by the algorithm, with light (blue) means k = 1 is preferred to k = 2, and dark (red) indicates k = 2 is preferred to k = 1. The black line is the theoretical boundary determined from Proposition 3.
+
+mean (−µX, −µY ). We perform a single 2 × 2 fold of Gabriel cross-validation and report the number of times (out of 10 replicates) where k = 2 is selected by the algorithm instead of k = 1. Figure 2 shows the frequency with which k = 2 is selected by the algorithm for each (µX, µY ) pair. Darker (red) colors indicate higher numbers (close to 10), situations where k = 2 is selected more often than k = 1. Ligher (blue) colors indicate that k = 1 is preferred. We can see the simulation result perfectly align with the theoretical curve (the black line), which separates the k = 2 zone from the k = 1 zone.
+
+17
+
+5 Adjusting for correlation
+
+Proposition 2 shows that when the correlation between dimensions is high, the Gabriel cross-validation method tends to overestimate the number of clusters, k. To mitigate this eﬀect, we propose a two-stage estimation procedure that attempts to transform the data to minimize the correlation between features. In the ﬁrst stage, we get a preliminary estimate for the number of clusters, kˆ0, and we use this value to get an estimate of the noise covariance matrix. Then, in the second stage, we transform the data attempting to sphere the noise covariance, and re-estimate the number of clusters, getting a ﬁnal estimate kˆ.
+The details of the correlation correction procedure are as follow:
+
+1. Apply the Gabriel cross-validation method on the original data X to get a preliminary estimate of the number of clusters, kˆ0.
+2. Apply k-means to the full data set with observations X1, X2, . . . , XN using k = kˆ0 clusters. For i = 1, . . . , N , let µˆi denote the assigned cluster mean for the ith observation.
+
+3. Estimate the noise covariance matrix Σˆ :
+
+N
+
+Σˆ = 1
+
+(Xi − µˆi)(Xi − µˆi)T .
+
+N − kˆ0 i=1
+
+4. Compute the eigendecomposition Σˆ = ΓΛΓT . Choose a random (Haar distributed) P × P orthogonal matrix Q. Rescale and rotate the original data matrix X to get a transformed data matrix deﬁned by
+
+X˜ = XΓΛ−1/2Q.
+
+18
+
+5. Apply Gabriel cross-validation method to transformed data matrix X˜ to get a ﬁnal estimate for the number of clusters, kˆ.
+The noise covariance estimate assumes a shared covariance matrix for all k clusters. Letting Gi denote the cluster membership of the ith observation, and letting µ(g) denote the mean of cluster g for g = 1, . . . , k, the model supposes that
+Xi = µ(Gi) + εi,
+where εi has mean zero and covariance matrix Σ, independent of Gi. If we knew Σ, then we could transform the observations as
+Σ−1/2Xi = Σ−1/2µ(Gi) + Σ−1/2εi = µ˜(Gi) + ε˜i,
+where µ˜ = Σ−1/2µ and ε˜i = Σ−1/2εi. The transformed data has the same number of clusters, but has noise covariance cov(ε˜i) = I. The matrix product ΓΛ−1/2 used in step 4 is an estimate of Σ−1/2.
+The transformation used in step 4 uses a random orthogonal matrix Q, which gets applied to the rows of X after multiplying by the estimate of Σ−1/2. We use this random orthogonal matrix for two reasons. First, it ensures that in expectation, each transformed cluster mean QΛ−1/2ΓT µ(g) for g = 1, . . . , k is uniformly spread across all P features. This ensures that the self-consistency conditions on the cluster centers enumerated in Proposition 1 are likely to hold. The second reason for multiplying by Q is to spread any remaining correlation in the noise evenly (in expectation) across all dimensions. The latter eﬀect follows since if Z is a random vector with covariance matrix Θ, then QZ has covariance matrix QΘQT , which has expectation E(QΘQT ) = tr(Θ)I.
+19
+
+Our correlation correction is not backed by a rigorous theoretical justiﬁcation. However, the simulations and empirical validation in Sections 6 and 7 demonstrate the eﬀectiveness of our ad-hoc adjustment procedure.
+6 Performance in simulations
+6.1 Overview
+In this section, we perform a set of simulations to evaluate the performance of our proposed method and the associated correlation correction described in Section 5. We compare our method with a basket of competing methods including the Gap statistic (Tibshirani et al., 2001), Gaussian mixture model-based clustering (Fraley and Raftery, 2002), the CH-index (Calin´ski and Harabasz, 1974), Hartigan’s statistic (Hartigan, 1975), the Jump method (Sugar and James, 2003), Prediction strength (Tibshirani and Walther, 2005), and Bootstrap stability (Fang and Wang, 2012). We use the default parameter settings for all competing methods. For Gabriel cross-validation, we perform 2-fold cross-validation on the columns (p = q) and 5-fold cross-validation on the rows (m = n/4). We also compare with Wold cross-validation, which we describe in Appendix D.
+In all simulation settings, we randomly generate cluster centers by drawing from a multivariate normal distribution with covariance matrix τ I, conditional on the cluster centers being well-separated (if the distance between any two cluster centers is less than 1, then we re-draw a new set of cluster centers). We choose τ to make the probability the cluster centers being well-separated on the ﬁrst draw to be equal to approximately 50%. Many of our simulation settings are chosen to mimic the settings used by Tibshirani et al. (2001).
+20
+
+For each setting, we perform 100 replicates. We report the number of times that each method ﬁnds the correct number k of clusters. We also report 95% conﬁdence intervals for the proportions, using Wilson’s method (Wilson, 1927). The simulations demonstrate that overall, the proposed Gabriel cross-validation method and its correlation-corrected version compare well with the competing methods, and they are robust to variance heterogeneity, high dimensional data, and heavy-tail data.
+
+6.2 Setting 1: Correlation between dimensions
+We generate six clusters in 10 dimensions. Each cluster has 100 or 50 multivariate normal observations with common covariance matrix Σ which has compound symmetric structure with 1 in diagonal and ρ oﬀ diagonal. ρ takes value in {0, 0.1, ..., 0.9}.
+
+Proportion
+
+gabriel−nearest−5x2
+
+gabriel−corr−correct2
+
+wold
+
+gap
+
+BIC
+
+100
+
+75
+
+50
+
+25
+
+0
+
+CH
+
+Hartigan
+
+Jump
+
+PS
+
+Stab
+
+100
+
+75
+
+50
+
+25
+
+0 0.00
+
+0.25
+
+0.50
+
+0.75
+
+0.00 0.25 0.50 0.75
+
+0.00 0.25 0.50 0.75 Rho
+
+0.00 0.25 0.50 0.75
+
+0.00 0.25 0.50 0.75
+
+We can see that high correlation between dimensions causes problem for most existing 21
+
+methods, including Gabriel cross-validation method without the correlation correction. The only two methods that work well in the presence of high correlation are the Gaussian model-based BIC method (Fraley and Raftery, 2002) and the correlation-corrected Gabriel method.
+
+6.3 Setting 2: Noise dimensions
+We generate three clusters in 6 dimensions. Each cluster has 1000 or 500 multivariate normal observations with identity covariance matrix. We add r dimensions of noise to the data, randomly generated from a uniform distribution on [0, 1]. The noise dimension r takes values in {0, 6, ..., 54}.
+
+Proportion
+
+gabriel−nearest−5x2 100
+
+75
+
+50
+
+25
+
+0 CH
+100
+
+75
+
+50
+
+25
+
+0 0
+
+20
+
+40
+
+gabriel−corr−correct2
+
+wold
+
+Hartigan
+
+Jump
+
+0
+
+20
+
+40
+
+0
+
+20
+
+40
+
+Noise Dimension
+
+gap
+
+PS
+
+0
+
+20
+
+40
+
+BIC
+
+Stab
+
+0
+
+20
+
+40
+
+Most methods are relatively insensitive to adding more noise dimensions; the one exception to this is the Jump method, which deteriorates signiﬁcantly in the presence of extra
+22
+
+noise dimensions.
+
+6.4 Setting 3: High dimension
+We generate eight clusters in P dimensions, with P taking values in {10, 20, ..., 100}. Each cluster has 100 or 50 multivariate normal observations with identity covariance matrix.
+
+Proportion
+
+gabriel−nearest−5x2
+
+gabriel−corr−correct2
+
+wold
+
+gap
+
+BIC
+
+100
+
+75
+
+50
+
+25
+
+0
+
+CH
+
+Hartigan
+
+Jump
+
+PS
+
+Stab
+
+100
+
+75
+
+50
+
+25
+
+0
+
+25 50 75 100
+
+25 50 75 100
+
+25 50 75 100 Data Dimension
+
+25 50 75 100
+
+25 50 75 100
+
+Some methods, like Jump and Gap, are insensitive to higher dimensions while other methods deteriorate quickly with increasing dimension, most notably the Gaussian modelbased BIC method. Gabriel cross-validation and its correlation-corrected version tend to work better in higher dimensions.
+
+23
+
+6.5 Setting 4: Variance heterogeneity
+
+We generate three clusters in 20 dimensions. Each cluster has 60 observations. Observations
+
+are
+
+generated
+
+from
+
+N
+
+(0, σ21I),
+
+N
+
+(0, σ22I)
+
+and
+
+N
+
+(0, σ23I)
+
+where
+
+σ21
+
+:
+
+σ22
+
+:
+
+σ23
+
+=
+
+1
+
+:
+
+1+R 2
+
+:
+
+R.
+
+The maximum ratio R takes values in {1, 5, 10, ..., 45}
+
+Proportion
+
+gabriel−nearest−5x2
+
+gabriel−corr−correct2
+
+wold
+
+gap
+
+BIC
+
+100
+
+75
+
+50
+
+25
+
+0
+
+CH
+
+Hartigan
+
+Jump
+
+PS
+
+Stab
+
+100
+
+75
+
+50
+
+25
+
+0 0
+
+10 20 30 40
+
+0 10 20 30 40
+
+0 10 20 30 40 Max Variance Ratio
+
+0 10 20 30 40
+
+0 10 20 30 40
+
+This setting demonstrates that most existing methods are sensitive to variance heterogeneity, most notably the Gap method and the model-based BIC method. The proposed Gabriel cross-validation method and its correlation-corrected version consistently perform well in estimating k and they are insensitive to variance heterogeneity.
+
+6.6 Setting 5: Heavy tail data
+We generate ﬁve clusters in 15 dimensions. Each cluster has 80 observations. Observations have independent t distributions in each dimension, with degrees of freedom ν taking values
+24
+
+in {11, 10, ..., 2}
+
+Proportion
+
+gabriel−nearest−5x2 100
+
+75
+
+50
+
+25
+
+0 CH
+100
+
+75
+
+50
+
+25
+
+0
+
+9
+
+6
+
+3
+
+gabriel−corr−correct2
+
+wold
+
+Hartigan
+
+Jump
+
+9
+
+6
+
+3
+
+9
+
+6
+
+3
+
+Degree of freedom
+
+gap
+
+PS
+
+9
+
+6
+
+3
+
+BIC
+
+Stab
+
+9
+
+6
+
+3
+
+This setting investigates performance in the presence of heavy-tailed data. When the degrees of freedom decreases, the tail becomes more ﬂat and the Gaussian assumption becomes more inappropriate. For most methods, their performances are relatively stable until the tail gets very heavy. In the case where there are 2 degrees of freedom, the Gap and Jump methods’ performances deteriorate considerably relative to the Gabriel method.
+
+7 Empirical validation
+To further validate our method, we applied it to three real world data sets with known clustering structure.
+The ﬁrst data set is congressional voting data consisting of voting records of the second session of the 98th United States Congress, (Schlimmer, 1987). This data set includes
+25
+
+votes for legislators on the P = 16 key votes. For each vote, each legislator either votes positively (“yea”) or negatively (“nay”). We removed legislators with missing votes. This results in N = 232 remaining records, with 124 democrat and 108 republican. There are k = 2 clusters of legislators, corresponding to political party.
+The second benchmark is the Mangasarian et al. (1990) Wisconsin breast cancer data set. After excluding the records with missing data, this data set consists records of N = 683 patients, each with measurements of P = 9 attributes of their biopsy specimens. It is known that there are k = 2 groups of patients: 444 patients with benign specimens and 239 patients with malignant specimens. There is some disagreement as to what the “true” value of k should be for this data set; Fujita et al. (2014) have argued that the malign group is heterogeneous, and should be split into two smaller clusters, yielding k = 3.
+The third data set is gene expression data of k = 5 types of brain tumors from Pomeroy et al. (2002), which contains N = 42 observations including 10 medulloblastomas, 10 malignant gliomas, 10 atypical teratoid/rhabdoid tumors, 8 primitive neuroectodermal tumours and 4 normal cerebella. After preprocessing and feature selection, there are P = 1379 variables, corresponding to log activation levels for 1379 genes.
+We applied the Gabriel cross-validation method, the correlation-corrected version, and the competing methods described in Section 6 to each of the three benchmark datasets. In each dataset, we allowed the number of clusters, k, to range from 1 to 10. Table 1 displays the results. Both versions of the Gabriel method perform well on all three benchmark datasets. In fact, Gabriel cross-validation is the only method that correctly identiﬁes the number of clusters in all three benchmark datasets.
+26
+
+Table 1: Number of clusters selected on benchmark datasets
+
+Dataset
+
+Method
+
+Congress Voting Breast Cancer Brain Tumours
+
+Gabriel
+
+2
+
+Gabriel (corr. correct)
+
+2
+
+Wold
+
+2
+
+Gap
+
+8
+
+BIC
+
+2
+
+CH
+
+2
+
+Hartigan
+
+3
+
+Jump
+
+10
+
+PS
+
+2
+
+Stab.
+
+2
+
+3
+
+5
+
+2
+
+5
+
+3
+
+4
+
+10
+
+10
+
+5
+
+2
+
+2
+
+2
+
+3
+
+4
+
+9
+
+1
+
+2
+
+1
+
+2
+
+7
+
+Ground Truth
+
+2
+
+2 or 3
+
+5
+
+27
+
+8 Application to yeast cell cycle data
+8.1 Motivation
+Now that we have established that Gabriel cross-validation can eﬀectively estimate the number of clusters, we apply our method to a yeast cell cycle dataset. This dataset was collected by Cho et al. (1998) to study the cell cycle of budding yeast Saccharomyces cerevisiae. Other authors, including Tavazoie et al. (1999) and Dortet-Bernadet and Wicker (2008) have used k-means and related methods to cluster the genes in the dataset, with k approximately equal to 30. In both of these analyses, the authors discard the majority of their clusters as uninterpretable or noise, focusing instead on a small number of clusters. In contrast to these previous analyses, Gabriel cross-validation ﬁnds a small number, k = 5 clusters, all of which are interpretable.
+8.2 Data collection and preprocessing
+To obtain the raw data, Cho et al. (1998) ﬁrst synchronized a collection of CDC28 yeast cells by raising their temperature to 37◦C in the late G1 cell cycle phase, then they reinitiated the cell cycle by switching them to a cooler environment (25◦C). The authors collected data at 17 time points spaced evenly at 10-minute intervals, covering almost 2 complete cell cycles. At each of the 17 time points, they used oligonucleotide microarrays to measure 6220 gene expression proﬁles.
+Tavazoie et al. (1999) preprocessed the raw data in an attempt to normalize the gene responses and remove noise. They reduced the original 6220 gene expression proﬁles to just the 2945 genes with the highest variances. Then, they removed the time points at 90 and 100 minutes, because they deemed the measurements at these time points to be
+28
+
+unreliable. Finally, they centered and scaled the genes by subtracting the means and dividing by the standard deviations, as computed from the remaining 15 time points. After the preprocessing, the data matrix X has N = 2945 genes and P = 15 time points.
+We obtained the preprocessed data and the Tavazoie et al. (1999) cluster analysis from http://arep.med.harvard.edu/network_discovery/.
+8.3 Clustering
+Following Tavazoie et al. (1999) and Dortet-Bernadet and Wicker (2008), we treat the N = 2945 gene expression proﬁles as draws from a mixture distribution, and we perform k-means clustering to segment the genes according to their expression proﬁles across the P = 15 time points. Both the original and the correlation-corrected version of Gabriel cross-validation ﬁnd k = 5 clusters.
+The lower-left panel of Figure 3 shows the average expression level for each cluster across the 15 time points, with error bars showing standard deviations. Cluster 1 has decreasing expression level with time. The mean gene expression level in Cluster 2 decreases at the beginning and then increases. Cluster 3 is a periodic cluster where one can see two periods corresponding to the two cell cycles. Cluster 4 has increasing expression level with time. Cluster 5 is another periodic cluster.
+8.4 Enrichment analysis
+To further validate our clusters, we follow Tavazoie et al. (1999), performing an enrichment analysis to discover which functional gene groups are signiﬁcantly over-represented in each cluster. In the Saccharomyces Genome Database, each gene is mapped to a set of Gene Ontology categories. We focus on the 103 biological process categories.
+29
+
+1
+
+2
+
+3
+
+Expression level
+
+4
+
+7
+
+8
+
+3 2 1 0 −1 −2
+3 2 1 0 −1 −2
+3 2 1 0 −1 −2
+3 2 1 0 −1 −2
+3 2 1 0 −1 −2
+3 2 1 0 −1 −2
+3 2 1 0 −1 −2
+3 2 1 0 −1 −2
+0
+
+1 5 10 15 0
+
+2 5 10 15 0
+
+3
+5 10 15 0
+Time
+
+4 5 10 15 0
+
+5 5 10 15
+
+Other
+
+14
+
+8
+
+7
+
+4
+
+3
+
+2
+
+1
+
+3 2 1 0 −1 −2 3 2 1 0 −1 −2 3 2 1 0 −1 −2 3 2 1 0 −1 −2 3 2 1 0 −1 −2 3 2 1 0 −1 −2 3 2 1 0 −1 −2 3 2 1 0 −1 −2
+0
+
+5
+
+10 15
+
+1
+
+2
+
+3
+
+4
+
+5
+
+3
+
+2
+
+1
+
+q
+
+0
+
+−1
+
+−2 0
+
+5 10 15 0
+
+5 10 15 0
+
+5 10 15 0
+
+5 10 15 0
+
+5 10 15
+
+14
+
+Other
+
+Figure 3: Yeast data set mean expression proﬁles. The 5 clusters found by the Gabriel method are on the bottom; Clusters proﬁled in Tavazoie et al. (1999) are on the right.
+
+30
+
+Table 2: Biological process enrichment within gene clusters
+
+Cluster Cluster Size Process Category (In Cluster/Total Genes)
+
+p-value
+
+1
+
+550
+
+response to oxidative stress (24/55)
+
+1.5 × 10−5
+
+response to chemical (64/213)
+
+2.2 × 10−5
+
+2
+
+590
+
+mitochondrion organization (79/159)
+
+1.1 × 10−16
+
+mitochondrial translation (28/51)
+
+2.9 × 10−8
+
+generation of precursor metabolites and energy (37/80) 7.3 × 10−8
+
+3
+
+654
+
+transcription from RNA polymerase II promoter (75/214) 5.5 × 10−6
+
+mRNA processing (30/67)
+
+2.7 × 10−5
+
+mitotic cell cycle (63/183)
+
+6.2 × 10−5
+
+4
+
+634
+
+cytoplasmic translation (105/134)
+
+3.3 × 10−47
+
+ribosomal subunit biogenesis (73/138)
+
+7.7 × 10−17
+
+rRNA processing (61/131)
+
+5.7 × 10−11
+
+ribosome assembly (21/36)
+
+1.5 × 10−6
+
+5
+
+517
+
+chromosome segregation (53/106)
+
+6.0 × 10−15
+
+cellular response to DNA damage stimulus (71/172)
+
+3.6 × 10−14
+
+DNA repair (64/147)
+
+3.7 × 10−14
+
+DNA replication (42/78)
+
+1.8 × 10−13
+
+mitotic cell cycle (70/183)
+
+4.8 × 10−12
+
+31
+
+For each category and each cluster, we compute a p-value for the null hypothesis that genes from the category are distributed across all clusters without any bias towards the particular cluster in question. Under the null hypothesis, the number of genes from the category that end up in the cluster is distributed as a hypergeometric random variable. For each cluster, we compute p-values for all 103 biological process categories, and we report those that are signiﬁcantly enrigched in Table 2. Using a Bonferroni correction to control the family-wise error rate at level 5%, we only report p-values that are less than 0.05/103 = 4.8 × 10−4.
+From Table 2, we can see that Cluster 1 is enriched with genes that somatize cell stress, such as oxidative heat-induce proteins. Cluster 2 contains genes that govern mitochondrial translation and mitochondrion organization. Cluster 3, the ﬁrst period cluster, contains cell cycle genes related to budding and cell polarity, along with genes that govern RNA processing and transcription. Cluster 4 contains genes related to cytoplasmic translation and genes encoding ribosomes. Cluster 5, the second periodic cluster, contains genes that participate cell-cycle processes, along with DNA replication and DNA repair.
+8.5 Comparison with Tavazoie clusters
+In the Tavazoie et al. (1999) analysis, those authors performed k-means clustering with k = 30; they found 23 of the clusters to be uninterpretable, and they found 7 clusters to be meaningful. To compare our clusters with the Tavazoie et al. clusters, we prepared a confusion matrix comparing our clusters with the 7 interpretable Tavazoie clusters in Table 3. Entry (i, j) of the confusion matrix gives the number of genes in Tavazoie’s Cluster i and our Cluster j.
+Figure 3 provides a more in-depth comparison with the Tavazoie clusters, using a graphical confusion matrix. The plot in cell (i, j) of the upper left part of this ﬁgure gives the
+32
+
+Table 3: Confusion matrix comparing the 5 clusters found by Gabriel cross-validation to the 7 interpretable clusters found by the Tavazoie et al. (1999) analysis
+
+Cluster 1 Cluster 2 Cluster 3 Cluster 4 Cluster 5 Total
+
+Cluster 1
+
+0
+
+0
+
+1
+
+161
+
+2
+
+164
+
+Cluster 2
+
+1
+
+0
+
+0
+
+0
+
+185
+
+186
+
+Cluster 3
+
+0
+
+0
+
+91
+
+11
+
+2
+
+104
+
+Cluster 4
+
+0
+
+102
+
+2
+
+66
+
+0
+
+170
+
+Cluster 7
+
+1
+
+10
+
+83
+
+7
+
+0
+
+101
+
+Cluster 8
+
+3
+
+145
+
+0
+
+0
+
+0
+
+148
+
+Cluster 14
+
+0
+
+1
+
+29
+
+6
+
+38
+
+74
+
+Other
+
+545
+
+332
+
+448
+
+383
+
+290
+
+1998
+
+Total
+
+550
+
+590
+
+654
+
+634
+
+517
+
+2945
+
+33
+
+mean expression level for genes in the intersection of Tavazoie’s Cluster i and our Cluster j; the plots in the margins give the mean expression levels for Tavazoie’s clusters (top right) and our clusters (bottom left). In Figure 3, we only include a plot for cell (i, j) if the number of genes in that cell is greater than 20.
+Our Cluster 1 mainly consists of genes that Tavazoie et al. found to be in uninterpretable clusters. Our Cluster 2 contains high concentrations of Tavazoie’s Clusters 4 and 8. Our ﬁrst periodic cluster, Cluster 3, contains high concentrations of Tavazoie’s Clulsters 3, 7, and 14; this is notable, because Tavazoie et al. highlighted their Clusters 7 and 14 as being periodic. Our Cluster 4 contains almost all of Tavazoie’s Cluster 1, along with part of Tavazoie’s Cluster 4. Finally, our second periodic cluster, Cluster 5, contains almost all of Tavazoie’s Cluster 2, along with part of Tavazoie’s Cluster 14; this, again, is notable, because Tavazoie et al. highlited these clusters as being periodic.
+For the clusters that Tavazoie et al. were able to characterize, our analysis broadly agrees with the earlier clustering. The major diﬀerence between our analysis and that of Tavazoie et al. (1999) is that we are able to identify meaningful groups of genes with a much smaller value of k (k = 5 instead of k = 30), and we are able to interpret all of the clusters found by our analysis.
+9 Discussion
+In this paper, we proposed a new approach to estimate the number of clusters to be used in k-means clustering. The intuition behind our proposed method is to transform the unsupervised learning problem into a supervised learning problem via a form of Gabriel cross validation. We proved that our method is self-consistent, and we analyzed its behavior in some special cases of Gaussian mixture models. Using simulations and real data examples,
+34
+
+we demonstrated that our method has good performance, competitive with existing approaches. The simulations and empirical benchmarks demonstrate the advantages of our method. In the yeast cell cycle application, our method was able to identify meaningful gene groups with a small number of clusters.
+There are many other clustering algorithms that get used in practice besides k-means. We suspect that it should be possible to apply our method in the context of a spectral clustering procedure, after transforming by the eigenvectors of the Laplacian matrix. For other clustering schemes, including versions of hierarchical clustering, we are less certain about the viability of Gabriel cross-validation. It is an open question as to whether Gabriel cross-validation can be extended to other clustering methods, and whether such extensions will perform well in practice.
+For k-means clustering, Gabriel cross-validation is competitive with other model selection methods, especially in the presence of high-dimensional, heterogeneous, or heavy-tailed data.
+Acknowledgements
+We thank Rob Tibshirani for getting us started on this problem and for providing code for some initial simulations. We thank Art Owen for providing us with a summary of the relevant theory on k-means clustering, and for giving us feedback on our theoretical results. We also thank Cliﬀ Hurvich, Josh Reed, and Jeﬀ Simonoﬀ, for providing comments on an early draft of this manuscript and for suggesting further avenues of inquiry.
+35
+
+A Clustering scree plot examples
+The top row of Figure 4 displays an example where the elbow in Wk corresponds to the true number k = 4 of mixture components in the data-generating mechanism. The elbow approach is simple and often performs well, but it requires subjective judgment as to where the elbow is located, and, as the bottom row of Figure 4 demonstrates, the approach can easily fail.
+
+B Analysis of Gabriel method: Single cluster in more than two dimensions
+
+Proposition 4. Suppose that {(Xi, Yi)}i=1 n+m is data from a single fold of Gabriel cross-
+validation, where each (X, Y ) pair in Rp+q is an independent draw from a mean-zero multivariate normal distribution with covariance matrix ΣXY = ΣXX ΣXY ΣY X ΣY Y , with ΣY Y has
+leading eigenvalue λ1 and corresponding eigenvector u1. In this case, the data are drawn √ from a single cluster; the true number of clusters is 1. If λ1 2 > √ uT1 ΣY XΣXY u1 T , then
+u1 ΣY X ΣXX ΣXY u1
+CV(1) < CV(2) with probability tending to one as m and n increase.
+
+Proof. Let X and Y be jointly multivariate normal distributed with mean 0 and covariance
+
+matrix ΣXY , i.e.
+
+(X, Y ) ∼ N (0, ΣXY )
+
+
+
+
+
+where ΣXY = ΣXX ΣY X
+
+ΣXY . ΣY Y
+
+Let ΣY Y = U ΛU T be the eigendecomposition of ΣY Y , with leading eigenvalue λ1 and
+
+corresponding eigenvector u1. Then the centroid of k-means applying on (y1, .., yn) is on
+
+36
+
+4
+
+q
+
+qq
+
+3 q qq qqqq
+
+q
+
+q
+
+q q q qq q q q
+
+2
+
+200 q
+
+150
+
+100
+
+q
+
+Within SS
+
+Y
+
+1
+
+0
+
+1
+
+2
+
+3
+
+4
+
+X
+
+50 q
+
+qqqqqqq
+0
+
+2
+
+4
+
+6
+
+8
+
+10
+
+Clusters
+
+q
+
+4
+
+500
+
+Y
+
+3
+
+q qq
+
+q q qqq
+
+q qq q qq
+
+2
+
+q
+
+qq
+
+q q q qq
+
+q
+
+qq
+
+q
+
+q
+
+qqqq qq q q q
+
+q
+
+q
+
+qq qqqqqq q
+
+q q
+
+qqq
+
+qqq qqqqq
+
+qq
+
+q q
+
+qq
+
+qq
+
+q
+
+qq qq
+
+qqqqqq qq q
+
+q
+
+q qqqq
+
+1 q q q q q q q
+
+q
+
+q
+
+q q
+q
+
+1
+
+2
+
+3
+
+4
+
+X
+
+Within SS
+
+400
+
+300
+
+200 100
+
+q q q qqqqqq
+
+2
+
+4
+
+6
+
+8
+
+10
+
+Clusters
+
+Figure 4: Left panels show the (X, Y ) data points; right panels show the corresponding values of the within-cluster sum of squares Wk plotted against the number of clusters, k.
+
+37
+
+the ﬁrst principal component of Y ,
+
+E(uT1 Y |uT1 Y > 0) = µ¯Y1 = 2λ1/πu1
+
+and E(uT1 Y |uT1 Y < 0) = µ¯Y2 = − 2λ1/πu1
+
+where uT1 Y ∼ N (0, λ1).
+
+To compute µ¯X1 = E(X|uT1 Y > 0), we need to know the conditional distribution X|uT1 Y .
+
+Since (X, Y ) has multivariate normal distribution, (X, uT1 Y ) also has a multivariate normal
+
+distribution with mean 0 and covariance matrix 
+ΣX,uT1 Y =  ΣXX uT1 ΣY X
+
+ ΣXY u1
+λ1
+
+The conditional distribution X|uT1 Y is hence normal with mean
+
+µX|uT1 Y = ΣXY u1λ1−1u1T Y
+
+Therefore,
+
+µ¯X1 = E(X | u1T Y > 0) = E E[X | u1T Y ] | u1T Y > 0 = E ΣXY u1λ1−1u1T Y | u1T Y > 0 = λ1−1ΣXY u1E(uT1 Y | u1T Y > 0) = λ1−1ΣXY u1 2λ1/π = 2/(λ1π)ΣXY u1
+
+Similar calculation yields µ¯X2 = − 2/(λ1π)ΣXY u1. The decision rule to classify any observed value of X to µ¯X1 is therefore
+
+(
+
+µ¯
+
+X 1
+
+)T
+
+X
+
+>
+
+0
+
+or
+
+u1T ΣY X X > 0
+
+38
+
+Since uT1 ΣY XX is a linear combination of X, it also has normal distribution
+
+N 0, u1T ΣY X ΣXX ΣXY u1
+
+And (Y, uT1 ΣY XX) also have multivariate normal distribution with mean 0 and covariance
+
+matrix
+
+
+ ΣY Y uT1 ΣY X ΣXY
+
+
+ΣY X ΣXY u1  uT1 ΣY X ΣXX ΣXY u1
+
+The conditional distribution of Y |uT1 ΣY XX is also multivariate normal with mean
+
+µY |uT1 ΣY X X = ΣY X ΣXY u1(u1T ΣY X ΣXX ΣXY u1)−1u1T ΣY X X
+
+The Y center for uT1 ΣY XX > 0 is
+
+µˆY1 = E(Y |uT1 ΣY X X > 0)
+
+=
+
+ΣY X ΣXY
+
+u1(u1T ΣY X ΣXX ΣXY
+
+u1
+
+)
+
+−1
+
+E
+
+(u
+
+T 1
+
+ΣY
+
+X
+
+X
+
+|
+
+u1T ΣY X X
+
+>
+
+0)
+
+Note that uT1 ΣY X X has normal distribution N 0, uT1 ΣY X ΣXX ΣXY u1 , so
+
+E
+
+(u
+
+T 1
+
+Σ
+
+Y
+
+X
+
+X
+
+|
+
+u1T ΣY X X
+
+>
+
+0)
+
+=
+
+2/π ·
+
+uT1 ΣY X ΣXX ΣXY u1
+
+Therefore, we have the Y center for uT1 ΣY XX > 0 be
+
+µˆY1 = =
+
+2/π · uT1 ΣY X ΣXX ΣXY u1 ΣY X ΣXY u1(u1T ΣY X ΣXX ΣXY u1)−1 2/π ΣY X ΣXY u1
+uT1 ΣY X ΣXX ΣXY u1
+
+Recall that µ¯Y1 = 2λ1/πu1, to judge if CV(2) > CV(1), one only need to compare the distance between µˆY1 and µ¯Y1 with distance between µˆY1 and grand mean 0. By the variance
+
+39
+
+and bias decomposition of prediction MSE, when variance is the same, only bias inﬂuences
+
+the MSE.
+
+After some linear algebra manipulation, we get µˆY1 − µ¯Y1 2 > µˆY1 2 or CV(2) > CV(1)
+
+if and only if
+
+√ λ1 > 2
+
+uT1 ΣY X ΣXY u1 uT1 ΣY X ΣXX ΣXY u1
+
+C Technical Lemmas
+
+Lemma 3. If Z is a standard normal random variable, then ϕ(b) − ϕ(a)
+E(Z | a < Z < b) = − Φ(b) − Φ(a)
+and E{(Z − δ)2 | a < Z < b} = δ2 + 1 − (b − 2δ)ϕ(b) − (a − 2δ)ϕ(a) Φ(b) − Φ(a)
+for all constants a, b, and δ, where ϕ(z) and Φ(z) are the standard normal probability density and cumulative distribution functions. These expressions are valid for a = −∞ or b = ∞ by taking limits.
+
+Proof. We will derive the expression for the second moment. Integrate to get
+b
+E[(Z − δ)21{Z < b}] = (z − δ)2ϕ(z) dz
+−∞
+= (δ2 + 1)Φ(b) − (b − 2δ)ϕ(b).
+
+Now,
+
+E{(Z − δ)2 | a < Z < b} = E[(Z − δ)21{Z < b}] − E[(Z − δ)21{Z < a}] . Φ(b) − Φ(a)
+
+40
+
+Lemma 3 has some important special cases:
+E{Z | Z > 0} = 2ϕ(0) = 2/π, E{(Z − δ)2 | Z > 0} = δ2 + 1 − 4δϕ(0), E{(Z − δ)2 | Z < 0} = δ2 + 1 + 4δϕ(0).
+
+D Wold cross-validation
+
+In Wold cross-validation, we perform “speckled” hold-outs in each fold, leaving out a random subset of the entries of the data matrix X ∈ RN×P . For each value of k and each fold, we perform the following set of actions to get an estimate of cross-validation error, CV(k), which we average over all folds.
+
+1. Randomly partition the set of indices {1, 2, . . . , N } × {1, 2, . . . , P } into a train set Strain and a test set Stest.
+
+2. Apply a k-means ﬁtting procedure that can handle missing data to the training data {Xi,j : (i, j) ∈ Strain}. This gives a set of cluster means µ(1), . . . , µ(k) ∈ RP and cluster labels for the rows, G1, G2, . . . , GN .
+
+3. Compute the cross-validation error as
+
+CV(k) =
+
+{Xi,j − µj(Gi)}2,
+
+(i,j)∈Stest
+
+where µj(Gi) denotes the jth component of µ(Gi).
+
+41
+
+References
+Ben-Hur, A., Elisseeﬀ, A., and Guyon, I. (2001). A stability based method for discovering structure in clustered data. In Paciﬁc symposium on biocomputing, volume 7, pages 6–17.
+Calin´ski, T. and Harabasz, J. (1974). A dendrite method for cluster analysis. Communications in Statistics-theory and Methods, 3(1):1–27.
+Chiang, M. M.-T. and Mirkin, B. (2010). Intelligent choice of the number of clusters in k-means clustering: an experimental study with diﬀerent cluster spreads. Journal of classiﬁcation, 27(1):3–40.
+Cho, R. J., Campbell, M. J., Winzeler, E. A., Steinmetz, L., Conway, A., Wodicka, L., Wolfsberg, T. G., Gabrielian, A. E., Landsman, D., Lockhart, D. J., et al. (1998). A genome-wide transcriptional analysis of the mitotic cell cycle. Molecular cell, 2:65–73.
+Dortet-Bernadet, J.-L. and Wicker, N. (2008). Model-based clustering on the unit sphere with an illustration using gene expression proﬁles. Biostatistics, 9(1):66–80.
+Fang, Y. and Wang, J. (2012). Selection of the number of clusters via the bootstrap method. Computational Statistics & Data Analysis, 56(3):468–477.
+Fraley, C. and Raftery, A. E. (2002). Model-based clustering, discriminant analysis, and density estimation. Journal of the American Statistical Association, 97(458):611–631.
+Fujita, A., Takahashi, D. Y., and Patriota, A. G. (2014). A non-parametric method to estimate the number of clusters. Computational Statistics & Data Analysis, 73:27–39.
+Gabriel, K. R. (2002). Le biplot–outil d’exploration de donn´ees multidimensionelles. Journal de la Soci´et´e Francaise de Statistique, 143:5–55.
+42
+
+Hartigan, J. A. (1975). Clustering Algorithms. Wiley. Hartigan, J. A. and Wong, M. A. (1979). Algorithm as 136: A k-means clustering algorithm.
+Journal of the Royal Statistical Society. Series C (Applied Statistics), 28:100–108. Hastie, T., Tibshirani, R., and Friedman, J. (2009). The Elements of Statistical Learning:
+Data Mining, Inference, and Prediciton. Springer Series in Statistics. Springer, 2nd edition. Jain, A. K. (2010). Data clustering: 50 years beyond k-means. Pattern recognition letters, 31(8):651–666. Jain, A. K., Murty, M. N., and Flynn, P. J. (1999). Data clustering: a review. ACM computing surveys (CSUR), 31(3):264–323. Mangasarian, O. L., Setiono, R., and Wolberg, W. (1990). Pattern recognition via linear programming: Theory and application to medical diagnosis. Large-scale numerical optimization, pages 22–31. Owen, A. B. and Perry, P. O. (2009). Bi-cross-validation of the svd and the nonnegative matrix factorization. Ann. Appl. Stat., 3(2):564–594. Pollard, D. (1981). Strong consistency of k-means clustering. Ann. Stat., 9(1):135–140. Pomeroy, S. L., Tamayo, P., Gaasenbeek, M., Sturla, L. M., Angelo, M., McLaughlin, M. E., Kim, J. Y., Goumnerova, L. C., Black, P. M., Lau, C., et al. (2002). Prediction of central nervous system embryonal tumour outcome based on gene expression. Nature, 415(6870):436–442.
+43
+
+Schlimmer, J. C. (1987). Concept acquisition through representational adjustment. PhD thesis, Department of Information and Computer Science, University of California, Irvine.
+Sugar, C. A. and James, G. M. (2003). Finding the number of clusters in a dataset. Journal of the American Statistical Association, 98(463).
+Tarpey, T. and Flury, B. (1996). Self-consistency: A fundamental concept in statistics. Statist. Sci., 11(3):229–243.
+Tavazoie, S., Hughes, J. D., Campbell, M. J., Cho, R. J., and Church, G. M. (1999). Systematic determination of genetic network architecture. Nature genetics, 22:281–285.
+Tibshirani, R. and Walther, G. (2005). Cluster validation by prediction strength. Journal of Computational and Graphical Statistics, 14(3):511–528.
+Tibshirani, R., Walther, G., and Hastie, T. (2001). Estimating the number of clusters in a data set via the gap statistic. Journal of the Royal Statistical Society: Series B (Statistical Methodology), 63(2):411–423.
+Wang, J. (2010). Consistent selection of the number of clusters via crossvalidation. Biometrika, 97(4):893–904.
+Wilson, E. B. (1927). Probable inference, the law of succession, and statistical inference. Journal of the American Statistical Association, 22(158):209–212.
+Wold, S. (1978). Cross-validatory estimation of the number of components in factor and principal components models. Technometrics, 20:397–405.
+44
+

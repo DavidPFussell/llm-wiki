@@ -1,0 +1,1020 @@
+Predicting Process Behaviour using Deep Learning
+Joerg Evermanna,∗, Jana-Rebecca Rehseb,c, Peter Fettkeb,c
+aMemorial University of Newfoundland, St. John’s, NL, Canada bGerman Research Center for Artiﬁcial Intelligence, Saarbru¨cken, Germany
+cSaarland University, Saarbru¨cken, Germany
+
+arXiv:1612.04600v2 [cs.LG] 22 Mar 2017
+
+Abstract
+Predicting business process behaviour is an important aspect of business process management. Motivated by research in natural language processing, this paper describes an application of deep learning with recurrent neural networks to the problem of predicting the next event in a business process. This is both a novel method in process prediction, which has largely relied on explicit process models, and also a novel application of deep learning methods. The approach is evaluated on two real datasets and our results surpass the state-of-the-art in prediction precision. Keywords: Process management, Runtime support, Process prediction, Deep learning, Neural networks
+1. Introduction
+Being able to predict the future behaviour of a business process is an important business capability (Houy et al., 2010). As an application of predictive analytics in business process management, process prediction exploits data on past process instances to make predictions about current ones (Breuker et al., 2016). Example use cases are customer service agents responding to inquiries about the remaining time until a case is resolved, production managers predicting the completion time
+∗Corresponding author Email address: jevermann@mun.ca (Joerg Evermann)
+
+Preprint submitted to Decision Support Systems
+
+March 23, 2017
+
+of a production process for better planning and higher utilization, or case managers identifying likely compliance violations to mitigate business risk.
+We present a novel approach to predicting the next process event using deep learning. While the term ”deep learning” has only recently become a popular research topic, it is essentially an application of neural networks and thus looks back on a long history of research (Schmidhuber, 2015). Recent innovations both in algorithms, allowing novel architectures of neural networks, and computing hardware, especially GPU processing, have led to a resurgence in interest for neural networks and popularized the term ”deep learning” (LeCun et al., 2015). Our approach is motivated by applications of neural networks to Natural Language Processing (NLP), more speciﬁcally the prediction of the next word in a sentence (Sutskever et al., 2011; Graves, 2013; Zaremba et al., 2014). By interpreting process event logs as text, process traces as sentences, and process events as words, these techniques can be applied to predict future process events. The contribution of our research is threefold:
+1. We improve on the state-of-the-art in process event prediction. Our results show our method has considerably better precision on next-event prediction.
+2. We demonstrate that an explicit process model is not necessary for prediction. Deep learning models, where the process structure is only implicitly reﬂected, can perform as well as explicit process models.
+3. We contribute to process management in general by showcasing the useful application of an artiﬁcial intelligence approach, illustrating that business process management can beneﬁt from the application of smart approaches.
+Our research is located at the intersection of business process management, in particular process mining, and artiﬁcial intelligence (AI) and machine learning. We bring together historic process data with an AI learning technology to leverage
+2
+
+real-time case management, opening new perspectives into process execution, monitoring, and analysis. Extending existing solutions to novel problems (”exaptation”) is a recognized and valid way to make a contribution in design science (Gregor and Hevner, 2013), which is the research approach we apply here. We not only provide a new approach, rooted in AI, to predicting the next process event, but also give a proof-of-concept regarding its feasibility and experimentally explore its eﬃciency and eﬀectiveness, thus making a valuable contribution to the ﬁeld of ”Smart BPM”.
+This paper is a signiﬁcant extension over earlier work (Evermann et al., 2016), adding more advanced neural network cells, separation of training and validation samples for cross-validation to prevent overﬁtting, empirical assessment of the eﬀect of diﬀerent neural network parameters, prediction not only of next events but of case remainders, interpretation and visualization of neural network states, encoding of timing information, and an extended discussion of the similarities and diﬀerences between natural language processing and process event prediction.
+2. Related Work
+Process prediction covers an array of diﬀerent techniques, objectives, and data sources. It extends process mining from a post-hoc analysis method to operational decision support (van der Aalst et al., 2010). Most existing process prediction research focuses on prediction of process outcomes, primarily the remaining time to completion, rather than prediction of the next event in a process, as we do here. Only ﬁve approaches are concerned with predicting the next event (Breuker et al., 2016; Ceci et al., 2014; Lakshmanan et al., 2015; Le et al., 2012; Unuvar et al., 2016), all of which use an explicit model representation such as a state-transition, HMM (hidden Markov models), or PFA (probabilistic ﬁnite automatons) model.
+The MSA approach by Le et al. (2012) considers each trace preﬁx as a state in
+3
+
+a state-transition matrix. From the observed preﬁxes and their next events, a state transition matrix is built. When a running case has reached a state not contained in the state-transition matrix, its similarity to observed traces is computed using string edit distance. The prediction is made from the most similar observed case. Evaluating the approach on two datasets from a telecommunications company, Le et al. (2012) report accuracies in predicting the next event of up to 25% and 70% for their two datasets.
+The approach described by Lakshmanan et al. (2015) and Unuvar et al. (2016) consists of ﬁve steps. First, a process model is mined from existing logs. For each XOR split in the model, a decision tree is mined from case data. These trees are then used to compute the state transition probabilities for a HMM that is speciﬁc to the running case that is to be predicted. This HMM is then used to predict the probabilities of the following event. The approach is evaluated on simulated data. After training the decision trees for the HMM on one half of the traces (training set), each trace in the test set is cut into a preﬁx and postﬁx at a random point. For each preﬁx, the log-likelihood of observing the corresponding postﬁx is reported.
+The approach described by Ceci et al. (2014) uses sequence mining to identify frequent trace preﬁxes. For each preﬁx, a regression model is trained to predict remaining time to completion and a decision tree is trained to predict the next event. The algorithm identiﬁes the appropriate preﬁx of the running case to choose the regression and decision tree model for predicting remaining completion time and the next event. The experimental evaluation uses two datasets, yielding prediction precision values for the next event of approximately 65% on one dataset and approximately 50% on the other, depending on the type of decision tree used and the frequency threshold for preﬁxes.
+RegPFA (Breuker et al., 2016) uses a probabilistic ﬁnite automaton (PFA) in-
+4
+
+stead of a HMM, allowing the future hidden state to be a function of both the previous hidden state and the previous observed event (which itself is a probabilistic consequence of the previous hidden state). RegPFA uses an EM algorithm to estimate the model parameters of the PFA. The evaluation uses data from the 2012 and 2013 BPI Challenges (van Dongen, 2012, 2013a,b).
+Our approach has the same objective as these ﬁve related works, but diﬀers in terms of method and process representation. Deep Learning in the form of a recurrent neural network (RNN) is used to predict the next events, using event sequences and associated resource information. Processes are only implicitly represented within the RNN, rather than in an explicit state-transition, PFA or HM model. Because of the non-linear transformations used in neural networks, they are particularly suited to model non-linear relationships. In contrast, many of the existing methods are based on linear assumptions (e.g. regression trees). Thus, neural networks require less restrictive assumptions. Moreover, because models are built implicitly rather than explicitly, their performance does not depend on any ex-ante assumptions about the form of the model. Overall, our method constitutes an innovative new approach to process prediction.
+3. Deep Learning for Process Prediction
+3.1. Introduction A neural network is a special form of an acyclic computational graph (Schmid-
+huber, 2015). It consists of a layer of input cells, one or more layers of ”hidden” cells, and a layer of output cells. Cells in each layer are connected by weighted connections to cells in the previous and following layers, allowing for diﬀerent network architectures. Each cell’s output is a function of the weighted sum of its inputs. A simple network architecture is a fully connected network of cells using sigmoid
+5
+
+activation functions that form the hidden layer.
+
+ajl = σ
+
+wil,j ail−1 + bjl
+i
+
+1 where σ(x) =
+1 + exp(x)
+
+Here, alj is the output (”activation”) of cell j in layer l, wjl,i is the weight of the connection from cell i on layer l − 1 to cell j on layer l, ail−1 is the output of cell i on layer l − 1 and blj is the ”bias” of cell j on layer l.
+A neural network is a supervised learning technique where the output of the neural net is compared to a target by means of a loss function. The type of output layer cell and the loss function are often chosen jointly for their computational properties with respect to backpropagation. A typical combination for categorical targets is a softmax layer with a cross-entropy loss function H:
+
+yi = sof tmax(a)i =
+
+exp(ai) j exp(aj)
+
+Hy (y) = − yi log(yi)
+i
+
+Here, y are the target values and y are the network outputs, computed in turn from the output activations ai of the next to last network layer. Gradients of the parameters wjl,i, bil with respect to the loss function are computed using backpropagation and parameters are adjusted using variants of gradient descent algorithms.
+
+3.2. Recurrent Neural Networks (RNN) Recurrent neural networks (RNN) are a neural network architecture popularized
+by work in natural language processing (NLP). NLP has moved away from explicit language models to statistical methods, speciﬁcally to RNN (for example, Mikolov et al., 2011; Sutskever et al., 2011; Graves, 2013, 2012; Zaremba et al., 2014). In a RNN, each cell’s output is not only connected to the following layer but each cell also feeds back information into itself, allowing it to maintain ”state” over time. To make this tractable within an acyclic computational graph and backpropagation,
+6
+
+the recurrent network cells are ”unrolled”, that is, copies of it are produced for time t, t − 1, t − 2, . . .. The state output of the RNN cell for time t − 1 is state input to the cell for time t. In general, t need not represent time, but can index any sequence. Depending on how long one wishes to maintain state for, fewer or more cells are unrolled. Fig. 1 shows an RNN architecture with an input layer, an output layer and two hidden layers that are unrolled ﬁve steps (Graves, 2013). Each layer (each box in Fig. 1) in turn consists of multiple input, output, or hidden cells that are not individually shown in Fig. 1.
+A typical NLP application trains the RNN on sequences of input words to predict the next word, e.g. to provide word suggestions for user input. As shown in Fig 1, the target words are simply the input words shifted by one position, so that for each input word the following word is the target to be predicted. The ability to maintain state or context means that, for example, when given the input ”fox” in Fig. 1 and predicting the correct target (the next word) ”jumps”, the RNN can make use of the previous words ”The quick brown” to improve prediction performance.
+In this work, we apply a recurrent neural network to the problem of predicting the next event in a process from a sequence of observed events. In implementing process prediction using RNN, our main idea is to view an event log as a text, traces in the log as sentences, and events in a trace as analogous to words in a sentence.
+3.3. Long Short Term Memory (LSTM) Recurrent networks with simple sigmoid cells have unsatisfactory performance
+for long time or sequence distances, leading to the development of long short term memory (LSTM) cells (Hochreiter and Schmidhuber, 1997), deﬁned by the vector equations in Fig 2. An LSTM cell accepts ct−1 and ht−1 as state information from the prior unrolled cell on the same level, and xt as input from cells on the previous layer. In turn, it passes ct and ht as new state information to the subsequent unrolled
+7
+
+Inputs: Initial State 1
+
+The
+
+quick
+
+brown
+
+fox
+
+jumps
+
+Input
+
+Input
+
+Input
+
+Input
+
+Input
+
+input LSTM state
+
+input LSTM state
+
+input LSTM state
+
+input LSTM state
+
+input LSTM
+
+Final State 1
+
+Initial State 2
+
+LSTM state LSTM state LSTM state LSTM state LSTM
+
+output
+
+output
+
+output
+
+output
+
+output
+
+Output
+
+Output
+
+Output
+
+Output
+
+Output
+
+Targets: quick
+
+brown
+
+fox
+
+jumps
+
+over
+
+Final State 2
+
+Figure 1: RNN architecture with single hidden layer of LSTM cells, unrolled ﬁve steps
+
+ft = σ (Wf · [ht−1, xt] + bf )
+
+(1)
+
+it = σ (Wi · [ht−1, xt] + bi)
+
+(2)
+
+c¯t = tanh (Wc · [ht−1, xt] + bc) (3)
+
+ct = ft × ct−1 + it × c¯t
+
+(4)
+
+ot = σ (Wo · [ht−1, xt] + bo) (5)
+
+ht = ot × tanh(ct)
+
+(6)
+
+Figure 2: Deﬁnition of LSTM cell
+
+cell on the same level and also provides ht as output to the next layer. The variables c, x, h, f, i, o in Fig. 2 are vectors in Rm; the W and b (weights and
+biases) are ”trainable” parameters of suitable dimensions. The functions tanh(. . .) and σ(. . .) are applied elementwise, [. . .] represents vector concatenation. Equations 1–6 describe m individual LSTM cells, each operating on a single input from R. The number of individual cells on each layer, i.e. the dimensionality m, can be freely chosen.
+The intuition behind these deﬁnitions is as follows. Eq. 1 represents the ”forget gate” that determines, based on the inputs xt and ht−1, which part of the state to forget. Note that the prior state ct−1 is multiplied by ft in Eq. 4 to derive the new
+
+8
+
+ft = σ (Wf · [ct−1, ht−1, xt] + bf ) it = σ (Wi · [ct−1, ht−1, xt] + bi) ot = σ (Wo · [ct, ht−1, xt] + bo)
+Figure 3: Deﬁnition of peepholes for LSTM cells
+state. With σ(. . .) in Eq. 1 yielding values between 0 and 1, some information in ct−1 will, to some degree, be ”forgotten”. Eq. 2 and 3 determine how the inputs xt and ht−1 contribute to the updated cell state. Eq. 2 represents the ”input gate” and determines which values of the state to update; some of the it will be close to zero, others close to one. Eq. 3 computes new candidate values c¯, which are multiplied with it in Eq. 4 when computing the new state ct. Eq. 4 is the actual state update equation. The left term represents the ”forgetting” of some prior state information while the right term represents the addition of new information to the cell state. Eq. 5 represents the ”output gate”. It determines which values of the cell state are provided as output to the following layer and subsequent unrolled cell. It is multiplied in Eq. 6 with the tanh of the cell state to produce the ﬁnal output ht.
+To further improve the performance of LSTM cells, Gers and Schmidhuber (2000) introduce the idea of ”peepholes”, which allow the forget and input gates to look (”peep”) at the prior state ct−1, and which allows the output gate to also look (”peep”) at the current state ct, with the equations in Fig. 3 replacing those in Fig. 2. While there exist other variants to this basic LSTM cell, Greﬀ et al. (2015) conclude after an experimental evaluation that ”the most commonly used LSTM architecture, performs reasonably well on various datasets and using any of eight possible modiﬁcations does not signiﬁcantly improve the LSTM performance.”
+9
+
+3.4. Word Embeddings As neural networks operate on real-valued data, words or any other categori-
+cal input must be appropriately encoded. One option for this is to use ”one-hot” encodings, but this leads to input vectors and neural net layers whose size (the dimensionality m in Sec. 3.3) is the number of distinct words or categories. Word embeddings avoid this problem and allows arbitrary input vector and neural network sizes. Words are mapped into an n-dimensional ”embedding” space Rv×m using an ”embedding matrix”, which is essentially a look-up matrix of dimensions v ×m where v is the size of the vocabulary and m is the chosen dimensionality of the embedding space and hence the size of each LSTM hidden layer (cf. Section 3.3). The input layer in Fig. 1 is an embedding lookup function yields a numeric vector from Rm for each word in the vocabulary, which forms the input xt in Eq. 1, 2 and 5 for the ﬁrst LSTM layer. The embedding matrix is also a trainable parameter that is learned during training. The output layer produces a probability distribution over the words in the vocabulary. Each output ”box” in Fig. 1 represents a softmax layer with v individual cells. The word with the highest probability is selected as the predicted word and compared to the target.
+3.5. Language and Process Referring to the XES standard (XES Working Group, 2016), we deﬁne events
+jointly by the name of the executing activity (e.g. ”Pay Invoice”, ”Repair Widget”), the lifecycle transition (e.g. ”Start”, ”Complete”, ”Schedule”) and, for some experimental settings, the organizational resource, role or group (e.g. ”Jane Doe”, ”Tester”, ”Accounting”). An example of an event is ”Repair Widget—Start—Jane Doe”. Our ”vocabulary” is the set of unique events of this form contained in a log.
+As natural language is constrained by grammatical and morphological rules, such as noun and verb agreement for plurals in English, process event sequences are
+10
+
+determined or constrained by an underlying process logic, for example by business rules based on case data. Just as linguistic rules and constraints are not explicitly captured in NLP deep-learning approaches (Mikolov et al., 2011; Sutskever et al., 2011; Graves, 2012, 2013; Zaremba et al., 2014) but are learned by the neural network, the process constraints and rules also need not be explicitly represented but can be learned.
+However, while there are many similarities between natural language and process traces, there are important diﬀerences. First, the size of the vocabulary in process prediction is much smaller than the size of a natural language vocabulary. Second, the length of a trace can far exceed the typical sentence length in natural language. Together, these two diﬀerences result in fewer possible prediction targets (vocabulary size or number of unique process event types) and more information to predict from (sentence or trace preﬁx length), suggesting that this approach may be able to achieve better results than word prediction in NLP. Third, in contrast to natural language, processes contain activities with temporally overlapping execution. But even in that case, individual lifecycle events are strictly ordered, e.g. ”A—Start, B— Start, A—Complete, B—Complete”, as deﬁned by the XES Working Group (2016): ”An event that occurs in a log . . . before another event that is related to the same trace, shall be assumed to have occurred before that other event.” However, the possibly arbitrary temporal sequence of events of parallel activities across diﬀerent traces can make the prediction task more diﬃcult, especially when there are no underlying regularities or dependencies imposed by other process characteristics such as resources or case attributes.
+To empirically examine the similarity of process event logs and natural language text, we focus on two characteristics. First, the mutual information I of two words in natural language declines with their distance d according to a power law (I ∝ d−k),
+11
+
+1.0
+
+1.0
+
+0.8
+
+q q
+
+BNC Gutenberg q BPIC2012 BPIC2013
+
+0.6
+
+0.8
+
+BNC Gutenberg BPIC2012 BPIC2013 Zipf's Law
+
+Relative Frequency
+
+0.6
+
+Mutual Information I(X,Y) in bits
+
+0.4
+
+0.4
+
+q
+
+0.2
+
+0.2
+
+0.0
+
+q q
+
+q
+
+q
+
+q
+
+q
+
+q
+
+q
+
+q
+
+q
+
+1
+
+10
+
+100
+
+1000
+
+10000
+
+Distance D(X,Y)
+
+0.0
+
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+
+Rank
+
+Figure 4: Mutual information of process event logs and English language text by separation distance (solid line is I = exp(−d/5))
+
+Figure 5: Relative frequency of terms by frequency rank for process event logs and English language text (solid line is Zipf’s law)
+
+rather than an exponential manner (I ∝ exp −d/k). Markov models cannot model this form of dependency, while RNN can (Lin and Tegmark, 2016). We compare the mutual information in our datasets against that of two natural language text corpora, the British National Corpus1 and an extract from Project Gutenberg2 (Fig. 4). As our event logs exhibit exponential decline, an RNN is not strictly necessary as they can be modelled by both Markov-based models and RNNs. This invites a comparison between the RNN and Markov-based approach, which we provide by comparing our method to the PFA method by Breuker et al. (2016) (Sec. 6).
+Second, we examine whether Zipf’s law (Zipf, 1949) holds for the event logs. Zipf’s law states that the frequency of words in a natural language corpus is inversely proportional to the frequency rank of that word. Figure 5 shows that our event logs also adhere to Zipf’s law and are, in this characteristic, similar to natural language.
+In summary, given that there are both similarities and diﬀerences, a proof-of-
+
+1http://www.natcorp.ox.ac.uk/ 2https://www.gutenberg.org/
+
+12
+
+concept implementation to demonstrate feasibility of applying NLP methods to prcoess prediction, and an experimental evaluation to demonstrate eﬀectiveness and performance are clearly required.
+4. Implementation
+A number of software frameworks for deep-learning have become available recently (Bahrampour et al., 2015). We implement our approach using Tensorﬂow as it provides a suitable level of abstraction, provides RNN speciﬁc functionality, and can be used on high-performance parallel, cluster, and GPU computing platforms. Code, data and complete results are available from the corresponding author3.
+Our network features an architecture as in Fig. 1 with two hidden RNN layers using LSTM cells. This architecture still aﬀords many choices, in particular the dimensionality of the embedding space and the number of unrolled steps.
+The dimensionality of the embedding space must be guided by the vocabulary size (the number of unique event types). A larger dimensionality allows better separation of words in that space, which likely leads to better predictive performance, but at the cost of computational eﬀort. Our baseline in the experimental evaluation (Sec. 5) is 125, and we explore the eﬀect of varying this parameter on predictive performance. The number of ”unrolled” steps indicates the length of the sequence of words across which state information is maintained, independent of vocabulary size. A larger number of unrolled steps allows the network to take earlier process events into account when predicting the following process event. This, too, is at the expense of computational eﬀort. Our baseline for the experimental evaluation is 20, and we explore the eﬀect of varying this parameter on predictive performance.
+In addition to these two parameters, a number of general neural network options
+3http://joerg.evermann.ca/software.html
+13
+
+Parameter Initialization scale Batch size Maximum gradient norm Number of training epochs Number of epochs with full base learning rate Base learning rate Learning rate decay Dropout probability LSTM forget bias
+
+Value 0.10 20 5.00 100 50 1.00 0.75 0.20 0.10
+
+Table 1: RNN Parameters
+
+are parameterized (Table 1). Greﬀ et al. (2015) show that these parameters are signiﬁcantly less important in determining RNN performance than network size and are largely independent in their eﬀect on RNN performance. Trainable parameters are initialized using a uniform random distribution over [−0.1, 0.1]. Training proceeds in batches of size 20. For each batch, the backpropagation algorithm computes the mean gradients for all parameters. Training of the net proceeds in ”epochs”. Each epoch trains the net on the entire event log. Subsequent epochs maintain the weights W and biases b learned from the previous epoch but reinitialize the states for each layer and then train the net again on the entire event log. The net was trained for 100 epochs. The learning rate is reduced from 1 by a factor of 0.75 each epoch after the 50th. Dropout is a technique to prevent overﬁtting and improve learning by randomly temporarily removing a cell from the network (Srivastava et al., 2014). Dropout probability for each cell is 0.2.
+
+5. Experimental Method 5.1. Data
+To provide a compelling evaluation of our approach, it should be compared to the state-of-the-art in next event prediction. Of the related work discussed in Section 2, only Breuker et al. (2016) make an implementation publicly available and
+14
+
+use publicly available data, demonstrating ”open research” (van der Aalst et al., 2016). We contacted all authors of the remaining papers twice, but did not receive software or data to use for comparative evaluation.
+We use the same datasets as Breuker et al. (2016). The BPI Challenge 2012 dataset (van Dongen, 2012) is a real dataset from a loan application process in a Dutch ﬁnancial institute with 13087 traces. It can be separated into three subprocesses concerning the application itself (A), the oﬀer (O) and the work item (W) belonging to the application. The BPI Challenge 2013 datasets (van Dongen, 2013a,b) are real datasets from IT incident and problem management processes at Volvo Belgium with 7553 and 2300 traces, respectively.
+In addition to separating the BPI 2012 data set by sub-process as done by Breuker et al. (2016), we also use the combined dataset. While Breuker et al. (2016) use only activity completion events for the BPI 2012 dataset, we also test our approach on all events (including the lifecycle transitions ”Start”, ”Schedule” and ”Complete”). However, only the ”W” subset has events other than completion events. Furthermore, we include an experimental condition where we extract the activity name and lifecycle transition, and combine this with the name of the resource associated with the event (cf. Sec. 3.5). We simply concatenate the two character strings to form the composite word. This creates a larger vocabulary which increases the prediction diﬃculty, but also provides more information to the training algorithm. It also allows prediction of not only the activity of the next event but also the resource associated with the next event. Because the number of distinct resources in the BPI 2013 datasets is very large, we use the organizational group instead of organizational resource. Table 2 shows characteristics of the datasets.
+The published datasets are transformed using XSL transformations to extract traces, events, and resource information in a suitable format.
+15
+
+Dataset
+BPI2013.Incidents BPI2013.Problems BPI2012 (completion events) BPI2012 (all events) BPI2012.W (completion events) BPI2012.W (all events) BPI2012.A BPI2012.O
+
+Number of unique event
+
+types (”vocabulary size”)
+
+w/ res. info
+
+14
+
+3133
+
+8
+
+64
+
+24
+
+877
+
+37
+
+1349
+
+7
+
+264
+
+7
+
+736
+
+11
+
+302
+
+8
+
+313
+
+Number of events
+65533 9011 164506 262200 72413 169507 60849 31244
+
+Table 2: Characteristics of datasets used in experimental evaluation. Event numbers for partial BPI2012 logs do not add up to that of corresponding complete log due to end-of-case marker events added to each trace.
+
+5.2. Evaluation Method There are three random inﬂuences on prediction performance. First, the train-
+able parameters are initialized randomly and diﬀerent initial values may lead to diﬀerent outcomes (e.g. convergence to local optima). Second, the traces in a log are in a particular order but this is an arbitrary order. Because the LSTM cells maintain state, the order in which traces are used to train the network may have an eﬀect on the outcome. Finally, the selection of the training dataset itself has an inﬂuence, and the results obtained with a particular sample may not generalize to others. Both BPI 2012 and 2013 datasets are sampled from running systems.
+To address these stochastic inﬂuences, we perform 10-fold cross-validation (Hastie et al., 2009). Comparing the prediction performance on an independent validation sample to the prediction performance on the training sample assesses the generalizability to similar datasets. Speciﬁcally, it examines whether the RNN overﬁts the training sample, i.e. exploits idiosyncrasies in the training sample, and what type of performance can realistically be expected on a dataset with similar characteristics. Note that Breuker et al. (2016) do not cross-validate the results of their stochastic EM-based approach; a fair comparison is therefore to our training results.
+We report the prediction precision, deﬁned as the proportion of correct predic-
+
+16
+
+Training Precision by Epoch
+
+Validation Precision by Epoch
+
+0.8
+
+0.8
+
+Training Precision Validation Precision
+
+0.6
+
+0.6
+
+0.4
+
+0.4
+
+0.2 0
+
+BPIC 2012 A
+
+q
+
+BPIC 2012 O
+
+q
+
+BPIC 2012 W Completion Events (Resource) q
+
+BPIC 2013 Incidents (Group)
+
+q
+
+BPIC 2013 Problems
+
+q
+
+20
+
+40
+
+60
+
+80
+
+100
+
+Epoch
+
+0.2
+
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+
+Epoch
+
+Figure 6: Training precision by training epoch for selected datasets (mean over 10 training folds)
+
+tions of all predictions made. We report mean and standard deviation of the training precision, as well as the mean and standard deviation of the precision achieved on the validation fold, across all 10 folds.
+
+6. Experimental Results
+We train the RNN for 100 epochs on each training dataset. Fig. 6 plots training and validation precision for each epoch for a selection of our datasets (averaged across all 10 training folds). The plot shows that 100 training epochs are suﬃcient for optimal and stable results. The small BPI 2012 A and O datasets converge quickly to a high precision, whereas this occurs more gradually for the BPI 2013 datasets. Moreover, the BPI 2012 A, BPI 2012 O, and BPI 2013 Problem datasets with relatively small vocabularies converge faster than the BPI 2012 W and BPI 2013 Incident datasets that include resource or organizational group information and consequently have a larger vocabulary. There is a signiﬁcant improvement in precision when the training rate is adjusted in epoch 50, suggesting that a dynamic
+
+17
+
+Dataset
+BPI2013.Incidents BPI2013.Problems BPI2012 (completion events) BPI2012 (all events) BPI2012.W (completion events) BPI2012.W (all events) BPI2012.A BPI2012.O
+
+Precision in (Breuker
+et al., 2016) .714 .690
+.719
+.801 .811
+
+Training Precision Mean SD .757 .011 .727 .037 .796 .001 .864 .001 .676 .002 .839 .001 .837 .001 .841 .001
+
+Validation Precision Mean SD .735 .044 .628 .086 .788 .006 .859 .005 .658 .020 .832 .010 .832 .010 .836 .010
+
+Table 3: Results and comparison to (Breuker et al., 2016)
+
+training rate helps to prevent suboptimal convergence. The second panel in Fig. 6 shows that validation precision generally follows the behaviour of training precision at a lower level.
+
+6.1. Predicting the Next Event Table 3 shows our results and a comparison to the best result presented by
+Breuker et al. (2016). The table shows that our RNN approach surpasses the performance of probabilistic ﬁnate automatons on many datasets. For the BPI 2013 Incidents data, the BPI 2012 A, and the BPI 2012 O subsets, our training and validation precision values are above the best values reported by Breuker et al. (2016). For the BPI 2013 Problems dataset, our approach oﬀers better training precision, but the validation precision is lower than that reported by Breuker et al. (2016), and on the BPI 2012 W dataset, our approach performs poorly. Overall, this is in line with the expectations based on mutual information (Sec. 3.5) which showed that both PFA and RNN should be able to model our process data equally well.
+Comparing the training and validation precision shows that little overﬁtting occurs, with the validation precision generally within ±0.05 of the training precision. The standard deviations for the validation precision are an order of magnitude above those for the training sample because of the smaller size of the validation sample
+
+18
+
+(one tenth of the training sample size). Table 3 shows many results with validation precision close to or in excess of 0.8.
+While we have no comparison to the state-of-the-art on these datasets by Breuker et al. (2016), this level of precision is encouraging for practical applications. It is also generally above the levels reported in related works (see Section 2), although this must be interpreted with caution due to diﬀerent datasets with possibly very diﬀerent characteristics, such as number of unique events, trace length, or the patterns due to the structure of the underlying, generating process.
+Prediction is signiﬁcantly better for the BPI 2012 W dataset with all events compared to the same dataset with completion events only as it exploits the regularity that after every ”Start” event for an activity, the corresponding ”Complete” event for that activity follows.
+6.2. The Eﬀect of Resource Information Including the organizational resource or group in the predicting data provides
+additional information that should lead to improved prediction precision. Including this information in both predictor and predictand allows prediction not only of the activity of the next process event but also of the resource associated with the next process event. However, this comes at the cost of a larger vocabulary and should lead to lower prediction precision. We explore both options, and the results in Table 4 are generally as expected.
+Including the organizational group or resource information only in the predictor (Table 4) improves the training precision for all datasets, by up to 0.07, compared to the baseline in Table 3. However, the validation precision does not follow the same pattern, improving only for some datasets, and even then improving to a lesser extent as the training precision. This suggests that including resource information for prediction may be useful but also runs the danger of overﬁtting the model.
+19
+
+Dataset
+BPI2013.Incidents BPI2013.Problems BPI2012 (completion) BPI2012 (all events) BPI2012.W (completion) BPI2012.W (all events) BPI2012.A BPI2012.O
+
+Predictand only
+
+Training
+
+Validation
+
+Precision
+
+Precision
+
+Mean SD Mean SD
+
+.832 .034 .761 .049
+
+.776 .081 .616 .117
+
+.833 .004 .811 .023
+
+.880 .007 .866 .008
+
+.745 .013 .693 .019
+
+.865 .012 .845 .012
+
+.846 .006 .826 .007
+
+.870 .015 .833 .015
+
+Predictor & Predictand
+
+Training
+
+Validation
+
+Precision
+
+Precision
+
+Mean SD Mean SD
+
+.731 .010 .595 .061
+
+.764 .034 .517 .043
+
+.622 .005 .594 .010
+
+.685 .007 .663 .015
+
+.313 .012 .208 .023
+
+.609 .018 .559 .018
+
+.758 .010 .709 .008
+
+.703 .026 .590 .020
+
+Table 4: Precision when including resources or organizational groups
+
+Including the organizational resource or group in both the predictor and predictand aﬀects the prediction precision for the datasets in diﬀerent ways. Training precision for the BPI 2013 Incident decreases, but increases for the BPI 2013 Problem dataset. Validation precision drops signiﬁcantly for both datasets. Training and validation precision for all BPI 2012 datasets also drop signiﬁcantly. An extreme example is the BPI 2012 W dataset with completion events only, where training precision drops to .313 and validation precision to .208. Here, the resources assigned to events do not follow any underlying regularity, impairing prediction performance. In contrast, for the BPI2012.W with all events, the resource of the completion event is the same as of the start event, which leads to improved performance.
+
+6.3. Predicting Duration of Activities An RNN can also be used to predict the duration of activities. For this, we
+quantize the temporal extent of a trace in minutes and, for each minute, encode the current activity in the input. For example, if activity A occurs for 3 minutes, the input consists of the sequence AAA. Only the BPI 2012 W dataset includes both
+
+20
+
+start and completion events to allow determination of the duration of activities4. While it is possible to encode idle time between two activities in the same manner, the BPI 2012 W dataset describes long-running cases, which would have led to very long and monotonous sequences.
+The validation precision for this case is 0.942, (SD=0.027), signiﬁcantly higher than the 0.832 reported in Table 3 for the case with no duration information. This increase in precision is not surprising, as the dataset consists of longer sequences of identical words, thus making prediction of the following word much easier.
+6.4. The Eﬀect of Embedding Space Dimensionality To identify the eﬀect of the dimensionality of the word embedding space on
+prediction performance, we repeat our experiments using embedding spaces of 500, 64, 32, 16, and 8 dimensions, keeping the other parameters unchanged. Table 5 shows the validation precision of our datasets for diﬀerent numbers of dimensions. Fig. 7 plots training and validation precision for three datasets with and without organizational information.
+As expected, reducing the dimensionality of the embedding has, in general, a detrimental eﬀect on the prediction precision. However, this eﬀect is negligible as long as the dimensionality of the embedding space is greater than the size of the vocabulary. This is the case for all datasets that do not include organizational information. For example, neither the BPI 2013 datasets with 14 and 8 event types, nor the BPI 2012 dataset with 24 event types in Fig. 7 show a marked reduction in training or validation precision when the dimensionality is reduced from 64 to 32 and to 16. However, when the dimensionality is reduced to 8, the reduction in precision is more pronounced for all datasets.
+4This kind of encoding is sensible only when activities do not temporally overlap, which is the case for this dataset.
+21
+
+Dataset
+BPI2013.Incidents BPI2013.Problems BPI2012 (completion events) BPI2012 (all events) BPI2012.W (completion events) BPI2012.W (all events) BPI2012.A BPI2012.O BPI2013.Incidents (with group) BPI2013.Problems (with group) BPI2012 (completion events, resource) BPI2012 (all events, resource) BPI2012.W (completion events, resource) BPI2012.W (all events, resource) BPI2012.A (resource) BPI2012.O (resource)
+
+Dimensionality of Embedding Space
+
+500 125 64 32 16
+
+8
+
+.721 .735 .736 .734 .728 .692
+
+.593 .628 .635 .642 .638 .622
+
+.779 .788 .791 .787 .747 .602
+
+.859 .859 .854 .772 .578
+
+.638 .658 .660 .661 .657 .646
+
+.832 .833 .832 .824 .733
+
+.833 .832 .833 .834 .832 .799
+
+.827 .836 .836 .837 .836 .823
+
+.567 .595 .590 .525 .387 .272
+
+.473 .517 .513 .521 .504 .449
+
+.573 .594 .575 .497 .327 .253
+
+.663 .618 .456 .328 .188
+
+.130 .208 .214 .204 .174 .147
+
+.559 .558 .495 .302 .134
+
+.714 .709 .717 .717 .688 .615
+
+.577 .590 .598 .588 .482 .263
+
+Table 5: Validation precision for diﬀerent dimensions of the embedding space. Due to computational requirements, 500 dimensions applied only to selected datasets.
+
+Training Precision Validation Precision
+
+q
+
+q q
+
+q
+
+0.8
+
+qq
+
+q
+
+q
+
+q q qq
+
+q q q q q q
+
+qq
+
+q
+
+q
+
+qq
+
+q
+
+q
+
+0.6
+
+qq
+
+qq
+
+qq
+
+0.4
+
+q
+
+BPI 2012 (completion events)
+
+q
+
+BPI 2012 (completion events, resource) q
+
+q
+
+BPI 2013 Incidents
+
+q
+
+BPI 2013 Incidents (group)
+
+q
+
+qq
+
+BPI 2013 Problems
+
+q
+
+BPI 2013 Problems (group)
+
+q
+
+8 32 64 125
+
+500
+
+Embedding space dimensions
+
+0.8 q q q q
+qq q q q q q
+
+qq q
+
+q
+
+q
+
+0.6
+
+qq
+
+q
+
+q
+
+q
+
+qq
+
+q q qq q q q
+q
+
+0.4
+
+q
+
+q
+q q
+
+8 32 64 125
+
+500
+
+Embedding space dimensions
+
+Figure 7: Training and validation precision against embedding space dimensions for selected datasets
+
+Given the larger vocabulary when including organizational information, the effect of dimensionality is more pronounced at smaller dimensions, as is visible in Fig. 7. The BPI 2013 datasets with 3133 and 64 unique combinations of event ac-
+
+22
+
+tivity and organizational group, and the BPI 2012 dataset with 877 unique combinations, show a signiﬁcant reduction in precision when the dimensionality is reduced from 125 to 64. Other datasets with large vocabulary show the same behaviour.
+Increasing the dimensionality to 500, done only for selected datasets due to the required computational eﬀort, shows that signiﬁcant overﬁtting occurs, especially for datasets with a large vocabulary. As shown in Fig. 7, the training precision for the BPI 2012 and BPI 2013 datasets increases signiﬁcantly whereas the validation precision is not only much lower than the training precision, but decreases with increasing dimensionality. These trends are clear indications of overﬁtting.
+Examining Fig. 7 and the corresponding data in Table 5 shows that our chosen baseline with 125 dimensions is close to the optimum validation precision for all datasets and does not suﬀer from signiﬁcant overﬁtting.
+6.5. The Eﬀect of the Number of Unrolled Steps To identify the eﬀect of the number of unrolled steps on prediction performance,
+we repeat our experiments using 10 and 5 unrolled steps, keeping the other parameters unchanged. Fig. 8 and Table 6 show the training and validation precision of selected datasets against the number of unrolled steps. Neither training nor validation precision is signiﬁcantly aﬀected by the number of unrolled steps. There appears to be a minor eﬀect for the BPI 2013 Problem dataset (more pronounced when including the organizational group), where the training performance decreases with increasing number of unrolled steps, while the validation performance increases. This indicates that there are few to no long-term dependencies in the diﬀerent processes that cannot be captured by even ﬁve previous steps, which is in line with the mutual information considerations in Section 3.5.
+23
+
+Training Precision Validation Precision
+
+0.8 q q q 0.8 q q q
+
+q
+
+q
+
+q
+
+q
+
+q
+
+qq
+
+q
+
+q
+
+q
+
+0.7 q q 0.7
+
+q
+
+q
+
+q
+
+q
+
+q
+
+q
+
+0.6
+
+0.6
+
+qq
+
+q
+
+q
+
+BPI 2012 (completion events)
+
+q
+
+0.5
+
+BPI 2012 (completion events, resource) q
+
+BPI 2013 Incidents
+
+q
+
+BPI 2013 Incidents (group)
+
+q
+
+BPI 2013 Problems
+
+q
+
+BPI 2013 Problems (group)
+
+q
+
+5
+
+10
+
+20
+
+Number of unrolling steps
+
+0.5
+q
+5
+
+q q
+
+10
+
+20
+
+Number of unrolling steps
+
+Figure 8: Validation precision for three values of unrolled steps for selected datasets
+
+Dataset
+BPI2013.Incidents BPI2013.Problems BPI2012 (completion events) BPI2012 (all events) BPI2012.W (completion events) BPI2012.W (all events) BPI2012.A BPI2012.O
+
+No Resource Info
+
+Unrolled Steps
+
+20 10
+
+5
+
+.735 .730 .731
+
+.628 .612 .612
+
+.788 .787 .787
+
+.859 .860 .860
+
+.658 .657 .657
+
+.832 .831 .831
+
+.832 .833 .834
+
+.836 .836 .836
+
+With Resource Info
+
+Unrolled Steps
+
+20 10
+
+5
+
+.595 .595 .600
+
+.517 .490 .478
+
+.594 .596 .596
+
+.663 .667 .667
+
+.208 .201 .201
+
+.559 .558 .558
+
+.709 .710 .712
+
+.590 .590 .590
+
+Table 6: Validation precision for diﬀerent number of unrolled steps
+
+6.6. Interpreting the RNN One of the main criticisms of neural networks is the fact that no explicit, human
+understandable model is created; the learning consists entirely in the optimization of the values of thousands or millions of ﬂoating point parameters. We present two ways in which users can gain insight into what the neural net has learned, i.e. the knowledge that is encoded in its structures.
+
+24
+
+6.6.1. Process Hallucinations Neural networks, especially RNN, can be made to ”hallucinate”, i.e. to generate
+output on their own, for example in language modeling (Graves, 2013; Sutskever et al., 2011; Karpathy, 2016) or music creation (van den Oord et al., 2016; Huang and Wu, 2016; Choi et al., 2016). This is done by feeding the net output (prediction) immediately back as new input. Hallucinations can provide insight into what the RNN has learned about the training set. The ability of an RNN to re-produce, on its own, realistic and convincing process traces demonstrates that it has correctly learned the important features of the event log used as training sample and thereby validates the trained net and supports the usefulness of the RNN approach for process prediction.
+Hallucinations are initialized by providing a short seed sequence of input events. One may either accept the event with the highest probability as output, or one samples from events using the output probabilities. We explore the two methods for the full BPI 2012 and BPI 2013 datasets. For each output method and for each dataset, we train a net with 32 embedding dimensions and 5 unrolled steps for 100 epochs. After training is complete, we produce 20 hallucinations of sequence length 1000 from each trained net. An excerpt of the BPI2012 hallucinations is shown in Fig. 9. The complete set of generated hallucinations is available from the authors.
+In addition to visually inspecting the generated hallucinations and judging their realism, we mine a process model from the original event log using the Flexible Heuristics Miner (FHM) (Weijters and Ribeiro, 2011) with default parameters. We choose the FHM because it performs well on a wide variety of models (Claes and Poels, 2012). We replay both the original log and the generated hallucinations against this model and compute the replay ﬁtness, which indicates how well the model can generate the observed behavior (van der Aalst et al., 2012). A replay
+25
+
+ASUBMITTED APARTLYSUBMITTED ADECLINED WAfhandelenleads [EOC] ASUBMITTED APARTLYSUBMITTED APREACCEPTED WAfhandelenleads WCompleterenaanvraag WCompleterenaanvraag WCompleterenaanvraag AACCEPTED AFINALIZED OSELECTED OCREATED OSENT WCompleterenaanvraag WNabellenoffertes WNabellenoffertes WNabellenoffertes OSENTBACK WNabellenoffertes WValiderenaanvraag WValiderenaanvraag WValiderenaanvraag WNabellenincompletedossiers OCANCELLED OSELECTED OCREATED OSENT WNabellenincompletedossiers WNabellenincompletedossiers WNabellenincompletedossiers WNabellenincompletedossiers WNabellenincompletedossiers ACANCELLED OCANCELLED WNabellenincompletedossiers [EOC] ASUBMITTED APARTLYSUBMITTED WAfhandelenleads ADECLINED WAfhandelenleads [EOC] ASUBMITTED APARTLYSUBMITTED ADECLINED [EOC] ASUBMITTED APARTLYSUBMITTED APREACCEPTED AACCEPTED OSELECTED AFINALIZED OCREATED OSENT WCompleterenaanvraag WNabellenoffertes WNabellenoffertes ADECLINED ODECLINED WNabellenoffertes [EOC]
+
+Figure 9: Example hallucinations for the BPI2012 dataset (probabilistic output sampling, ”[EOC]” designates end-of-case)
+
+Mean trace length Max trace length Replay ﬁtness KS test p-value
+
+full log 13 96
+.586 —
+
+prob. sampling 12 56
+.582 .878
+
+top-p output 21
+194 .350 .000
+
+Table 7: Hallucination characteristics for BPI2012 (completion events only) dataset
+
+ﬁtness of the hallucinations similar to that of the original model is a strong indication that the generated traces are realistic. We also examine whether the frequency distribution of events in the generated hallucinations matches that in the original dataset, using the Kolmogorov-Smirnov test. A non-signifant test (p-value > 0.05) indicates the frequency distributions come from the same underlying population.
+Table 7 shows the results for the BPI2012 dataset. Probabilistic output sampling produces more realistic results than choosing the output with the highest probability; the latter produces many long uniform event sequences that are uncharacteristic of the input logs. Results for the other event logs are similar. In summary, the generated hallucinations show that the neural networks learn the relevant features of the input event logs.
+Hallucinations can also be used to predict the remainder of a case. For this, the
+
+26
+
+Dataset
+BPI2013.Incidents BPI2013.Problems BPI2012 (completion events) BPI2012.W (completion events) BPI2012.W (all events) BPI2012.A BPI2012.O
+
+Damerau–Levenshtein Distance
+
+Mean
+
+SD
+
+.563
+
+.199
+
+.616
+
+.177
+
+.659
+
+.203
+
+.703
+
+.205
+
+.697
+
+.211
+
+.545
+
+.241
+
+.532
+
+.191
+
+Table 8: Mean and standard deviation of Damerau-Levenshtein distance between actual trace remainders and those predicted from a preﬁx of length 5. Hallucinations produced using probability sampling (k = 1) and element-wise feedback (m = 1); smaller is better.
+
+hallucination is initialized with a trace preﬁx and then continued until it produces an end-of-case indicator. The hallucination can then be compared with the actual trace continuation using a string-edit distance. We train nets with 32 embedding dimensions and 5 unroll steps for 100 epochs. Using trace preﬁxes of length 5, we produce hallucinations and compare them to the actual continuation using the normed Damerau–Levenshtein distance, which ranges from 0 to 1 (Table 8).
+The application of hallucinations might be interesting in other areas of process mining as well, such as improving event log completeness in cases where particular mining algorithms beneﬁt from better or larger logs5.
+
+6.6.2. Hidden State Dynamics Recent work on understanding RNNs also focuses on visualization. In particular,
+visualizations of the embedding matrix, the state activation and the state dynamics are useful in understanding how an RNN encodes knowledge (Karpathy et al., 2015; Li et al., 2015; Yosinski et al., 2015; Strobelt et al., 2016).
+We export embedding matrices after completion of training to create 2D t-SNE plots (Maaten and Hinton, 2008). They are not included here as no signiﬁcant or
+
+5We thank one of the anonymous reviewers for this suggestion.
+
+27
+
+obvious clustering of events is discernible for any of our datasets. We use LSTMVis (Strobelt et al., 2016), which is motivated by earlier work by
+Karpathy et al. (2015), to examine the activation of hidden state cells for diﬀerent inputs6. The visualization assists in identifying cells that are active for some input but not others (the ”hypothesis selection process”, Strobelt et al., 2016), and then conﬁrming such hypotheses by comparing activation patterns against similar input (the ”matching process”, Strobelt et al., 2016).
+Figure 10 shows the tool in use with hidden states on the ﬁrst level of the trained RNN for the BPI2012 dataset with 16 embedding dimensions. The event sequence ”ADECLINED [EOC]” is selected in the timeline (top part of ﬁgure). The inputs that match the activation pattern of the selected event sequence are sequences of the same two events, shown at the bottom of the image. This cell appears to represent the ending of cases with declined loan applications. In some cases, another event occurs in between the ”ADECLINED” and ”[EOC]” and this input is represented by the same cell activation pattern. Other hidden state cells represent the events ”WNABELLENOFFERTES”, ”WCOMPLETERENANVRAAG”, and the sequence ”AACCEPTED AFINALIZED OSELECTED”.
+7. Discussion and Conclusion
+This paper introduced the use of deep learning for process prediction. Our approach does not rely on explicit process models and can be applied when models do not exist or are diﬃcult to obtain. Our results, surpassing or close to the stateof-the-art and with cross-validated precision in excess of 80% on many problems, demonstrate the feasibility and usefulness of this approach.
+6Because LSTMVis provides an interactive visualization for exploring state dynamics, it is difﬁcult to provide in static form in this paper. The fully interactive visualization is available at http://rnnprocess.evermann.ca
+28
+
+Figure 10: LSTM visualization of states for declined loan application processes
+While one can perform prediction by mining a model from event logs, and mining decision rules for each process branch point (Lakshmanan et al., 2015; Unuvar et al., 2016), this has inherent drawbacks. Process mining algorithms trade oﬀ diﬀerent quality criteria, such as ﬁtness, precision, generalizability, and simplicity. The mined models are abstractions and intentionally imperfect representations of the underlying true process. This impairs predictive performance. Decision mining at process branch points or for trace preﬁxes (Ceci et al., 2014) makes trade-oﬀs between recall, precision, and parsimony, and may use simplifying assumptions such as linearity. This further impairs predictive performance. Explicit process models and decision rules are useful for understandability. At the same time, however, their intentional abstraction and parsimony makes them less suitable for prediction. In contrast, deep learning networks with their larger parameter space and non-linearity ”skip” the
+29
+
+intentionally imperfect representations between raw event logs and event prediction. We chose RNNs for their natural ﬁt to the sequence data of process event logs.
+An alternative to RNN are n-gram models, in which a non-recurrent neural network is trained on all ﬁxed-length trace preﬁxes of length n. The RNN approach has the advantage of allowing prediction from trace preﬁxes of arbitrary length while also oﬀering better prediction performance (Mikolov et al., 2011). Alternatives to neural networks are probabilistic automatons such as HMM (Lakshmanan et al., 2015; Unuvar et al., 2016) and PFA (Breuker et al., 2016). Section 3.5 showed that the event logs chosen for this study have characteristics that make either of these techniques applicable. Our prediction results conﬁrm this. While our RNN are not always superior, they surpass the performance of PFA in many cases. However, other processes may involve long-distance dependencies between events that are not found in our data. Such long-distance dependencies in an event log are likely to present problems for HMMs and n-gram models, but not for RNN (Lin and Tegmark, 2016).
+Deep learning approaches are susceptible to overﬁtting. The larger a neural network, the better it can capitalize on chance training data idiosyncrasies. With an embedding space of 500 dimensions and a small event log, Evermann et al. (2016) report training data prediction precision in excess of 99%, showing clear overﬁtting. In this paper, we have also seen overﬁtting with similarly large embedding spaces. In the context of process model discovery, overﬁtting has its analogue in mined models with high ﬁtness and precision, that are complex and not generalizable. And similar to quality trade-oﬀs in process model mining, deep learning also makes tradeoﬀs. Prediction precision is traded oﬀ against generalizability (by overﬁtting) and simplicity (network size, embedding dimensionality). Just as model ﬁtness must be evaluated in the context of other quality dimensions, predictive performance must be evaluated in the context of generalizability and model size. An assessment of
+30
+
+overﬁtting through cross-validation is therefore essential. Our approach constructs the RNN inputs by concatenating categorical, character
+string valued event attributes and then encodeing these attributes via an embedding space. This is feasible only because of the small number of unique values for each attribute in our datasets. Because of this, the number of unique values of the concatenated input remains small. Hence, the embedding space dimensionality need not be large. While the names of executing activities and lifecycle transitions for most datasets usually have a small set of values, the set of resources or organizational groups may be much larger, which limits the feasibility of this approach. Application-speciﬁc event-level or case-level attributes can also be included in predictors and predictands simply by concatenating their values. This too is limited to cases where the set of unique values is small. Numerical attributes are diﬃcult to handle in our approach unless they are encoded in a limited number of intervals, which may lead to signiﬁcant information loss.
+A diﬀerent approach, ﬁrst encoding individual attributes and subsequently concatenating the embedding vectors for input to the RNN, can keep the RNN input size small even when the number of unique values for some attributes is large, and also simpliﬁes including numerical attributes. Exploring this alternative and its predictive performance, and determining ways to identify event- and case-level attributes that are useful as predictor variables, are important future work.
+Acknowledgements The authors gratefully acknowledge the support of the Memorial University
+Center for Health Informatics and Analytics, St. John’s, Canada and the HassoPlattner-Institute at the University of Potsdam, Germany, in providing access to computing resources.
+31
+
+References
+References
+Bahrampour, S., Ramakrishnan, N., Schott, L., Shah, M., 2015. Comparative study of deep learning software frameworks. CoRR abs/1511.06435.
+Breuker, D., Matzner, M., Delfmann, P., Becker, J., 2016. Comprehensible predictive models for business processes. MIS Quarterly 40 (4), 1009–1034.
+Ceci, M., Lanotte, P. F., Fumarola, F., Cavallo, D. P., Malerba, D., 2014. Completion time and next activity prediction of processes using sequential pattern mining. In: Discovery Science - 17th International Conference, DS 2014, Bled, Slovenia, October 8-10, 2014. Proceedings. pp. 49–61.
+Choi, K., Fazekas, G., Sandler, M. B., 2016. Text-based LSTM networks for automatic music composition. CoRR abs/1604.05358.
+Claes, J., Poels, G., 2012. Process mining and the prom framework: An exploratory survey. In: Business Process Management Workshops. Vol. 132 of Lecture Notes in Business Information Processing. Springer, pp. 187–198.
+Evermann, J., Rhese, J.-R., Fettke, P., 2016. A deep learning approach for predicting process behaviour at runtime. In: PRAISE Workshop at the 14th International Conference on BPM.
+Gers, F. A., Schmidhuber, J., 2000. Recurrent nets that time and count. In: IJCNN (3). pp. 189–194.
+Graves, A., 2012. Supervised Sequence Labelling with Recurrent Neural Networks. Vol. 385 of Studies in Computational Intelligence. Springer.
+Graves, A., 2013. Generating sequences with recurrent neural networks. CoRR abs/1308.0850.
+Greﬀ, K., Srivastava, R. K., Koutn´ık, J., Steunebrink, B. R., Schmidhuber, J., 2015. LSTM: A search space odyssey. CoRR abs/1503.04069.
+Gregor, S., Hevner, A. R., 2013. Positioning and presenting design science research for maximum impact. MIS Quarterly 37 (2), 337–355.
+Hastie, T., Tibshirani, R., Friedman, J., 2009. The Elements of Statistical Learning: Data Mining, Inference, and Prediction. Springer Verlag, Berlin, Germany.
+Hochreiter, S., Schmidhuber, J., 1997. Long short-term memory. Neural Computation 9 (8), 1735–1780.
+32
+
+Houy, C., Fettke, P., Loos, P., van der Aalst, W. M. P., Krogstie, J., 2010. BPM-inthe-large - towards a higher level of abstraction in business process management. In: EGES/GISP. Vol. 334 of IFIP Advances in Information and Communication Technology. Springer, pp. 233–244.
+Huang, A., Wu, R., 2016. Deep learning for music. CoRR abs/1606.04930.
+Karpathy, A., 2016. The unreasonable eﬀectiveness of recurrent neural networks. Accessed 6 Dec, 2016.
+Karpathy, A., Johnson, J., Li, F., 2015. Visualizing and understanding recurrent networks. CoRR abs/1506.02078.
+Lakshmanan, G. T., Shamsi, D., Doganata, Y. N., Unuvar, M., Khalaf, R., 2015. A Markov prediction model for data-driven semi-structured business processes. Knowl. Inf. Syst. 42 (1), 97–126.
+Le, M., Gabrys, B., Nauck, D., 2012. A hybrid model for business process event prediction. In: SGAI Conf. Springer, pp. 179–192.
+LeCun, Y., Bengio, Y., Hinton, G., 2015. Deep learning. Nature 521, 436–444.
+Li, J., Chen, X., Hovy, E. H., Jurafsky, D., 2015. Visualizing and understanding neural models in NLP. CoRR abs/1506.01066.
+Lin, H. W., Tegmark, M., Jun. 2016. Critical Behavior from Deep Dynamics: A Hidden Dimension in Natural Language. CoRR abs/1606.06737.
+Maaten, L. v. d., Hinton, G., 2008. Visualizing data using t-SNE. Journal of Machine Learning Research 9 (Nov), 2579–2605.
+Mikolov, T., Kombrink, S., Burget, L., Cˇ ernocky`, J., Khudanpur, S., 2011. Extensions of recurrent neural network language model. In: Acoustics, Speech and Signal Processing (ICASSP), 2011 IEEE International Conference on. pp. 5528– 5531.
+Schmidhuber, J., 2015. Deep learning in neural networks: An overview. Neural Networks 61, 85–117.
+Srivastava, N., Hinton, G. E., Krizhevsky, A., Sutskever, I., Salakhutdinov, R., 2014. Dropout: a simple way to prevent neural networks from overﬁtting. Journal of Machine Learning Research 15 (1), 1929–1958.
+Strobelt, H., Gehrmann, S., Huber, B., Pﬁster, H., Rush, A. M., 2016. Visual analysis of hidden state dynamics in recurrent neural networks. CoRR abs/1606.07461.
+Sutskever, I., Martens, J., Hinton, G. E., 2011. Generating text with recurrent neural networks. In: ICML. Omnipress, pp. 1017–1024.
+33
+
+Unuvar, M., Lakshmanan, G. T., Doganata, Y. N., 2016. Leveraging path information to generate predictions for parallel business processes. Knowl. Inf. Syst. 47 (2), 433–461.
+van den Oord, A., Dieleman, S., Zen, H., Simonyan, K., Vinyals, O., Graves, A., Kalchbrenner, N., Senior, A. W., Kavukcuoglu, K., 2016. Wavenet: A generative model for raw audio. CoRR abs/1609.03499.
+van der Aalst, W. M. P., Adriansyah, A., van Dongen, B. F., 2012. Replaying history on process models for conformance checking and performance analysis. Wiley Interdisc. Rew.: Data Mining and Knowledge Discovery 2 (2), 182–192.
+van der Aalst, W. M. P., Bichler, M., Heinzl, A., 2016. Open research in business and information systems engineering. Business & Information Systems Engineering 58 (6), 375–379.
+van der Aalst, W. M. P., Pesic, M., Song, M., 2010. Beyond process mining: From the past to present and future. In: Pernici, B. (Ed.), Advanced Information Systems Engineering: 22nd International Conference, CAiSE 2010, Hammamet, Tunisia, June 7-9, 2010. Proceedings. Springer, Berlin, Heidelberg, pp. 38–52.
+van Dongen, B., 2012. Business process intelligence 2013 challenge data set. http: //dx.doi.org/10.4121/uuid:3926db30-f712-4394-aebc-75976070e91f.
+van Dongen, B., 2013a. Business process intelligence 2013 challenge data set (closed problems). http://dx.doi.org/10.4121/uuid: c2c3b154-ab26-4b31-a0e8-8f2350ddac11.
+van Dongen, B., 2013b. Business process intelligence 2013 challenge data set (incident management). http://dx.doi.org/10.4121/uuid: 500573e6-accc-4b0c-9576-aa5468b10cee.
+Weijters, A. J. M. M., Ribeiro, J. T. S., 2011. Flexible heuristics miner (FHM). In: CIDM. IEEE, pp. 310–317.
+XES Working Group, 2016. IEEE standard for eXtensible Event Stream (XES) for achieving interoperability in event logs and event streams. IEEE Std 1849-2016.
+Yosinski, J., Clune, J., Nguyen, A. M., Fuchs, T., Lipson, H., 2015. Understanding neural networks through deep visualization. CoRR abs/1506.06579.
+Zaremba, W., Sutskever, I., Vinyals, O., 2014. Recurrent neural network regularization. CoRR abs/1409.2329.
+Zipf, G. K., 1949. Human behavior and the principle of least eﬀort.
+34
+

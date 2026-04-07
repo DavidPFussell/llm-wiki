@@ -1,0 +1,654 @@
+Sentiment Spin: Attacking Financial Sentiment with GPT-3
+Markus Leippold∗ January 25, 2023
+Abstract The use of dictionaries in financial sentiment analysis and other financial and economic applications remains widespread because keyword-based methods appear more transparent and explainable than more advanced techniques commonly used in computer science. However, this paper demonstrates the vulnerability of using dictionaries by exploiting the eloquence of GPT-3, a sophisticated transformer model, to generate successful adversarial attacks on keyword-based approaches with a success rate close to 99% for negative sentences in the financial phrase base, a well-known human-annotated database for financial sentiment analysis. In contrast, more advanced methods, such as those using context-aware approaches like BERT, remain robust.
+Version: January 25, 2023 JEL-Code: G2, G38, C8, M48 Keywords: Sentiment analysis in financial markets, keyword-based approach, FinBERT, GPT-3.
+∗Department of Banking and Finance, University of Zurich, Switzerland, and the Swiss Finance Institute (SFI), Plattenstrasse 14, 8032 Switzerland. Email: markus.leippold@bf.uzh.ch.
+1
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+1 Introduction
+Recently, Cao et al. (2022) suggest that increasing AI readership encourages firms to craft filings tailored to machine parsing and processing. Their research is the first to recognize and analyze the feedback effect of how firms adjust their language because they know machines are listening.1 These effects could potentially lead to manipulation and collusion. The authors, therefore, suggest that further research is needed to understand the influence and behavior of AI in finance and society. In this paper, I investigate whether financial texts can be easily and widely manipulated using large language models so that AI readers (machines) can be deceived by adversarial attacks for their financial sentiment analysis.
+In the financial literature, keyword-based approaches are still the dominant approach for sentiment analysis of financial texts, predominantly based on the Loughran and McDonald (2011) dictionary.2 These approaches involve identifying the presence or absence of specific words or phrases in a text to determine its overall sentiment and then counting the number of times these words appear in the text. Alternatively, it can be done automatically, using natural language processing (NLP) techniques to identify and extract the relevant keywords from the text.
+One advantage of keyword-based approaches is that they are relatively simple to implement and can be applied to a wide range of financial texts, including annual reports, press releases, and social media posts. Another argument is that they are easier to interpret compared to other more modern approaches in NLP, which are based almost exclusively on deep neural networks. However, keyword-based approaches can also have some limitations. For example, they may not be able to capture the context or tone of the text accurately, and they may not be able to detect sarcasm or irony. As a result, they may not always
+1The first version of their paper, published in 2020, refers to AI systems as predominantly based on keyword-based methods. Their version from December 2022 also includes a BERT Devlin et al. (2018) model in their analysis.
+2As of January 2023, the paper of Loughran and McDonald (2011) has been cited more than 4,276 times by researchers. Moreover, their word list has been adopted for the WRDS SEC Sentiment Data.
+2
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+produce reliable or accurate results, especially when applied to more complex or nuanced financial texts. Indeed, previous results (e.g., Boukes et al. 2020, Van Atteveldt et al. 2021) indicate that the performance of dictionaries is not satisfactory, with agreement generally close to a chance agreement, and correlations between dictionaries were also low. Error analysis showed this was mostly due to the missing context of words. The same verdict applies to financial dictionaries. However, they are still the dominant approaches in academic finance.3 Nevertheless, this paper does not aim to provide further evidence as to whether keyword-based or more advanced methods should be used for sentiment classification. Instead, I will focus on whether and how sentiment classification approaches can be attacked by large language models such as GPT-3 (Generative Pre-trained Transformer 3), currently the most advanced tools for contextual and semantically correct text generation.
+Attacks on natural language processing (NLP) systems involve making small changes to the original text that are undetectable to humans but cause the model to make incorrect predictions.4 Previous NLP research has primarily used rule-based methods to create negative examples by replacing words with synonyms. Unfortunately, these methods can lead to unnatural and confusing changes in the text that people can easily detect. However, recent advances in NLP have been tremendous, with large-scale language models (LLMs) being developed that show impressive results in language generation. This has led to renewed interest in adversarial attacks in the NLP field, with a variety of different methods proposed, such as, e.g., Papernot et al. (2016), Alzantot et al. (2018), Jin et al. (2020), Garg and Ramakrishnan (2020), Wang et al. (2021).5 Yet, recent studies have shown that
+3Examples include Benchimol et al. (2021), De Franco et al. (2022), Huang et al. (2022), Jiang et al. (2019), Katsafados et al. (2021), Ma and Xu (2021), among others. In addition, new dictionaries emerge (Garcia et al. 2023), with the promise to outperform previous dictionaries. On the other side, a recent paper has shown how machine-learning methods outperform keyword-based approaches in the financial context (Frankel et al. 2022).
+4Research on adversarial attacks on neural networks began in computer vision (Szegedy et al. 2013, Goodfellow et al. 2014). In contrast to computer vision, adversarial examples in NLP cannot be imperceptible, as discrete characters or words must be replaced.
+5For example, in Garg and Ramakrishnan (2020), the authors propose a new approach to generating adversarial examples using BERT-based tokens that is able to retain the semantic meaning of the sentence in natural-looking sentences. Different from other pipelines, it utilizes dynamic embedding vector spaces
+3
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+these methods often do not preserve the semantics of the original text, contrary to what has often been claimed in previous work. In particular, Morris et al. (2020) and Hauser et al. (2021) have shown that most perturbations made by adversarial attacks do not preserve the semantics of the original text.6 Therefore, I will rely on the eloquence of GPT-3 (Brown et al. 2020) to construct adversarial attacks.
+2 NLP Methods
+I am now going to elaborate on the methods used in this study. Specifically, the utilization of a keyword-based methodology predicated on a financial lexicon will be discussed. Then, I briefly introduce a specific transformer-based approach, which allows for a state-of-theart sentiment classification for financial texts. All of these methods are off-the-shelf tools and open-sourced. For the text-generation task, I use GPT-3, which can only be accessed through an API.
+2.1 Financial dictionaries
+The Henry (2008) Financial Dictionary (HFD) and the Loughran and McDonald (2011) dictionary (LM) are the most prominent financial dictionaries. HFD is the first dictionary specifically designed for the financial domain and contains 104 positive and 85 negative words. It is used to assess the tone of earnings press releases, which are a key element of communication between firms and investors. HFD has been frequently used for financial sentiment analysis, but its limited number of words and low coverage are weaknesses. In contrast, the LM dictionary is a sentiment word list compiled from annual reports released by firms and includes 354 positive, 2,355 negative, 297 uncertainty, 904 litigious, 19 strong modal, 27 weak modal, and 184 constraining words.
+rather than fixed embedding vector space. 6The authors find that between 96% and 99% of the analyzed attacks do not preserve semantics. They
+conclude that BERT is much more robust than research on attacks suggests.
+4
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+(A) Word cloud for negative words from the LM dictionary, financial phrase base
+(B) Word cloud for negative words from the LM dictionary, earning calls
+Figure 1: In Panel A, we plot the word cloud for the negative words from the LM dictionary as they appear in the financial phrase bank (4,846 sentences). In Panel B, we plot the corresponding word cloud for sentences taken out of a subsample of earning calls from 2022 (500,000 sentences).
+5
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+LM is the most widely used finance domain lexicon that we are aware of. The paper’s provision of a specialized finance dictionary, containing both positive and negative connotations and words that offer information regarding prospects and uncertainty, has influenced sentiment analysis algorithms in the industry and academia. Given that the LM dictionary has become the predominant dictionary used in lexicographic algorithms for sentiment calibration, we focus on the LM in the subsequent analysis.
+Figure 1 shows the word cloud of words that appear in sentences for which the LM dictionary would attach a negative sentiment. The sentences are taken from the financial phrase database (Malo et al. 2013) (4,846 sentences) and from a subsample of earning calls from 2022 (500,000 sentences). A dictionary-based approach would take negative words and positive words in each sentence and aggregate them to obtain a sentence-level score for the sentiment eventually.
+2.2 FinBERT
+Recent advancements in architecture and training methods have greatly improved the way deep learning models are able to learn general language and perform downstream tasks. With self-attention and token masking, the transformer architecture of BERT (Devlin et al. 2018) and other deep neural networks allows a truly bi-directional contextual relationship to be learned.7 The transformer architecture is a key component of these models, a type of neural network architecture particularly well-suited for NLP tasks, such as language understanding and generation. The underlying attention mechanism allows the model to focus selectively on different parts of the input when processing it.8
+Often, these models are trained on a large corpus of general text and can further be
+7BERT stands for bidirectional encoder representations from transformers. 8The transformer architecture is composed of an encoder and a decoder. The encoder takes in a sequence of tokens (e.g., words or subwords) and generates a set of hidden representations, one for each token in the sequence. These hidden representations capture the meaning of the input text in a high-dimensional space. The decoder then takes in the hidden representations and generates a set of output tokens, which can be used for a variety of NLP tasks, such as language understanding, language generation, and text classification.
+6
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+improved if pretrained on domain-specific language. In finance, different versions of FinBERT have been introduced (Araci 2019, Liu et al. 2020, Yang et al. 2020, Hazourli 2022). For our analysis, we use the version of FinBERT as introduced by Araci (2019).9 The transformer architecture allows FinBERT to process input text in a more sophisticated way by selectively focusing on different parts of the input. The fine-tuning of FinBERT on financial corpus allows the model to understand better the financial domain, which can be useful for various classification tasks.
+2.3 GPT-3
+GPT-3 is a language generation model developed by OpenAI based on a transformer architecture (Brown et al. 2020) with a decoder only but no encoder. Decoders are created for text generation, which makes them suitable for tasks like machine translation, summarisation, and abstractive question-answering. GPT-3 is trained on a massive dataset of internet text and can generate human-like text, complete tasks such as translation and summarization, and even write code. It is considered one of the most advanced language generation models currently available, with 175 billion parameters, and has been used in a wide range of applications, including language translation and text generation. Given its strength as a decoder-only neural network, I mainly use GPT-3 for text generation. However, I will also present some interesting results on sentiment classification (which, in NLP, is not considered a specifically hard task).
+9In some preliminary analysis, I find that the FinBERT-version of (Araci 2019) outperforms all others. Therefore, I only consider that model for my experiments. Araci (2019) use the original BERT model and further pre-trains it on a subset of the TRC2 corpus, a collection of 1.8M news articles published by Reuters between 2008 and 2010, by filtering for keywords related to finance. Moreover, their model is already fine-tuned on sentiment analysis, and I use their sentiment classifier downloaded from Hugging Face (https://huggingface.co/ProsusAI/finbert).
+7
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+3 Data
+For the first part of my analysis, I want to rely on data annotated by humans. Therefore, I rely on the well-known financial phrase bank (Malo et al. 2013), which contains labeled financial phrases. For my second part, I will use unlabelled data from earning calls. The financial phrase bank is a dataset of 4,837 English news headlines of companies listed on the OMX Helsinki exchange. It was annotated by a team of 16 people with a background in finance, economics, or accounting, who classified each sentence based on their emotional tones as either positive, negative, or neutral. The total number of sentences corresponds to the instances of an inner-annotator agreement larger than 50%. From these sentences, there are 2,264 sentences with a 100% agreement. For my experiment, we will use the full database with 4,846 sentences, consisting of 604 negative, 2,879 neutral, and 1,363 positive sentences. Examples of the sentences and their labels from human annotations are given in Table B.1. For our experiments, we will mostly focus on the sentences that have a negative sentiment given by human annotators, as our goal with adversarial attacks is to spin the negative sentiment into neutral or positive territory.
+4 Performance on original data
+Before I elaborate on how (easily) I will generate the adversarial attacks, I show the differences in the performance of the three methods presented above. In particular, I will use the keyword-based approach, FinBERT, and GPT-3 to explore their performance on the financial phrase bank. Table 1 reports the different performance metrics for all the models. It turns out that FinBERT outperforms not only the keyword-based approach but also the GPT-3 few-shot learners by a considerable margin. The weighted average F1-score is 0.89 for FinBERT, while for the best GPT-3 model, the F1-score is 0.74. The keyword-based approach lags behind with an F1 score of 0.60. Hence, in what follows, I will not rely on GPT-3 to perform the sentiment analysis. Instead, I will only consider FinBERT and the
+8
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+more traditional keyword-based approach. However, GPT-3 will help me in performing adversarial attacks on these two methods.
+
+Keyword
+
+FinBERT
+
+precision recall f1-score precision recall f1-score
+
+negative neutral positive macro avg weighted avg
+
+0.410 0.663 0.604 0.559 0.615
+
+0.424 0.842 0.250 0.505 0.624
+
+0.417 0.742 0.354 0.504 0.592
+
+0.802 0.962 0.810 0.858 0.899
+
+0.970 0.858 0.920 0.916 0.889
+
+0.878 0.907 0.862 0.882 0.890
+
+GPT-3 (3-shots)
+
+GPT-3 (6-shots)
+
+precision recall f1-score precision recall f1-score
+
+negative neutral positive macro avg weighted avg
+
+0.890 0.777 0.647 0.772 0.755
+
+0.457 0.794 0.756 0.669 0.742
+
+0.604 0.786 0.698 0.696 0.738
+
+0.894 0.865 0.547 0.769 0.780
+
+0.710 0.617 0.913 0.747 0.712
+
+0.792 0.720 0.684 0.732 0.719
+
+Table 1: The table reports different performance measures for the different algorithms on the sentiment task.
+
+Figure 2 gives the confusion matrix for the keyword-based approach and the FinBERT with the true labels on the y-axis and the predicted labels on the x-axis. Clearly, the keyword-based approach struggles to attach positive sentiment to truly positive sentences. This might be caused by the fact that the LM dictionary has much fewer positive (354) than negative words (2,355). However, the keyword-based approach also struggles to identify truly negative sentences (only 256 out of 604), while FinBERT is able to do a reasonably good job (586 out of 604).
+One could argue that the keyword-based approach will perform much better when applied to sentences where human annotators fully agree on the sentiment. However, it turns out that this is not the case. In Table 2, we report the corresponding results when we restrict the analysis to this subset. While the weighted average F1-score jumps to 0.97, the keyword-based approach only generates a small and negligible increase from 0.592 to 0.599. Despite this result, the keyword-based approach is still dominant in the academic
+9
+
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+(A) KW-Sentiment
+
+(B) FB-Sentiment
+
+Figure 2: Confusion matrix for the financial sentiment analysis on the financial phrase bank. Panel A shows the results for the keyword-based approach; Panel B shows the result for FinBERT. Table 1 gives a detailed summary of the performance metrics. The annotated true labels are on the y-axis, and the predicted labels are on the x-axis
+literature on financial sentiment analysis. To further show that this approach should be abandoned, given the recent progresses in natural language processing, I will show how the keyword-based approach may suffer from adversarial attacks. There are many different ways to design such adversarial attacks. However, with the arrival of generative models like GPT-3, I will show that a very powerful pipeline can be defined with minimal effort.
+5 Manipulating sentiment with GPT-3
+For sentence manipulation, I will use OpenAI’s GPT-3 (Brown et al. 2020), currently one of the largest language models made public with 175 billion parameters. While GPT-3 is a good zero/few-shot learner for general domain problems, it does not perform well on financial classification tasks, as shown in Table 1. However, GPT-3 is, among other tasks, a great tool for sentence completion and text generation. Therefore, we will use GPT-3 to manipulate the sentences from the financial phrase bank (Malo et al. 2013). By using GPT-
+10
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+Keyword
+
+FinBERT
+
+precision recall f1-score precision recall f1-score
+
+negative neutral positive accuracy macro avg weighted avg
+
+0.418 0.686 0.637 0.648 0.580 0.638
+
+0.403 0.901 0.163 0.648 0.489 0.648
+
+0.410 0.779 0.260 0.648 0.483 0.599
+
+0.909 0.998 0.947 0.972 0.951 0.973
+
+0.983 0.968 0.975 0.972 0.976 0.972
+
+0.945 0.982 0.961 0.972 0.963 0.972
+
+Table 2: Performance of keyword-based approach and FinBERT on the subset of the financial phrase bank where annotators agree with 100%.
+
+3, I try to overcome some of the problems mentioned in the previous literature on adversarial attacks, namely that the manipulated sentences give semantically non-meaningful results and can easily be spotted by humans (Hauser et al. 2021). Moreover, GPT-3 dramatically simplifies the pipeline for adversarial attacks.10
+
+5.1 Strategy 1: Prompting GPT-3
+In Strategy 1, I will follow a very direct approach in prompting GPT-3.11 In particular, I will apply the code in Listing 1, given in Appendix A, to change the negative sentiment to neutral or positive. The intuition behind the code is quite simple. First, I ask GPT3 to generate a list of potential synonyms that fit the context of the word(s) identified from a given sentence that is(are) also part of the LM dictionary. Then, I filter out all the suggested synonyms that appear in the negative words list in the dictionary. Lastly, I ask GPT-3 to rephrase the sentence such that it replaces the negative words of the LM dictionary with the suggested synonyms while respecting the context.
+10For instance, I first tried, similar to previous literature, using BERT embeddings to generate synonyms by averaging over all the attention layers. However, the results were not good, and so I switched back to the use of GPT-3.
+11I also tried few-shot learning. However, the results were not improving over zero-shot learning.
+
+11
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+5.2 Strategy 2: Prompting GPT-3 given a predefined list of synonyms For Strategy 2, I will first generate a new dictionary based on synonyms generated by GPT3, which are not yet part of the LM dictionary. In particular, I ask GPT-3 to generate up to 100 synonyms for each negative word in the LM dictionary. At some point, GPT-3 becomes repetitive. Therefore, I only keep the unique words. In addition, I filter out all those words that are already part of the LM dictionary. In the second step, given a sentence with a negative word from the LM dictionary, I ask GPT-3 to rephrase the sentence by replacing the negative word with a corresponding synonym from my newly generated dictionary. The disadvantage compared to Strategy 1 is that GPT-3 no longer has the context of the word for which it must generate the synonyms. By doing so, I risk that the rephrased sentence might not be semantically correct. However, given that I want to apply this method to a couple of thousands of sentences, I can considerably reduce the cost of using the GPT-3 API. The code snippets are provided in Listing 2 and 3 of Appendix A, together with the list of generated synonyms for all the negative words in the LM dictionary.
+6 Experiments: Positive sentiment spin
+In what follows, I analyze the impact of the adversarial attacks on negative sentiments, i.e., we want to find ways to change the negative sentiment of a given sentence into a neutral sentiment (or even a positive one). I will focus first on the financial phrase dataset since this dataset contains annotated data. In addition, I will also perform a broader analysis of sentences taken from earning calls.
+6.1 Manipulating sentiment in the financial phrase bank In the financial phrase database, we can find 256 sentences that annotators have labeled as ‘negative,’ and the keyword-based approach correctly assigns a negative sentiment. These sentences form the basis of my experiments. In the first experiment, I use Strategy 1,
+12
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+(A) Attacked KW-Sentiment
+
+(B) Attacked FB-Sentiment
+
+before attack after attack
+
+precision
+1.000 1.000
+
+Keyword recall/acc
+1.000 0.012
+
+f1-score
+1.000 0.023
+
+FinBERT precision recall/acc
+
+1.000 1.000
+
+0.980 0.906
+
+f1-score
+0.990 0.951
+
+Figure 3: The figure shows the confusion matrix for the attacked sentences with negative sentiment. The sample consists only of sentences that originally have been correctly identified by the keyword-based approach with a negative sentiment. The table below reports the different performance measures. In this case, the recall is equal to the accuracy (acc) since we only have true positives. The accuracy of the attacked KW approach is reduced (from 100%) to 1.2%, while the accuracy of the attacked FB approach remains at 90.6%. On this subset, the accuracy of FB on the original sentences is 98%.
+
+13
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+described in the previous section. Given the new sentences generated by GPT-3, I can assess the sentiment using the keyword-based approach and FinBERT.
+Figure 3 display the results. From all the 256 sentences, only three survive the attack under the keyword-based approach, i.e., all other sentences obtain a neutral or positive sentiment. In contrast, FinBERT, which correctly assesses a negative sentiment for the original sentences in 98% of the cases, decreases its accuracy to only 91%. Hence, the attack’s success rate is at 99% for the keyword-based approach, while it is only at 7% for FinBERT. Table B.2 in Appendix B gives some examples of attacked sentences. In principle, the semantic quality of the sentences is high. However, GPT-3 struggles with generating synonyms for more frequent words like ‘loss’ (see Figure 1), which eventually results in a sentence that would look suspicious to a human (if that human knows that the sentence could have been potentially subject to an adversarial attack). Nevertheless, the overall quality of the adversarial attacks is quite high, given the simplicity of how these attacks are generated.
+6.2 Manipulating sentiment in earning calls
+For my second experiment, I use sentences from the presentation sections of earning calls in 2022. In Figure 4, Panel A, I have illustrated the distribution of sentiment scores calculated using a keyword-based method and FinBERT on 500,000 sentences from earning call transcripts in 2022. The scores represent the average sentiment across all sentences in the presentation section for a specific company. In Panel B, the confusion matrix for the corresponding sentiments is depicted. Since we do not have human-annotated sentences, we do not have a reference point or ground truth to compare against, unlike the financial phrase bank. The figure suggests that there is not much agreement between the sentiment scores of the keyword-based approach and FinBERT. Moreover, there seems to be a negative bias in how the keyword-based approach scores the sentiment of earning call sentences.
+Figure 5 shows the distributions of sentiment scores computed using the keyword-based
+14
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+(A) Original distribution of KW- and FB-Sentiment
+
+(B) Confusion Matrix
+
+Figure 4: In Panel A, I plot the original distribution of the sentiment score on 500,000 sentences, calculated using a keyword-based approach and using FinBERT. taken from earning calls in 2022. The score is calculated as the mean sentiment over all the sentences in the presentation section for a given company. In Panel B, I plot the confusion matrix for the corresponding sentiments. Unlike the financial phrase bank, we do not have humanannotated sentences; therefore, we do not have a ground truth as a benchmark.
+approach for 35,000 sentences from call transcripts in 2022.12 The sample size of sentences with negative sentiment obtained by the keyword-based approach is 3,902. These sentences with negative sentiment were then attacked using GPT-3, specifically Strategy 2, as described above. The resulting sentiment score is then calculated as the average score for all sentences in the presentation section for a given company. Panel B of Figure 5 shows the distribution of sentiment scores when computed with the FinBERT model, again for the original sentences and the sentences attacked with GPT-3. It is clear that attacking the keyword-based approach leads to a large difference in the distribution of sentiment scores between the companies. At the same time, the distribution of the attacked FinBERT classifier remains close to the original distribution. Some example sentences are given in Table B.3 in Appendix B, together with the verdicts of the keyword-based approach and
+12I have reduced the number of sentences attacked by GPT-3 to 3,902 due to computational constraints. However, the results hold without loss of generality
+15
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+FinBERT, and my own (human) assessment.
+(A) Distribution of attacked KW-sentiment
+(B) Distribution of attacked FB-Sentiment
+Figure 5: In Panel A, I plot the distribution of the sentiment score on 35,000 sentences, calculated using a keyword-based approach, when the sentences with the negative sentiment of the keyword-based approach are attacked by GPT-3. The sample size of sentences with negative sentiment is 3,902. The earning calls are from 2022. The score is calculated as the mean sentiment over all the sentences in the presentation section for a given company. In Panel B, I plot the corresponding distributions when calculating the score using FinBERT.
+16
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+7 Conclusion
+Overall, my analysis shows the main problem of keyword-based approaches. They lack robustness, even if highly popular and broad dictionaries like the one of Loughran and McDonald (2011) are used. Hence, the same problem may persist even more so for domainspecific dictionaries. More involved methods, such as BERT, are more robust to attacks by a generative model like GPT-3. Nevertheless, there might be other ways for adversarial attacks. The approach taken in this paper is, on purpose, rather simple, showcasing the power of current NLP methods to generate adversarial attacks. More elaborated models could potentially make these adversarial models even more powerful. Therefore, this topic should be further explored, especially in light of the information overload that makes AIbased information processing increasingly indispensable.
+17
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+References
+Alzantot, M., Sharma, Y., Elgohary, A., Ho, B.-J., Srivastava, M. and Chang, K.-W.: 2018, Generating natural language adversarial examples, arxiv preprint arxiv:1804.07998.
+Araci, D.: 2019, FinBERT: Financial sentiment analysis with pre-trained language models, arxiv preprint arxiv:1908.10063.
+Benchimol, J., Kazinnik, S. and Saadon, Y.: 2021, Federal reserve communication and the covid-19 pandemic, Covid Economics 79, 218–256.
+Boukes, M., Van de Velde, B., Araujo, T. and Vliegenthart, R.: 2020, What’s the tone? Easy doesn’t do it: Analyzing performance and agreement between off-the-shelf sentiment analysis tools, Communication Methods and Measures 14(2), 83–104.
+Brown, T., Mann, B., Ryder, N., Subbiah, M., Kaplan, J. D., Dhariwal, P., Neelakantan, A., Shyam, P., Sastry, G., Askell, A. et al.: 2020, Language models are few-shot learners, Advances in neural information processing systems 33, 1877–1901.
+Cao, S., Jiang, W., Yang, B. and Zhang, A. L.: 2022, How to talk when a machine is listening: Corporate disclosure in the age of ai, SSRN Working Paper.
+De Franco, G., Shohfi, T., Xu, D. and Zhu, Z. V.: 2022, Fixed income conference calls, Journal of Accounting and Economics p. 101518.
+Devlin, J., Chang, M.-W., Lee, K. and Toutanova, K.: 2018, Bert: Pretraining of deep bidirectional transformers for language understanding, arxiv preprint arxiv:1810.04805.
+Frankel, R., Jennings, J. and Lee, J.: 2022, Disclosure sentiment: Machine learning vs. dictionary methods, Management Science 68(7), 5514–5532.
+Garcia, D., Hu, X. and Rohrer, M.: 2023, The colour of finance words, Journal of Financial Economics 147(3), 525–549.
+Garg, S. and Ramakrishnan, G.: 2020, Bae: BERT-based adversarial examples for text classification.
+Goodfellow, I. J., Shlens, J. and Szegedy, C.: 2014, Explaining and harnessing adversarial examples, arxiv preprint arxiv:1412.6572.
+Hauser, J., Meng, Z., Pascual, D. and Wattenhofer, R.: 2021, Bert is robust! a case against synonym-based adversarial examples in text classification, arxiv preprint arxiv:2109.07403.
+Hazourli, A.: 2022, Financialbert - a pretrained language model for financial text mining, Technical report.
+Henry, E.: 2008, Are investors influenced by how earnings press releases are written?, The Journal of Business Communication (1973) 45(4), 363–407.
+Huang, J., Roberts, H. and Tan, E. K.: 2022, The media and ceo dominance, International
+18
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+Review of Finance 22(1), 5–35.
+Jiang, F., Lee, J., Martin, X. and Zhou, G.: 2019, Manager sentiment and stock returns, Journal of Financial Economics 132(1), 126–149.
+Jin, D., Jin, Z., Zhou, J. T. and Szolovits, P.: 2020, Is Bert really robust? a strong baseline for natural language attack on text classification and entailment, Proceedings of the AAAI conference on artificial intelligence, Vol. 34, pp. 8018–8025.
+Katsafados, A. G., Androutsopoulos, I., Chalkidis, I., Fergadiotis, E., Leledakis, G. N. and Pyrgiotakis, E. G.: 2021, Using textual analysis to identify merger participants: Evidence from the us banking industry, Finance Research Letters 42, 101949.
+Liu, Z., Huang, D., Huang, K., Li, Z. and Zhao, J.: 2020, FinBERT: A pre-trained financial language representation model for financial text mining, in C. Bessiere (ed.), Proceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence, IJCAI-20, International Joint Conferences on Artificial Intelligence Organization, pp. 4513–4519. Special Track on AI in FinTech. URL: https://doi.org/10.24963/ijcai.2020/622
+Loughran, T. and McDonald, B.: 2011, When is a liability not a liability? textual analysis, dictionaries, and 10-ks, The Journal of Finance 66(1), 35–65.
+Ma, Y. and Xu, L.: 2021, Major government customers and stock price crash risk, Journal of Accounting and Public Policy 40(6), 106900.
+Malo, P., Sinha, A., Takala, P., Korhonen, P. J. and Wallenius, J.: 2013, Good debt or bad debt: Detecting semantic orientations in economic texts, CoRR abs/1307.5336. URL: http://arxiv.org/abs/1307.5336
+Morris, J. X., Lifland, E., Lanchantin, J., Ji, Y. and Qi, Y.: 2020, Reevaluating adversarial examples in natural language.
+Papernot, N., McDaniel, P., Swami, A. and Harang, R.: 2016, Crafting adversarial input sequences for recurrent neural networks, MILCOM 2016-2016 IEEE Military Communications Conference, IEEE, pp. 49–54.
+Szegedy, C., Zaremba, W., Sutskever, I., Bruna, J., Erhan, D., Goodfellow, I. and Fergus, R.: 2013, Intriguing properties of neural networks, arxiv preprint arxiv:1312.6199.
+Van Atteveldt, W., Van der Velden, M. A. and Boukes, M.: 2021, The validity of sentiment analysis: Comparing manual annotation, crowd-coding, dictionary approaches, and machine learning algorithms, Communication Methods and Measures 15(2), 121–140.
+Wang, X., Yang, Y., Deng, Y. and He, K.: 2021, Adversarial training with fast gradient projection method against synonym substitution based text attacks, Proceedings of the AAAI Conference on Artificial Intelligence, Vol. 35, pp. 13997–14005.
+Yang, Y., Uy, M. C. S. and Huang, A.: 2020, Finbert: A pretrained language model for financial communications, arxiv preprint arxiv:2006.08097.
+19
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+A Prompting GPT-3
+A.1 Rephrasing sentences to attack keyword-based approaches
+
+1 #for sent , idx in zip(df[((df["KW"] == ’negative ’))&(df[" Sentiment "]==’
+
+negative ’)][’ Headline ’],df[((df["KW"] == ’negative ’))&(df[" Sentiment
+
+"]==’ negative ’)]. index) :
+
+2 for sent , idx in zip(df[((df["KW"] == ’negative’))&(df["Sentiment"]==’
+
+negative’)&(df["KWx"]==’negative’)][’Headline’],df[((df["KW"] == ’
+
+negative ’)) &( df [" Sentiment " ]== ’ negative ’) &( df [" KWx " ]== ’ negative ’) ].
+
+index) :
+
+3 negativewords = toneCntWneg(lmdict ,sent)[2]
+
+4 allWords = []
+
+5 for nw in negativewords:
+
+6
+
+response = openai.Completion.create(
+
+7
+
+model="text -davinci -003",
+
+8
+
+prompt= ["\"\ nQuestion: Generate 30 single -worded synonyms to
+
+the following word and give it as a comma -seperated python list The
+
+synoyms should fit the context of the sentence: " + sent + ’ Avoid
+
+special characters. Word: ’ + nw + " \nAnswer:"],
+
+9
+
+temperature= 0.6,
+
+10
+
+max_tokens= 256,
+
+11
+
+top_p =1 ,
+
+12
+
+frequency_penalty =0 ,
+
+13
+
+presence_penalty =0
+
+14
+
+)
+
+15
+
+new_list = [item.strip() for item in response[’choices’][0][’text’].
+
+split(",")]
+
+16
+
+candidates = []
+
+17
+
+for word in new_list:
+
+18
+
+candidates.append(check(word , lm_neg))
+
+19
+
+newList = list(filter(None , candidates))
+
+20 allWords . append ( newList )
+
+21 response = openai . Completion . create (
+
+22
+
+model="text -davinci -003",
+
+23
+
+prompt= ["\"\ nQuestion: Rephrase the sentence" + str(sent) + "by
+
+substituting the word " + str(negativewords) + " with the best -fitting
+
+finance -related synonym from the following lists , so that the context
+
+, meaning , and grammar is still correct. List:" + str(allWords) + ".
+
+Do not change other negative sounding words. " + "\nAnswer:"],
+
+24
+
+temperature =0.6 ,
+
+25
+
+max_tokens =256 ,
+
+26
+
+top_p =1 ,
+
+27
+
+frequency_penalty =0 ,
+
+28
+
+presence_penalty =0
+
+29
+
+)
+
+30 df [ " Sent Syn x " ][ idx ] = response [ " choices " ][0][ " text " ]
+
+31 print ( allWords )
+
+32 print ( lex ( df [ " Sent Syn x " ][ idx ] ) )
+
+Listing 1: Generating adversarial headlines.
+
+20
+
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+A.2 Keyword generation
+
+In Listing 2, I list the code used in order to generate a keyword list that can be used for a larger-scale analysis, see Listing 3. The whole generated keyword list can be found here, in json-format.
+
+1 # create a dictionary of all the negative words that are part of the LM dictionary
+2 dicts = {} 3 keys = df_nw[’NegWord’].to_list()
+
+4
+
+5k = 0
+
+6 for i in range(len(keys)):
+
+7 if k < 0:
+
+8
+
+k=k+1
+
+9
+
+print(k)
+
+10
+
+continue
+
+11 else :
+
+12
+
+k=k+1
+
+13
+
+print(k)
+
+14
+
+response = openai.Completion.create(
+
+15
+
+model="text -davinci -003",
+
+16
+
+prompt= ["\"\nQuestion: Generate 100 single -worded synonyms
+
+17
+
+for the financial context to the following word.
+
+18
+
+Word: " + str(keys[i]) + " \nAnswer:"],
+
+19
+
+temperature =0.6 ,
+
+20
+
+max_tokens =256 ,
+
+21
+
+top_p =1 ,
+
+22
+
+frequency_penalty =0 ,
+
+23
+
+presence_penalty =0
+
+24
+
+)
+
+25
+
+new_list = [item.strip() for item in response[’choices’][0][’text’].
+
+split(",")]
+
+26
+
+candidates = []
+
+27
+
+for word in new_list:
+
+28
+
+candidates.append(check(word , lm_neg))
+
+29
+
+dicts[keys[i]] = candidates
+
+Listing 2: Generating synonyms with GPT-3 that are not part of the LM dictionary.
+
+A.3 Reformulating sentences
+1 for sent , idx in zip(subsample[’Headline’], subsample.index): 2 negativewords = toneCntWneg(lmdict ,sent)[2] 3 synonymlist = [] 4 # identify the negative words in a given sentence and grab the 5 # synonyms (previously generated with GPT -3)
+21
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+6 for word in negativewords:
+
+7
+
+synonymlist.append(df_syn[df_syn["LM Word"] == word]["Synonyms"].
+
+to_list () )
+
+8 # access GPT -3
+
+9 response = openai.Completion.create(
+
+10
+
+model="text -davinci -003",
+
+11
+
+prompt= ["\"\nQuestion: Rephrase the sentence" + str(sent)
+
+12
+
++ "by substituting the word " + str(negativewords)
+
+13
+
++ " with the best -fitting finance -related synonym from
+
+14
+
+the following lists , so that the context , meaning ,
+
+15
+
+and grammar is still correct. List:" + str(synonymlist) +".
+
+16
+
+Do not change other negative -sounding words. " + "\nAnswer:"],
+
+17
+
+temperature =0 ,
+
+18
+
+max_tokens =256 ,
+
+19
+
+top_p =1 ,
+
+20
+
+frequency_penalty =1 ,
+
+21
+
+presence_penalty =1
+
+22
+
+)
+
+23 df [ " New Sentence " ][ idx ] = response [ " choices " ][0][ " text " ]
+
+Listing 3: Prompting GPT-3.
+
+B Example sentences and adversarial attacks
+Table B.1: Human-annotated examples from the financial phrase bank Malo et al. (2013).
+Sentence: The business to be divested generates consolidated net sales of EUR 60 million annually and currently has some 640 employees. Label: neutral Sentence: Svyturys-Utenos Alus, which is controlled by the Nordic group Baltic Beverages Holding (BBH), posted a 6.1 percent growth in beer sales for January-September to 101.99 million liters. Label: positive Sentence: The Department Store Division’s sales fell by 8.6% to EUR 140.2 mn. Label: negative Sentence: Production capacity will rise gradually from 170,000 tonnes to 215,000 tonnes. Label: positive Sentence: Rautalinko was responsible also for Mobility Services, and his job in this division will be continued by Marek Hintze. Label: neutral Sentence: Circulation revenue has increased by 5% in Finland and 4% in Sweden in 2008. Label: positive Sentence: The changes will take effect on 1 January 2010, and they are not estimated to have an impact on the number of employees. Label: neutral
+22
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+Table B.2: Attacked examples from financial phrase bank. The table reports some representative sentences from the financial phrase bank. I selected only sentences that humans and the keyword-based approach labeled as negative. By KWx, I denote the label given to the attacked sentence by the keyword-based approach. By FB and FBx, I denote the labels given by FinBERT to the original and the attacked sentence, respectively.
+
+Sentence
+
+Attacked Sentence
+
+KWx
+
+FB
+
+FBx
+
+Jan. 6 – Ford is struggling in the face of slowing truck and SUV sales and a surfeit of up-to-date , gotta-have cars . Asian traffic declined by 3.4 per cent . Myllykoski , with one paper plant in Finland , one in the US and three in Germany , had revenues of EUR286m in the first half of 2010 and an operating loss of EUR12m , Reuters said . 2009 3 February 2010 - Finlandbased steel maker Rautaruukki Oyj ( HEL : RTRKS ) , or Ruukki , said today it slipped to a larger-than-expected pretax loss of EUR46m in the fourth quarter of 2009 from a year-earlier profit of EUR45m . In this case , the effect would be negative in Finland . Nokia will certainly disagree with Qualcomm ’s views on the patent situation . The number of bodily injury cases quadrupled in 2000-2006 . In January-June 2010 , diluted loss per share stood at EUR0 .3 versus EUR0 .1 in the first half of 2009 .
+Operating loss totalled EUR 5.2 mn , compared to a loss of EUR 3.4 mn in the corresponding period in 2008-2009 . Operating loss totaled EUR 0.3 mn compared to a profit of EUR 2.2 mn in the corresponding period in 2007 .
+
+Ford is struggling in the face of decelerating truck and SUV sales and a surfeit of up-to-date , gotta-have cars. Asian traffic fell by 3.4 per cent.
+Myllykoski, with one paper plant in Finland, one in the US and three in Germany, had revenues of EUR286m in the first half of 2010 and an operating decrease of EUR12m, Reuters said. Ruukki said today it reversed to a larger-than-expected pretax liability of EUR46m in the fourth quarter of 2009 from a year-earlier profit of EUR45m.
+In this case , the effect would be ruinous in Finland . Nokia will certainly gainsay Qualcomm’s views on the patent situation. The number of affliction cases quadrupled in 2000-2006. In January-June 2010 , diluted reduction per share stood at EUR0 .3 versus EUR0 .1 in the first half of 2009 . Operating drain totalled EUR 5.2 mn, compared to an abatement of EUR 3.4 mn in the corresponding period in 2008-2009. Operating reduction totaled EUR 0.3 mn compared to a profit of EUR 2.2 mn in the corresponding period in 2007.
+
+neutral neutral neutral
+neutral
+neutral neutral neutral neutral neutral neutral
+
+negative negative negative
+negative
+neutral negative negative negative negative negative
+
+negative negative negative
+negative
+negative negative negative negative negative negative
+
+23
+Electronic copy available at: https://ssrn.com/abstract=4337182
+
+Table B.3: Attacked examples from earning calls. The table reports some representative sentences from earning calls for which the keywordbased approach provides a negative sentiment. The original sentences are given under a) and the attacked sentences under b). Also reported are the verdicts for the original and new sentences for the keyword-based approach, FinBERT, and the human intuition of this paper’s author.
+
+Sentence
+
+Keyword FinBERT human
+
+1a) Obviously, we had also the COVID-19 pandemic and certain shortage of labor. 1b) Obviously, we had also the COVID-19 pandemic and certain scarcity of labor.
+
+negative neutral
+
+negative negative
+
+negative negative
+
+2a) And despite significant challenges imposed by a sharp rise in inflation levels, high nat cat losses and ongoing claims from the COVID-19 pandemic, we delivered an excellent result of EUR 2.9 billion. 2b) And despite significant predicaments imposed by a sharp rise in inflation levels, high nat cat reductions and ongoing remunerations from the COVID-19 pandemic, we delivered an excellent result of EUR 2.9 billion.
+
+negative positive
+
+positive positive
+
+positive positive
+
+3a) This is due to mainly three reasons: significantly higher price-driven sales comparing to unchanged absolute EBITDA, resulting in a mathematically lower margin; earnings significantly burdened by higher feedstock prices; and longer-term sales contracts yet presented to fully pass-through prices, reflecting the typical nature of a specialty business. 3b) This is due to mainly three reasons: significantly higher price-driven sales comparing to unchanged absolute EBITDA, resulting in a mathematically lower margin; earnings significantly charged by higher feedstock prices; and longer-term sales contracts yet presented to fully pass-through prices, reflecting the typical nature of a specialty business.
+
+negative neutral
+
+negative negative
+
+negative negative
+
+24
+Electronic copy available at: https://ssrn.com/abstract=4337182
+

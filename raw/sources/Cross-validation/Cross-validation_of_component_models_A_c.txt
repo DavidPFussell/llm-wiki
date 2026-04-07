@@ -1,0 +1,745 @@
+Anal Bioanal Chem (2008) 390:1241–1251 DOI 10.1007/s00216-007-1790-1
+REVIEW
+Cross-validation of component models: A critical look at current methods
+R. Bro & K. Kjeldahl & A. K. Smilde & H. A. L. Kiers
+
+Received: 24 September 2007 / Revised: 28 November 2007 / Accepted: 4 December 2007 / Published online: 24 January 2008 # Springer-Verlag 2007
+
+Abstract In regression, cross-validation is an effective and popular approach that is used to decide, for example, the number of underlying features, and to estimate the average prediction error. The basic principle of cross-validation is to leave out part of the data, build a model, and then predict the left-out samples. While such an approach can also be envisioned for component models such as principal component analysis (PCA), most current implementations do not comply with the essential requirement that the predictions should be independent of the entity being predicted. Further, these methods have not been properly reviewed in the literature. In this paper, we review the most commonly used generic PCA cross-validation schemes and assess how well they work in various scenarios.
+Keywords Overfitting . PRESS . Cross-validation . PCA . Rank estimation
+R. Bro (*) : K. Kjeldahl
+Chemometrics Group, Faculty of Life Sciences, University of Copenhagen, 1958 Frederiksberg C, Denmark e-mail: rb@life.ku.dk
+A. K. Smilde Biosystems Data Analysis (BDA), Swammerdam Institute for Life Sciences, Nieuwe Achtergracht 166, 1018 WV Amsterdam, The Netherlands
+H. A. L. Kiers Heymans Institute (DPMG), University of Groningen, Grote Kruisstraat 2/1, 9712 TS Groningen, The Netherlands
+
+Introduction
+Cross-validation is a standard resampling technique used in many chemometric applications. Results from crossvalidation often simplify the selection of meta-parameters, such as the number of components, and also provide a more realistic basis for residual and influence analysis. However, most of the cross-validation techniques currently used in component analysis have some built-in yet seldom mentioned drawbacks, which can hamper the interpretation of the results.
+The concept of cross-validation was initially proposed by Mosier [1] as a “design” for assessing the effectiveness of model weights, and it has been explored mainly by Stone [2], Geisser [3] and Allen [4]. In 1976 [5] and 1978 [6] Wold laid the foundations for principal component analysis (PCA) cross-validation, a method used to identify the dimensions that best describe the systematic variations in data. Eastment and Krzanowski [7] and Osten [8] later developed an alternative method. Recently Louwerse and co-workers [9] developed several cross-validation procedures, based on the work of Eastment and Krzanowski, for multiway models such as PARAFAC and Tucker.
+In this paper a critical review of current cross-validation techniques for component models is provided, focusing on PCA. Some of the methods described have not been described previously in the literature but have been implemented in commercial software. This paper provides a detailed description of the different implementations of cross-validation. It is important, however, to note that many software companies have included various ad hoc rules for simplifying the decision about the number of components to suggest. The implementations discussed in this paper may differ in these rules. Therefore, it is not a review of
+
+1242
+specific software implementations, but rather a review of generic types of cross-validation schemes.
+The purpose of cross-validation, as described here, is to find a suitable number of components for a PCA model. Suitable implies that the model describes the systematic variation in the data and preferably not the noise. The noise can be loosely defined as any specific variation in a measurement which is not correlated with any other variation in the measured data. Thus, the aim is to find the number of components for which adding more components does not provide a better (in an overall least squares sense) description of the data not previously included. In this paper, as well as in the actual implementations of cross-validation, it will be assumed that the residuals are not correlated across samples or variables.
+Theory
+In this section six cross-validation methods are described. Four of these are commonly used in software, while two additional ones are new proposals aimed at overcoming some of the potential problems with the currently used techniques. Some of the current methods have been described in the literature previously, but none of them have been compared to each other in detail. In the following, no mention will be made of preprocessing, but it is assumed that an appropriate preprocessing process is applied before the analysis. In fact, preprocessing should ideally be incorporated into the cross-validation scheme, but to simplify the descriptions we have deliberately chosen to look at models where no preprocessing is required. The results presented will generalize to include preprocessing.
+Row-wise cross-validation
+This approach illustrates a cross-validation scheme similar to the one used in the UNSCRAMBLER software (CAMO; [10, 11]). A PCA model is sought for a data matrix X, and in this approach each individual segment, consisting of a defined number of whole samples, is left out in turn. In this investigation, the segment will be restricted to one object (one row of X); hence this is termed “leave-one-out crossvalidation.” For a maximum number of components F, the following procedure is applied:
+For number of factors, f=1,...,F
+(1) for left-out sample(s) (or rows when more than one row is left out) i=1,...,I (a) Split X (I×J) into X(−i) and (xi)T, where X(−i) holds all rows except the ith, and (xi)T is a row vector containing only the ith row.
+
+Anal Bioanal Chem (2008) 390:1241–1251
+
+(b) Fit a PCA model to X(−i) by solving min XðÀiÞ À TðÀiÞP f ðÀiÞT 2 ð1Þ
+where kk2f defines the squared Frobenius norm, PðÀiÞT PðÀiÞ ¼ I, and TðÀiÞ; PðÀiÞ are of dimension (I−1) × f and J×f, respectively, where J is the number of variables. (c) Project xi onto the loadings and find the scores of the left-out sample as ÀtiÁT ¼ ÀxiÁT PðÀiÞ ð2Þ
+
+(d) Determine the residual variation of xi as
+
+ðeiÞT ¼ ðxiÞT À ðbxiÞT
+
+¼ ðxiÞT À ðtiÞT PðÀiÞT
+
+ð3Þ
+
+¼ ðxiÞT À ðxiÞT PðÀiÞPðÀiÞT
+
+(2) Collect all residuals in E (I×J×F); one I×J matrix for each number of components
+(3) Calculate mean residual validation variance and correct for the degrees of freedom, resulting in the mean predicted residual sum of squares (MPRESS):
+
+1 XI XJ
+
+MPRESSð f Þ ¼
+
+eijf2
+
+ð4Þ
+
+IðJ À f Þ
+
+Characteristics of row-wise cross-validation
+Equations 2 and 3 show that the left-out data xi are used to find the model of xi. Consequently, the residuals from the model of xi are not independent of xi, which will result in overfitting; i.e., the more components there are, the smaller the residuals. This is not appropriate because the whole idea of cross-validation is to avoid overfitting by estimating the model independently from the data to be modeled. The numerator in Eq. 4 is meant to correct for this overfitting, but the underlying assumptions and hence validity of this correction are not clear.
+Another characteristic of the row-wise cross-validation is that it enables the assessment of different types of samplespecific errors. For example, by leaving out only one replicate in each segment the repeatability can be assessed, and by leaving out all replicates or possibly samples of, say, a given day of analysis, the reproducibility can be assessed.
+Cross-validation of Wold
+The cross-validation method for PCA proposed by Wold [6] relies on the special property of the NIPALS [12] algorithm to cope with a moderate amount of randomly missing data. In this cross-validation method a selected sequence of
+
+Anal Bioanal Chem (2008) 390:1241–1251
+
+1243
+
+: Missing in 1st segment : Missing in 2nd segment
+
+Fig. 1 The pattern of missing values used in Wold cross-validation for K=7
+
+individual elements xij are left out in a diagonal pattern and are regarded as “missing values.” A model is fitted to the remaining data, and the fit of the model to the left-out elements is calculated. The user has to choose the number of segments, K. For the kth (k=1,...,K) segment, the element numbers k, k+K, k+2K, etc., of the complete data set are set to missing. The counting of elements is performed rowwise (see Fig. 1). In this way, upon completing K segments, all elements will have been left out once. The default number of segments in commercial software is often seven, and this number is also used here. This cross-validation approach used to be implemented in the SIMCA software, but a different proprietary method is currently used.
+In this method one component is validated at a time. If the first component is judged to be valid it is subtracted from the full data set, and only the residuals are then used to test whether the next component is valid.
+The cross-validation method can formally be described as follows. For a data matrix X (I×J) a PCA model is sought. For the component, f, to be validated, the following procedure is applied. For factor f
+
+(1) Let X( f ) be the residuals after f−1 components, i.e., initially X(1)=X and subsequently X( f ) is the residual matrix E( f−1) found in step 6.
+(2) Calculate the sum of squared elements of X( f ):
+
+XI XJ
+
+SSxð f Þ ¼
+
+xij2ð f Þ
+
+ð5Þ
+
+(3) For the left-out segment k=1,...,K
+(A) Split data X( f ) into X(−k)( f ) and X(k)( f ), where X(−k)( f ) holds all observations except the elements in the kth segment and X(k)( f ) holds only those.
+(B) Estimate the next principal component (t(−k), p(−k)) by fitting to X(−k)( f ) with the NIPALS
+algorithm. (C) Calculate the model of X(k)( f ) using
+
+bxijð f Þ ¼ tiðÀkÞpjðÀkÞ ð6Þ
+
+(4) Find the total PRESS,
+
+XI XJ
+
+XI XJ À
+
+Á2
+
+PRESSð f Þ ¼
+
+eij2ð f Þ ¼
+
+xijð f Þ À bxijð f Þ
+
+ð7Þ
+(5) Form the ratio R
+Rð f Þ ¼ PRESSð f Þ ð8Þ SSxð f Þ
+R<1 indicates that the predictions are improved with the inclusion of the last component ( f ). If R>1, the component did not improve the prediction errors. Hence, the appropriate number of components is f−1. Note that instead of using this specific rule, it is also possible to use alternatives, such as looking for the minimal PRESS, etc. (6) Fit a PCA model (t, p) to the complete data set X( f ) with one component. Determine the residual variation as E( f )=X( f )−tpT (7) Increase f by 1 and go back to step (1).
+
+Characteristics of Wold’s cross-validation
+Wold’s cross-validation scheme provides both a way to calculate PRESS by a specific leave-out pattern and a criterion for the selection of the number of components.
+From step (3) it can be seen that the cross-validation of component f is based on a model where the first f−1 components are estimated from the complete data set and only component f is estimated on a segmented basis. This means that, when leaving out elements, the estimates of these left-out elements bxij depend on the f−1 component PCA model, where xij was included. Hence, the left-out elements and their predicted values are not independent and overfitting can be expected.
+Cross-validation of Eastment and Krzanowski (EK)
+In 1982, Eastment and Krzanowski [7] suggested an approach that could be used to choose a feasible number of components in PCA. The incentive was to create a crossvalidation approach that ensured that each data point was not used at both the prediction and the assessment stages, thus avoiding problems with overfitting. The approach intends to use as much of the original data as possible in order to predict a left-out element for each possible choice of factors f=1,...,F (i=1,...,I and j=1,...,J).
+In order to ensure that the residuals are independent of the data element being predicted, the following scheme is adopted. For each combination of i (1,...,I) and j (1,...,J), one PCA model is fitted to X(−i) and another PCA model is
+
+1244
+
+fitted to X(−j); that is, they are fitted to the data with row i left out and to the data with column j left out. The PCA models are represented as singular value decompositions:
+
+xðÀiÞ ¼ UðÀiÞSðÀiÞVðÀiÞT ð9Þ
+
+and
+
+xðÀjÞ ¼ UðÀjÞSðÀjÞVðÀjÞT
+
+ð10Þ
+
+In Fig. 2, a graphical representation of the data for the PCA model of X(−i) is provided, where the gray area
+designates the part of the data (row i), not the part of the model. Similarly, the model of X(−j) is created by excluding
+the elements in column j. It is apparent from Fig. 2 that the parameters in V(−i) and
+S(−i) are not influenced by sample i. Likewise U(−j) is not
+influenced by the jth column of X. From the model in the figure, the “loadings” in V(−i) do not provide the means to predict sample i. However, the scores in U(−j) which are
+independent of variable j also contain scores for the ith
+sample. Hence, by combining the two models, an estimate
+of element xij can be obtained which is independent of the value in xij. The crucial aspect of this approach is deciding how to combine the two models into one estimate.
+Eastment and Krzanowski [7] suggest using the following
+combination of the two models
+
+Xf
+
+qﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃqﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+
+bxijð f Þ ¼ uðÀ1Þ i ð f Þ sðÀjÞð f Þ sðÀiÞð f ÞvðÀiÞ j ð f Þ ð11Þ
+
+The square roots of the two sets of singular values are used to accommodate for the possible differences in their magnitudes. Some attention is required to avoid problems with sign indeterminacies that can occur when matching two different models. This sign incompatibility is mended by what Eastment and Krzanowski called a “parity check,” where the products of component scores and loadings, per component, are given the same sign as the corresponding product of the component scores and loadings found for the full data.
+
+Fig. 2 Eastment–Krzanowski (EK) cross-validation. Data for one of two submodels is obtained by leaving out element xij. Likewise, the jth column of X is left out, whereby X(−j), U(−j), S(−j) and V(−j) are obtained
+
+Anal Bioanal Chem (2008) 390:1241–1251
+
+The MPRESS( f ) expresses the mean difference between the actual and the predicted value:
+
+1 XI XJ À
+
+Á2
+
+MPRESSð f Þ ¼
+
+bxijð f Þ À xij
+
+ð12Þ
+
+IJ
+
+In order to determine the number of components, Eastment and Krzanowski introduced a diagnostic called W, which compares the gain in MPRESS between two levels of model complexity:
+
+W ð f Þ ¼ MPRESSðf À 1Þ À MPRESSð f Þ Ä MPRESSð f Þ
+
+Dfitð f Þ
+
+Drð f Þ
+
+ð13Þ
+
+where Dfitð f Þ ¼ I þ J À 2f is the number of degrees of freedom lost in fitting the fth component and Dr( f ) is the number of degrees of freedom remaining after fitting f components. Prior to modeling, and with no centering, Dr
+Pf ( f )=IJ, so after fitting f factors Drð f Þ ¼ IJ À 1 ðI þ J À 2f Þ. Originally [7], Eastment and Krzanowski suggested that the factor f should be included as long as W( f )>1; this
+threshold was later modified to a value of 0.9 by Krzanowski
+[13].
+
+Characteristics of the Eastment and Krzanowski cross-validation
+
+The rationale behind the Eastment and Krzanowski (EK) approach is that the two PCA models can be combined. The authors [7] argue that this is possible because the PCA model is unique. However, the conclusion that the models are comparable due to this uniqueness is based on a misunderstanding. It is true that the PCA model is unique and hence the same solution is obtained every time the model parameters are estimated from one particular data set. However, if the parameters are found from different subsets, then different parameters are generally found.
+As an example, consider a situation where there are two components in a data set. In one set of samples, it is mainly one phenomenon that is present; hence a PCA model will primarily reflect this phenomenon in its first loading. Another subset primarily reflects the second phenomenon, and hence a PCA model would primarily reflect the second phenomenon in its first component. Therefore, even in the absolutely noise-free case, the uniqueness of the PCA model does not imply anything at all with respect to whether the same components of different models can be compared. The components in a bilinear model have rotational freedom. Uniqueness is obtained in PCA by adding restrictions (orthogonality, maximum variance per component). These additional constraints will affect PCA models of different subsets differently and will not yield, for example, the same first
+
+Anal Bioanal Chem (2008) 390:1241–1251
+
+loading vector when models are fitted to comparable but
+
+different subsets of data. As expected, and as seen in the
+
+simulation study below, this problem is most pronounced
+
+for small amounts of data.
+
+An additional, possibly minor, problem relates to the
+
+parity check.The parity check is simple, but it is a source of
+
+overfitting because it implies that the sign of the prediction
+
+is chosen using information from the data element that was
+
+excluded.
+
+Louwerse et al. [14] note that EK’s estimates of xij, bxij, are biased because the matrices S(−i) and S(−j) systemati-
+
+cally underestimate S. On averagpe,ﬃﬃﬃtﬃhﬃﬃﬃiﬃsﬃﬃﬃﬃbﬃﬃiﬃaﬃﬃﬃs is eliminated
+
+by
+
+correcting S(−i) by a pﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+
+factor
+
+of
+
+I =ðI À 1Þ and S(−j) by a
+
+factor of J =ðJ À 1Þ [19].
+
+Cross-validation by Eigenvector
+
+This approach illustrates a cross-validation scheme similar to the one used in the PLS_Toolbox software (Eigenvector) [15]. In this approach, PCA models are calculated with one or several samples left out and then the model is used to predict estimates of the left-out samples [16]. Assume, without loss of generality, that leave-one-out cross-validation is used. A PCA model is determined from the I−1 remaining samples. For the left out sample, each variable is predicted independently through the following procedure. First a score value for the left-out sample is estimated in a least squares sense using the J−1 remaining variables of that sample and the PCA model where the jth row of the loading matrix has been excluded. This score value combined with the PCA loading matrix with all variable loadings included gives an estimate of the kept-out element xij. In essence, this is a missing data problem where the missing variable is predicted from the model and the sample observation excluding the one variable [16].
+
+(1) Leave out one or several samples and calculate a PCA
+model (T, P) on the remainder.
+(2) For each factor f=1,...,F, for the left-out sample(s) i=1,...,I, then (a) for the left-out variable(s) j=1,...,J:
+
+(i) Estimate the score as
+
+ðÀjÞT
+
+ðÀjÞT ðÀjÞ ðÀjÞT ðÀjÞÀ1
+
+t ¼ xi P P P
+
+;
+
+where P(−j) is the loading matrix P found in step 1 with the jth row excluded. xiðÀjÞT is a row vector containing the ith row of x except for the jth
+element. (ii) Estimate the element x(ij) as bxijð f Þ ¼ tðÀjÞpTj ,
+where pj is the jth row of p (iii) Find the prediction error of the (i,j)th element
+eijð f Þ ¼ xij À bxijð f Þ
+
+1245
+
+(b) Estimate
+
+XI XJ À
+
+Á2
+
+PRESSð f Þ ¼
+
+eijð f Þ
+
+ð14Þ
+
+Characteristics of Eigenvector’s cross-validation
+In contrast to the other methods, the PRESS values estimated with Eigenvector’s method are actually independent from the predicted elements. Furthermore, the Eigenvector method, like the row-wise method, possesses the advantage that sample-specific error measures such as repeatability and reproducibility can be calculated based on leaving out samples in different patterns. The least squares element of the method requires that variables are correlated, and thus it is particularly suited to “spectral type” data.
+EM cross-validations
+Some of the cross-validation techniques mentioned so far display two significant problems. Either overfitting is introduced, because the model with which left-out elements are predicted is not independent of the left-out elements, or an unintended additional error is introduced because the rationale behind the method is not correct. Both of these problems can be eliminated though, by properly designing the cross-validation procedure as outlined below. The two suggested methods are called expectation maximization (EM) approaches in the following, because the remedies suggested are special cases of EM [17].
+Cross-validation based on an improved Wold procedure (EM-Wold)
+A revised cross-validation approach based on the Wold [6] procedure is presented that removes the problem with the original method by estimating all components simultaneously for each segment. Then, however, the NIPALS approach for handling missing values is no longer feasible, as this is only optimal for one-component models. Instead, the full PCA models are calculated for each number of components using imputation, as described by Kiers and Bro [18, 19]. Unlike NIPALS, such an approach can calculate several-component PCA models in a true least squares sense even when data elements are missing. The price paid for this is that the estimation depends on the number of components, and hence solutions must be calculated anew for each number of principal components. The procedure is as follows. For factors f=1,...,F
+(1) For left-out element k=1,...,IJ (A) Split data into X(−k) and x(k), where X(−k) holds all data except the kth element xk.
+
+1246
+(B) Fit a PCA model to X(−k) by solving min XðÀkÞ À TP f T 2 ð15Þ
+(C) Find the model of the whole data set as Xbð f Þ ¼ TPT (D) Determine the residual of the left-out element as
+ekð f Þ ¼ xk À bxkð f Þ (E) Calculate PRESS( f )
+1 2 kX ¼IJ PRESSð f Þ ¼ IJ ðekð f ÞÞ ð16Þ
+As can be seen, the prediction of the left-out element is independent of the left-out element, and no additional error is introduced by the estimation method because the PCA model is estimated in a least squares sense (Eq. 15). Algorithms for estimating the model with missing data in a least squares sense are readily available, as described in the literature [18, 19].
+Cross-validation based on an improved Eastment and Krzanowski procedure (EM-EK)
+It is also possible to correct the procedure of Eastment and Krzanowski [7] to take the rotation problems into account. This correction consists of a simple remedy before matching the scores and loadings. The assumption in the Eastment and Krzanowski [7] approach is that for a given left-out element, xij, the model of the element is defined by the subspaces given by U(−j) and V(−i). However, the scale
+
+Anal Bioanal Chem (2008) 390:1241–1251
+
+and rotation is not defined immediately. In order to define those, a model based on U(−j) and V(−i) is found to
+maximize the fit to the data that have not been left out.
+This is done through an iterative procedure where the model of X(−ij) is determined from
+
+  þ   þT
+
+Xb ¼ UðÀjÞ UðÀjÞ
+
+XðÀijÞ VðÀiÞ VðÀiÞ
+
+ð17Þ
+
+Hence, we obtain a projection onto the spaces spanned by the given scores and loadings without assuming that the columns of these are pairwise-matched. As the element xij in X(−ij) is missing, the above cannot be calculated immediately. Rather, iterative imputation is used to deal with the missing data in the following way. The missing element is initially replaced with its original value. Other values can also be used, but convergence is typically fastest when the original value is used. Note though that the original value does not affect the actual solution; it only provides an initial estimate. Subsequently, the missing element is replaced with the estimate from Eq. 17 and the procedure is repeated until the missing element does not change significantly. Upon convergence, an estimate of the missing element is obtained which is in the same subspace as that dictated by the Eastment and Krzanowski [17] approach, but where the scaling and rotation ambiguities have been resolved. In essence, this is missing data imputation by expectation maximization [17].
+
+Fig. 3 Low and high correlation between underlying features in two rank-three data sets. Left: corr=0.0, right: corr=0.9
+
+0.2 0.15
+0.1 0.05
+0 -0.05
+-0.1 -0.15
+-0.2 -0.25 0
+
+0.1 0.05
+0 -0.05
+-0.1 -0.15
+-0.2 50 100 -0.250
+
+50
+
+100
+
+Anal Bioanal Chem (2008) 390:1241–1251
+
+1247
+
+Selection of the number of components
+The series of f-dependent PRESS values obtained from the cross-validation form the basis for choosing the optimal number of components. The row-wise and Eigenvector crossvalidations leave it up to the user to choose the number of components, whereas Wold and EK provide explicit ways to select components through the R and W statistics. Alternatively, one may simply choose the number of components representing either the global minimum PRESS value or the first local minimum PRESS. The latter approach is often used in practice. In the following we have applied all of these four different criteria to all methods in order to assess the influence of the selection method. It is worth noting that in many real applications of PCA, visual interpretation of the crossvalidation results is used as an important guide when selecting the right number of components. However, this is not important in this study, where the focus is on the extent to which cross-validation provides consistent results in general.
+
+Hence automated selection of the number of components is the only criterion used.
+Simulation and discussion
+The capability of the six cross-validation methods described above was examined by performing a simulation study. Datasets of rank one, three or five containing either 10 or 100 variables and either 10, 100 or 300 samples were created and homoscedastic noise was added at a level of either 1 or 10%. For the rank three and five datasets, correlation between underlying loadings was set to either 0, 0.3 or 0.9. Figure 3 illustrates how low and high correlations are reflected in the data structure. All combinations of these parameters sum to 84 different dataset configurations. The rank-one data cannot be set to have different correlations between loading vectors as there is only one loading vector, and so correlations were not varied
+
+Row-wise
+
+50 0
+
+Wold
+
+50 0
+
+EK
+
+50 0
+
+EM Wold Eigenvector
+
+50 0
+
+50 0
+
+EM EK
+
+50
+
+0 -6 -4 -2 0 2 4 6
+
+-6 -4 -2 0 2 4 6
+
+-4 -2 0 2 4 6 Z
+
+-4 -2 0 2 4 6 Z
+
+GlobalMin
+
+LocalMin
+
+W
+
+R
+
+Fig. 4 Distributions of deviations from reference rank for method–criterion combinations. The reported numbers are the percentage of models
+
+with a given deviation from the reference rank. Negative values correspond to underfitted and Z = zero components assigned
+
+1248
+
+Anal Bioanal Chem (2008) 390:1241–1251
+
+for rank-one data. Ten different datasets were created for each configuration, and all 840 datasets were subjected to rank estimation by each of the six PCA cross-validation approaches, resulting in a total of 5040 runs.
+Since no offset was included in the data, all PCA modeling was performed without the use of mean centering (or any other preprocessing). Eight principal components were calculated for each dataset and PRESS or MPRESS values calculated as described above. The cross-validation algorithms were implemented according to the descriptions above; Wold’s using seven segments, row-wise and Eigenvector using leave-one-out crossvalidation. For comparative purposes, success rates were calculated on the basis of a binary (correct/incorrect) comparison of the selected number of components and the known rank of the dataset. The number of components was selected by the following four criteria:
+(A) Minimum (M)PRESS (B) Wold’s R criterion (see Eq. 8). If R(F=1)>1 the result
+is zero components. (C) Krzanowski’s W criterion (see Eq. 13). If no W values
+were found to exceed 0.9 the result is zero components.
+
+(D) The choice of the first local minimum value of (M) PRESS was also investigated, but a clear result was not obtained and so this was kept out of the following.
+Result of simulations
+Figure 4 evaluates the cross-validation methods and criteria across noise, correlation, and number of samples and variables. It shows that W and R are the criteria best suited to the Wold and Row-wise methods, but they tend to provide conservative rank estimates. The simplest criterion, GlobalMin, is not useful for Wold’s method, but it is very well suited to the EK, Eigenvector and EM methods, although it has a tendency to result in overfitting in the EK case. In the following, the row-wise and Wold methods are used in combination with the W criterion, whereas GlobalMin is used with the remaining methods.
+It was expected that higher noise and higher correlation would present greater challenges to the cross-validatory rank estimation. Figure 5 suggests that this may be valid for the correlation part, whereas—with the noise levels at play here—a high noise level is only critical if correlation is also
+
+Fig. 5 The influence of noise and correlation level on the success rate in rank estimation. Marker size and color reflect success rate (%), which was determined using the best criteria for each method
+
+Correlation
+
+Correlation
+
+Row-wise %correct
+
+100
+
+0.9
+
+0.9
+
+80
+
+0.6
+
+0.6
+
+60
+
+Wold
+
+%correct 100 0.9
+80
+0.6 60
+
+EK
+
+%correct
+
+100
+
+80
+
+60
+
+0.3
+
+40
+
+0.3
+
+40
+
+0.3
+
+40
+
+20 0
+0.01 0.05 0.1
+
+20 0
+0.01 0.05 0.1
+
+20 0
+0.01 0.05 0.1
+
+Eigenvector %correct
+
+EM Wold %correct
+
+100
+
+100
+
+0.9
+
+0.9
+
+0.9
+
+80
+
+80
+
+0.6
+
+0.6
+
+0.6
+
+60
+
+60
+
+EM EK
+
+%correct 100
+
+80
+
+60
+
+0.3
+
+40
+
+0.3
+
+40
+
+0.3
+
+40
+
+20 0
+0.01 0.05 0.1 Noise level
+
+20 0
+0.01 0.05 0.1 Noise level
+
+20 0
+0.01 0.05 0.1 Noise level
+
+Anal Bioanal Chem (2008) 390:1241–1251
+
+Table 1 Overall success rates for each tested cross-validation method using the optimal criterion and excluding extreme noise and correlation combinations
+
+Method
+
+Success rate (%)
+
+Row-wise
+
+38
+
+Wold
+
+49
+
+EK
+
+34
+
+Eigenvector
+
+72
+
+EM Wold
+
+65
+
+EM EK
+
+81
+
+high, in which case all methods fail. In Table 1, Fig. 4 and Fig. 6 the (noise,correlation)=(10%, 0.9) cases have been excluded. Intrinsically, the rank-one configurations did not contain these critical combinations, and all methods performed well for rank-one data, irrespective of the noise level and the number of samples and variables.
+According to Fig. 6, a higher number of samples improves the results slightly, whereas the number of variables seems to have a considerably greater impact. The EK method in particular performs poorly for a low number of samples and/or variables, but the row-wise and Wold methods also require many variables and samples to provide reliable results. For an insufficient number of variables (and samples) it is no longer clear which criterion to use. The percentages in Figs. 5 and 6 and in Table 1 are
+
+1249
+of course based on sample estimates. Ninety-five percent confidence intervals will be at most ±3.7% around the results in Table 1, and ±9.0% around the results in Figs. 5 and 6. Hence our main findings remain if we take into account the ranges of these confidence intervals.
+Although also influenced by the matrix size, the EM EK, EM Wold and Eigenvector methods are clearly the best at handling relatively small datasets, and GlobalMin is consistently (across settings) the best criterion to use for these methods. Each cross-validation method obtained an overall success rate as listed in Table 1.
+A short comment is given on computational aspects. These were not the focus of this study, and so intensive code optimization was not undertaken. Figure 7 shows how the computer time was spent during the simulations; clearly, the EM methods are very computationally intensive. Inherently calculation time increases rapidly with number of elements for these methods. It should be noted that eight principal components were calculated for all datasets, which disagrees slightly with the original outline of Wold’s method.
+Real data: UV-VIS
+A set of real process data was subjected to crossvalidation by the six methods. The data consist of UVVIS spectra for eight batches of the two-step chemical reaction of 3-chlorophenylhydrazonopropane dinitrile
+
+Fig. 6 The influence of the number of variables and samples on the success rate in rank estimation. Marker size and color reflect success rate (%)
+
+No. Samps
+
+Row-wise
+
+%correct
+
+Wold
+
+%correct
+
+EK
+
+100
+
+100
+
+300
+
+300
+
+300
+
+80
+
+80
+
+200
+
+60 200
+
+60 200
+
+100
+
+10
+
+10 50
+
+100
+
+40 100
+
+20
+
+10
+
+10 50
+
+100
+
+40 100
+20
+10 10 50
+
+%correct 100 80 60 40 20
+100
+
+No. Samps
+
+Eigenvector
+
+%correct 100
+
+300
+
+300
+
+80
+
+EM Wold
+
+%correct 100
+300 80
+
+EM EK
+
+%correct 100
+80
+
+200
+
+60 200
+
+60 200
+
+60
+
+40
+
+40
+
+40
+
+100
+
+100
+
+100
+
+20
+
+20
+
+20
+
+10
+
+10 50
+
+100
+
+No. Vars
+
+10
+
+10 50
+
+100
+
+No. Vars
+
+10
+
+10 50
+
+100
+
+No. Vars
+
+1250
+
+80
+
+70
+
+60
+
+% of total cpu time
+
+50
+
+40
+
+30
+
+20
+
+10
+
+0 Row-wise Wold
+
+EK Eigenvector EM Wold EM EK
+
+Fig. 7 Computational times for the six methods
+
+with 2-mercaptoethanol to form 3-chlorophenyl-hydrazonocyanoacetamide and the byproduct ethylene sulfide [20]. Prior to analysis, the original dataset was reduced by extracting every ninth object and every second variable, resulting in 31 samples and 201 variables.
+Figure 8 shows the PRESS patterns obtained for crossvalidations of the batch 4 dataset, and since little variation was found between batches, this is representative of the differences between the methods. All PRESS patterns show a decrease for three principal components, but after that the picture differs. The row-wise method displays a gradual decrease in PRESS as more components are added. The result for Wold’s method looks similar, but for most of the batches (five of eight) a very small PRESS increase was
+
+Anal Bioanal Chem (2008) 390:1241–1251
+detected for four principal components. Wold’s method is the only one which had some noticeable batch differences (not shown).
+The EK method evaluated by the GlobalMin diagnostic consistently suggests eight components. However, by using the W criterion which was originally associated with the method, we find that three components are suggested for all batches.
+Eigenvector’s method suggests three principal components in six of eight batches and four in the remainder. Again, a steep decrease in PRESS is observed for three components, but a clear increase in PRESS is also observed following the suggested number of components, making the manual choice of model complexity relatively simple. This quality is even more pronounced for the EM Wold method, which consistently suggests three principal components throughout the eight batches.
+The other EM method, EM EK, displays a local PRESS minimum for three components, but the global minimum is observed at six components. This slightly “bumpy” behavior of the PRESS pattern after three components is found to a greater or lesser extent in the results of all eight batches. Nevertheless, three components is suggested for four of the batches, and only the example in Fig. 8 suggests that as many as six components should be included.
+The figure illustrates the fact that rank estimation by crossvalidation consists of two parts: (A) formation of a PRESS sequence and (B) selection of the optimal model based on (A). The main focus of this study has been (A); however, it has been necessary to automate (B) through the use of the criteria described in this paper in order to summarize the results of the
+
+Row-wise
+1 0.5
+0 EK
+4 2 0
+EM Wold
+
+Wold 1 0.5 0
+Eigenvector
+1 0.5
+0 EM EK
+
+1
+
+1
+
+0.5
+
+0.5
+
+0 1 23 45 67 8
+
+0 1 23 45 67 8
+
+Fig. 8 Real data: PRESS patterns obtained by cross-validation of UV-VIS batch-4 data. The abscissa represents the number of principal components
+
+Anal Bioanal Chem (2008) 390:1241–1251
+
+1251
+
+simulation. Many experienced users would probably choose to select three components based on any (or most) of the bar plots in Fig. 8, but with greater confidence for the EM Wold than for, say, the row-wise pattern. As for the simulations here, it is clear that for the less experienced user or for an automated selection, the choice of method greatly affects the resulting PRESS values.
+Conclusion
+There are many approaches that can be used to perform cross-validation of PCA models. However, few of them are trivial extensions of the original idea of cross-validation, and therefore the question of whether they provide meaningful results remains to be shown thoroughly in practice. In this paper, the different approaches have been described and their seldom-mentioned deficiencies have been highlighted. When tested on simulated “spectral type” data, theoretical weaknesses and method performance could be linked. In terms of accuracy in rank estimation, the Eigenvector and EM methods in combination with the GlobalMin criterion outperform the other methods under most circumstances, and were particularly superior in cases involving few variables and samples. Considering computational effort too, the Eigenvector method represents a very good choice based on the results of this study.
+
+References
+1. Mosier C (1951) Educ Psychol Meas 11:5–11 2. Stone M (1974) J Roy Stat Soc B 36:111–148 3. Geisser S (2000) Biometrika 61:101–107 4. Allen D (1974) Technometrics 16:125–127 5. Wold S (1976) Pattern Recogn 8:127–139 6. Wold S (1978) Technometrics 20:397–405 7. Eastment HT, Krzanowski WJ (1982) Technometrics 24:73–77 8. Osten D (1988) J Chemom 2:39–48 9. Louwerse D, Kiers H, Smilde A (1999) J Chemom 13:491–510 10. Martens H, Martens M (2001) Multivariate analysis of quality: an
+introduction. Wiley, Chichester, UK 11. Martens H, Næs T (1989) Multivariate calibration. Wiley,
+Chichester, UK 12. Wold H (1975) Quantitative sociology. In: Blalock H, Aganbegian
+A, Borodkin F, Boudon R, Capecchi V (eds) International perspectives on mathematical and statistical modeling. Academic Press, New York, pp 307–357 13. Krzanowski WJ (1983) J Stat Comput Simul 18:299–314 14. Louwerse D, Kiers H, Smilde A (1997) Internal Report 8:1–6 15. Wise B, Gallagher N, Bro R, Shaver J (2003) PLS Toolbox 3.0. Manson, WA 16. Wise B, Ricker N (1991) In: Najim K, Dufour E (eds) IFAC Symp on Advanced Control of Chemical Processes, Toulouse, France, 14–16 October 1991, pp 125–130 17. Dempster A, Laird N, Rubin D (1977) J Roy Stat Soc B 39:1–38 18. Bro R (1998) Multi-way analysis in the food industry. Models, algorithms, and applications. Ph.D. Thesis, University of Amsterdam, Amsterdam (see http://www.models.life.ku.dk/research/theses. Accessed 2 Jan 2007) 19. Kiers H (1997) Psychometrika 62:251–266 20. Bijlsma S, Boelens H, Smilde A (2001) Appl Spectrosc 55:77–83
+
+View publication stats
+

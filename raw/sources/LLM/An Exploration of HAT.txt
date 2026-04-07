@@ -1,0 +1,823 @@
+An Exploration of Hierarchical Attention Transformers for Efﬁcient Long Document Classiﬁcation
+Ilias Chalkidis∗† Xiang Dai ‡ Manos Fergadiotis Prodromos Malakasiotis Desmond Elliott †
+† Department of Computer Science, University of Copenhagen, Denmark † CSIRO Data61, Sydney, Australia
+Department of Informatics, Athens University of Economics and Business, Greece Pioneer Centre for AI, Copenhagen, Denmark
+
+arXiv:2210.05529v1 [cs.CL] 11 Oct 2022
+
+Abstract
+
+Non-hierarchical sparse attention Transformerbased models, such as Longformer and Big Bird, are popular approaches to working with long documents. There are clear beneﬁts to these approaches compared to the original Transformer in terms of efﬁciency, but Hierarchical Attention Transformer (HAT) models are a vastly understudied alternative. We develop and release fully pre-trained HAT models that use segment-wise followed by crosssegment encoders and compare them with Longformer models and partially pre-trained HATs. In several long document downstream classiﬁcation tasks, our best HAT model outperforms equally-sized Longformer models while using 10-20% less GPU memory and processing documents 40-45% faster. In a series of ablation studies, we ﬁnd that HATs perform best with cross-segment contextualization throughout the model than alternative conﬁgurations that implement either early or late cross-segment contextualization. Our code is on GitHub: https://github.com/coast alcph/hierarchical-transformers.
+1 Introduction
+Long Document Classiﬁcation is the classiﬁcation of a single long document typically in the length of thousands of words, e.g., classiﬁcation of legal (Chalkidis et al., 2022) and biomedical documents (Johnson et al., 2016), or co-processing of long and shorter chunks of texts, e.g., sequential sentence classiﬁcation (Cohan et al., 2019), documentlevel multiple-choice QA (Pang et al., 2021), and document-level NLI (Koreeda and Manning, 2021).
+One approach to working with long documents is to simply expand standard Transformer-based language models (BERT of Devlin et al. (2019), RoBERTa of Liu et al. (2019), etc.) but this is problematic for long sequences, given the O(N 2)
+∗Corresponding author: ilias.chalkidis[at]di.ku.dk
+
+Figure 1: Performance - Efﬁciency trade-off for HAT and Longformer on downstream tasks.
+self-attention operations. To address this computational problem, researchers have introduced efﬁcient Transformer-based architectures. Several sparse attention networks, such as Longformer of Beltagy et al. (2020), or BigBird of Zaheer et al. (2020), have been proposed relying on a combination of different attention patterns (e.g., relying on local (neighbor), global and/or randomly selected tokens). Another approach relies on Hierarchical Attention Transformers (HATs) that use a multilevel attention pattern: segment-wise followed by cross-segment attention. Ad-hoc (partially pretrained), and non-standardized variants of HAT have been presented in the literature (Chalkidis et al., 2019; Wu et al., 2021; Chalkidis et al., 2022; Liu et al., 2022; Dai et al., 2022), but the potential of such models is still vastly understudied.
+In this work, we examine the potential of fully (end-to-end) pre-trained HATs and aim to answer three main questions: (a) Which conﬁgurations of segment-wise and cross-segment attention layers in HATs perform best? (b) What is the effect of pre-training HATs end-to-end, compared to ad-
+
+Figure 2: Attention patterns for the examined architectures: Hierarchical (Segment-wise followed by crosssegment attention) and Sparse (Combination of windowed and global attention) Attention Transformers.
+hoc (partially pre-trained), i.e., plugging randomly initialized cross-segment transformer blocks during ﬁne-tuning? (c) Are there computational or downstream perfomance beneﬁts of using HATs compared to widely-used sparse attention networks, such as Longformer and BigBird?
+2 Related Work
+2.1 Sparse Attention Transformers
+Longformer of Beltagy et al. (2020) consists of local (window-based) attention and global attention that reduces the computational complexity of the model and thus can be deployed to process up to 4096 tokens. Local attention is computed in-between a window of neighbour (consecutive) tokens. Global attention relies on the idea of global tokens that are able to attend and be attended by any other token in the sequence. Windowed (local) attention does not leverage hierarchical information in any sense, and can be considered greedy.
+BigBird of Zaheer et al. (2020) is another sparseattention based Transformer that uses a combination of a local, global and random attention, i.e., all tokens also attend a number of random tokens on top of those in the same neighbourhood. Both models are warm-started from the public RoBERTa checkpoint and are further pre-trained on masked language modelling. They have been reported to outperform RoBERTa on a range of tasks that require modelling long sequences.
+In both cases (models), the attention scores for local (neighbor), global, and randomly selected tokens are combined (added), i.e., attention blends only word-level representations (Figure 1). BigBird is even more computationally expensive with borderline improved results in some benchmarks, e.g., LRA of Tay et al. (2021), but not in others, e.g., LexGLUE of Chalkidis et al. (2022).
+
+2.2 Hierarchical Attention Transformers
+Hierarchical Attention Transformers (HATs) are directly inspired by Hierarchical Attention Networks (HANs) of Yang et al. (2016). The main idea is to process (encode) document in a hierarchical fashion, e.g., contextualize word representations per sentence, and then sentence-level representations across sentences. Chalkidis et al. (2019) were probably the ﬁrst to use HATs as a viable option for processing long documents based on pre-trained Transformer-based language models. They show improved results using a hierarchical variant of BERT compared to BERT (fed with truncated documents) or HANs. Similar models were used in the work of Chalkidis et al. (2022), where they compared hierarchical variants of several pre-trained language models (BERT, RoBERTa, etc.) showcasing comparable results to Longformer and BigBird in long document classiﬁcation tasks. Recently, Dai et al. (2022) compared ad-hoc RoBERTa-based HATs with Longformer and reported comparable performance in four document classiﬁcation tasks.
+Wu et al. (2021) proposed a HAT architecture, named Hi-Transformers, a shallow version of our interleaved variant presented in detail in Section 3.2. They showed that their model performs better compared to Longformer and BigBird across three classiﬁcation tasks. Although their analysis relies on non pre-trained models, i.e., all models considered are randomly initialized and directly ﬁne-tuned on the downstream tasks, thus the impact of pre-training such models is unknown.
+Liu et al. (2022) propose a similar architecture, named Hierarchical Sparse Transformer (HST). Liu et al. showed that HST has improved results in the long range arena (LRA) benchmark, text classiﬁcation and QA compared to Longformer and BigBird. Their analysis considers a single layout (topology) and is mainly limited on datasets where documents are not really long (<1000 tokens). In our work, we consider several HAT layouts (conﬁgurations) and evaluate our models in several segment-level, document-level, and multi-segment tasks with larger documents (Table 1).
+2.3 Other Approaches
+Several other efﬁcient Transformer-based models have been proposed in the literature (Katharopoulos et al., 2020; Kitaev et al., 2020; Choromanski et al., 2021). We refer readers to Xiong et al. (2021); Tay et al. (2022) for a survey on efﬁcient attention
+
+Figure 3: Top: The two main modules (building blocks) of Hierarchical Attention Transformers (HAT): the Segment-wise ( SWE ), and the Cross-segment ( CSE ) encoders. Bottom: The four examined HAT variants.
+
+variants. Recently other non Transformer-based approaches (Gu et al., 2022; Gupta et al., 2022) have been proposed for efﬁcient long sequence processing relying on structured state spaces (Gu et al., 2021). In this work, we do not compare with such architectures (Transformer-based or not), since there are no standardized implementations or publicly available pre-trained models to rely on at the moment. There are several other Transformerbased encoder-decoder models (Guo et al., 2022; Pang et al., 2022) targeting generative tasks, e.g., long document summarization (Shen et al., 2022), which are out of the scope in this study.
+3 Hierarchical Attention Transformers
+3.1 Architecture
+Hierarchical Attention Transformers (HATs) consider as input a sequence of tokens (S), organized in N equally-sized segments (chunks) (S = [C1, C2, C3, . . . , CN ]). Each sub-sequence (segment) is a sequence of K tokens (Ci = [Wi[CLS], Wi1, Wi2, Wi3, . . . , WiK−1]), i.e. each segment has its own segment-level representative [CLS] token. A HAT is built using two types of neural modules (blocks): (a) the Segment-wise encoder (SWE): A shared Transformer (Vaswani et al., 2017) block processing each segment (Ci) independently, and (b) the Cross-segment encoder (CSE): A Transformer block processing (and contextualizing) segment-level representative tokens (Wi[CLS]). The two components can be used in several different layouts (topologies). We present HAT variants (architectures) in Section 3.2.
+
+HATs use two types of absolute positional embeddings to model the position of tokens: segmentwise position embeddings (P sw i ∈ RH , i ∈ [1, K]) to model token positioning per segment, and crosssegment position embeddings (P cs i ∈ RH , i ∈ [1, N ]) to model the position of a segment in the document. P sw embeddings are additive to word ones, like in most other Transformer-based models, such as BERT. Similarly, P cs embeddings are added to the segment representations (Wi[CLS]) before they are passed to a CSE, and they are shared across all CSEs of the model. A more detailed depiction of HAT including positional embeddings is presented in Figure 4 of Appendix B.1.
+3.2 Examined Layouts
+We ﬁrst examine several alternative layouts of HAT layers, i.e., the placement of SWE and CSE:
+Ad-Hoc (AH): An ad-hoc (partially pre-trained) HAT (Chalkidis et al., 2022) comprises an initial stack of shared LSWE segment encoders from a pre-trained transformer-based model, followed by LCSE ad-hoc segment-wise encoders. In this case the model initially encodes and contextualize token representations per segment, and then builds higherorder segment-level representations (Figure 3(a)).
+Interleaved (I): An interleaved HAT comprises a stack of LP paired segment-wise and crosssegment encoders. In this case, contrary to the ad-hoc version of HAT, cross-segment attention (contextualization) is performed across several levels (layers) of the model (Figure 3(b)).
+
+Early-Contextualization (EC): An earlycontextualized HAT comprises an initial stack of LP paired segment-wise and cross-segment encoders, followed by a stack of LSWE segment-wise encoders. In this case, cross-segment attention (contextualization) is only performed at the initial layers of the model (Figure 3(c)).
+Late-Contextualization (LC): A latecontextualized HAT comprises an initial stack of LSWE segment-wise encoders, followed by a stack of LP paired segment and segment-wise encoders. In this case, cross-segment attention (contextualization) is only performed in the latter layers of the model (Figure 3(d)).
+We present task-speciﬁc HAT architectures (e.g., for token/segment/document classiﬁcation, and multiple-choice QA tasks) in Appendix A.1.
+3.3 Tokenization / Segmentation
+Since HATs consider a sequence of segments, we need to deﬁne a segmentation strategy, i.e. how to group tokens (sub-words) into segments. Standard approaches consider sentences or paragraphs as segments. We opt for a dynamic segmentation strategy that balances the trade-off between the preservation of the text structure (avoid sentence truncation), and the minimization of padding, which minimizes document truncation as a result. We split each document in N segments by grouping sentences up to K total tokens.1 Following Dai et al. (2022), our models consider segments of K = 128 tokens each; such a window was shown to balance the computational complexity with task performance.
+4 Experimental Set Up
+4.1 Evaluation Tasks
+We consider three groups of evaluation tasks: (a) Upstream (pre-training) tasks, which aim to pre-train (warm-start) the encoder in a generic self-supervized manner; (b) Midstream (qualityassessment) tasks, which aim to estimate the quality of the pre-trained models; and (c) Downstream tasks, which aim to estimate model’s performance in realistic (practical) applications.
+Upstream (Pre-training) Task: We consider Masked Language Modeling (MLM), a wellestablished bidirectional extension of traditional
+1Any sentence splitter can be used. In our work, we consider the NLTK (https://www.nltk.org/) English sentence splitter. We present examples in Appendix B.
+
+language modeling proposed by Devlin et al. (2019) for Transformer-based text encoders. Following Devlin et al. (2019), we mask 15% of the tokens.
+Midstream Tasks: We consider four alternative mid-stream tasks. These tasks aim to assess the quality of word, segment, and document representations of pre-trained models, i.e., models pre-trained on the MLM task.2
+• Segment Masked Language Modeling (MLM), an extension of MLM, where a percentage of tokens in a subset (20%) of segments are masked. We consider two alternatives: 40% (SMLM-40) and 100% (SMLM-100) masking. For this tasks, we predict the identity of the masked tokens. We use cross-entropy loss as the evaluation metric. Intuitively we assess cross-segment contextualization, since we predict masked words of a segment mainly based on the other segments.
+• Segment Order Prediction (SOP), where the input for a model is a shufﬂed sequence of segments from a document. The goal of the task is to predict the correct position (order) of the segments, as it was in the original document. For this task, we predict the position per segment as a regression task; hence our evaluation metric is mean absolute error (mae). Intuitively we assess cross-segment contextualization and the quality of segment-level representations since segment order has to resolved given segment relations.
+• Multiple-Choice Masked Segment Prediction (MC-MSP), where the input for a model is a sequence of segments from a document with one segment being masked at a time, and a list of ﬁve alternative segments (choices) including the masked one. The goal on this task for the model, is to identify the correct segment; the one masked from the original document. For this task, we predict the id of the correct pair (<masked document, choice>) across all pairs; hence our evaluation metric is accuracy. Similarly with SOP we assess cross-segment contextualization and the quality of segment-level representations, since predicting the correct segment has to be resolved based on both document-level semantics and those of the neighbor segments to the masked one.
+2We present additional details (e.g., dataset curation) for the midstream tasks in Appendix A.2.
+
+Dataset Name
+
+MIMIC-III ECtHR-LJP ContractNLI QuALITY ECtHR-ARG
+
+Johnson et al. (2016) Chalkidis et al. (2021c) Koreeda and Manning (2021) Pang et al. (2021) Habernal et al. (2022)
+
+Task Type
+Document Classiﬁcation Document Classiﬁcation Document NLI Multiple-Choice QA Paragraph Classiﬁcation
+
+No of Classes
+19 10 3 4 8
+
+No of Samples
+30,000/10,000/10,000 9,000/1,000/1,000 7,191/2,091/1,037 2,523/1,058/1,028 900/100/100
+
+Avg. Doc. Length
+3,522 2,104 2,220 6,821 1,285
+
+Table 1: Speciﬁcations for the examined long document downstream tasks (datasets). We report the task type, number of classes and number of samples across training, development, and test subsets. We also report the average document length measures in BPEs produced by the RoBERTa tokenizer.
+
+• Document Topic Classiﬁcation (DTC), where the input for a model is a full document. The goal on this task for the model is to identify the correct label out of N alternative labels (topics). Intuitively we assess document-level representations, since the relevant topics are inferred by the documentlevel (pooled) representations. This a single-label multi-class classiﬁcation task, and the evaluation metric is micro-averaged F1 (F1).
+Downstream Tasks: We consider four downstream long classiﬁcation tasks, covering four task types across three different application domains.3
+• MIMIC-III (Johnson et al., 2016) contains approx. 50k discharge summaries from US hospitals. Each summary is annotated with one or more codes (labels) from the ICD-9 taxonomy. The input of the model is a discharge summary, and the output is the set of the relevant 1st level ICD-9 (19 in total) codes.
+• ECtHR-LJP (Chalkidis et al., 2021c) contains approx. 11K cases from the European Court of Human Rights (ECtHR) public database. For each case, the dataset provides a list of factual paragraphs (facts) from the case description. Each case is mapped to articles of ECHR that were allegedly violated (considered by the court). The input of the model is the list of facts of a case, and the output is the set of allegedly violated articles.
+• ContractNLI (Koreeda and Manning, 2021) is a dataset for contract-based Natural Language Inference (NLI). The dataset consists of 607 contracts, speciﬁcally Non-Disclosure Agreements (NDAs). Each document has been paired with 17 templated hypothesis and labeled with one out of three classes (entailment, contradiction, or neutral). This is a single-label multi-class classiﬁcation task. The inputs to a model is the full
+3We present statistics (e.g., number of samples) and other additional details on Appendix A.2.
+
+document, and a hypothesis, and the output is the correct out of the three plausible classes.
+• QuALITY (Pang et al., 2021) contains approx. 5k questions based on reference documents (books or articles). Each questions is paired with 4 alternative answers, one of which is the correct one. The input of the model is the document (context), the questions, and the four alternative answers, and the output is the the id of the correct answer.
+• ECtHR-ARG (Habernal et al., 2022) contains approx. 300 cases from the European Court of Human Rights (ECtHR). For each case, the dataset provides a list of argumentative paragraphs from the case analysis. Spans in each paragraph has been labeled with one or more out of 13 argument types. We re-formulate this task, as a sequential paragraph classiﬁcation task, where each paragraph is labelled with one or more labels. The input of the model is the list of paragraphs of a case, and the output is the set of relevant argument types per paragraph.4
+5 Experiments
+5.1 Miniature Language Models (MiniHATs)
+We start by conducting a controlled study in which we pre-train different miniature Hierarchical Transformer-based models in a standard MLM setting. We call them MiniHATs, in short. The MiniHATs have 12 Transformer blocks (layers) in total, each having 256 hidden units with 4 attention heads. We examine 8 alternative model layouts (4 interleaved, 2 early-contextualization, and 2 latecontextualization; see Section 3.2 for additional details), whose exact layout is presented in Table 2.
+Warm-Start: Following Beltagy et al. (2020) and Zaheer et al. (2020), we warm-start the MiniHATs
+4We consider the 8 most frequent argument types, since the rest are extremely rare (less than 50 labeled paragraphs).
+
+Model Type
+
+SWE Params
+
+Longformer
+
+6
+
+MiniHAT AH1 6
+
+MiniHAT AH2 8
+
+14.4M 17.7M
+»
+
+MiniHAT
+
+I1
+
+6
+
+»
+
+MiniHAT
+
+I2
+
+6
+
+»
+
+MiniHAT
+
+I3
+
+8
+
+»
+
+MiniHAT
+
+I4
+
+9
+
+»
+
+MiniHAT EC1 9
+
+»
+
+MiniHAT EC2 8
+
+»
+
+MiniHAT LC1 9
+
+»
+
+MiniHAT LC2 8
+
+»
+
+W+G SW SW SW SW
+SW CS SW SW SW SW SW SW
+SW CS SW SW
+SW SW SW SW
+
+Layout (Encoder Type per Layer)
+
+Baselines
+
+W+G SW SW SW SW
+
+W+G SW SW SW SW
+
+W+G CS CS SW SW
+
+W+G CS CS CS CS
+
+Interleaved
+
+SW CS SW CS SW CS SW CS CS CS SW SW CS CS SW SW CS SW SW CS SW SW CS SW SW CS SW SW SW CS SW SW
+
+Early-Fusion
+
+SW CS SW CS SW SW SW SW CS CS SW SW CS CS SW SW
+
+Late-Fusion
+
+SW SW SW SW SW CS SW CS SW SW SW SW CS CS SW SW
+
+SpeedUp MemSave
+
+W+G
+
+-
+
+-
+
+CS CS 20%
+
+2%
+
+CS CS 20%
+
+-4%
+
+SW CS 20%
+
+2%
+
+CS CS 20%
+
+2%
+
+SW CS 20%
+
+-4%
+
+SW CS 20%
+
+-6%
+
+SW SW 20%
+
+-6%
+
+SW SW 20%
+
+-4%
+
+SW CS 20%
+
+-6%
+
+CS CS 20%
+
+-4%
+
+Table 2: Layouts examined for miniature models. SWE: number of segment-wise encoders. Layout: the organization of segment-wise (SW) and cross-segment (CS) encoders. In case of Longformer, there are encoders with paired window-based and global (W+G) attention. SpeedUp is the time improvement (batch/sec), and MemSave is the decrease in memory over Longformer (LF) for masked language modelling using 1×A100 40GB.
+
+from pre-trained checkpoints. In preliminary experiments we ﬁnd that the best warm-up strategy for our models is to warm-start all embedding layers (word, position, type), and all transformer blocks in pairs, i.e., the weights of each original Transformer block are copied to a SWE encoder, and the following CSE encoder, if any.5 For warm-starting MiniHATs, we use the miniature BERT models of Turc et al. (2019). We consider models based on the numbers of SWE encoders, i.e., the I1 variant of MiniHAT with 6 SWE encoders is warm-started from the 6-layer BERT model of Turc et al.. We train models with sequences up to 1024 tokens (8× segments of 128 tokens). Similarly to Turc et al., we use English Wikipedia (2021 dump) to build the datasets for the MLM, MSLM-40/100, SOP and MC-MSP mid-stream tasks (Section 4.1).
+Baselines: We also pre-train a 6-layer Longformer model, which is more computationally intensive (almost equal in terms of memory, but 20% slower) than our 12-layer MiniHATs (Table 2). For Longformer, we use a similar tokenization strategy, concatenating segments with the special separator token ([SEP]). We use a window size equal to the segment size (K = 128 tokens). The [CLS] and all [SEP] tokens are considered as global tokens across all tasks to improve global information ﬂow.
+We also compare with two ad-hoc (AH) HAT models (with no CS encoders for (S)MLM; because CS encoders do not update word-level repre-
+5The results of the preliminary experiments are presented in Appendix A.
+
+Model Name
+Longformer
+MiniHAT - AH1 MiniHAT - AH2
+MiniHAT - I1 MiniHAT - I2 MiniHAT - I3 MiniHAT - I4
+MiniHAT - EC1 MiniHAT - EC2
+MiniHAT - LC1 MiniHAT - LC2
+
+SWE
+n/a
+6 8
+6 6 8 9
+9 8
+9 8
+
+Train MLM
+2.44
+2.41 2.31
+2.40 2.67 2.30 2.34
+2.34 2.33
+2.35 2.35
+
+Dev MLM
+2.21
+2.18 2.09
+2.17 2.30 2.08 2.09
+2.09 2.09
+2.10 2.12
+
+Table 3: MLM results of all examined miniature Transformer-based models. We report the training and development MLM losses (cross-entropy). SWE is the number of segment-wise encoders per model.
+
+sentations). Since all models are warm-started, we continue pre-training for 50k steps with batches of 128 samples, similar to Beltagy et al. (2020).
+Results: We present experimental results for the upstream and midstream tasks:
+
+• Upstream Task (MLM): In Table 3, we present the results for the MLM task. We observe that the general trends suggests that more segmentwise (SW) encoders in favor of cross-segment (CS) encoders are preferable. This is further highlighted given the results of the ad-hoc MiniHATs (AH1 and AH2), which make clear that the beneﬁts of segment-wise contextualization on masked language modelling (in the standard setting) are minimal (the MLM losses are improved by 0.01
+
+Model Name
+
+SWE MLM SMLM-40 SMLM-100 SOP MC-MSP DTC
+
+loss (↓) loss (↓)
+
+loss (↓) mae (↓) acc. (↑) F1 (↑)
+
+Longformer
+
+n/a 2.21
+
+4.05
+
+6.87
+
+0.98
+
+87.9
+
+76.3
+
+MiniHAT (AH2) 8
+
+2.09
+
+4.08
+
+MiniHAT (I1)
+
+6
+
+2.17
+
+4.09
+
+MiniHAT (I3)
+
+8
+
+2.08
+
+4.03
+
+MiniHAT (EC2) 8
+
+2.09
+
+4.05
+
+MiniHAT (LC1) 9
+
+2.10
+
+4.07
+
+7.08
+
+0.89
+
+49.1
+
+71.8
+
+6.38
+
+0.89
+
+87.1
+
+77.1
+
+6.45
+
+0.84
+
+89.6
+
+77.1
+
+6.54
+
+0.88
+
+79.2
+
+76.6
+
+6.68
+
+0.90
+
+84.2
+
+77.6
+
+Table 4: Development results of all examined miniature HAT models on midstream tasks.
+
+comparing AH1 vs I1 and AH2 vs I3). We also observe that interleaved (I) attention patterns (layouts) with 2/1 or 3/1 SW/CS encoders ratio (cf. I3 and I4) have the best results.
+• Midstream Tasks: Based on the initial MLM experiments, we consider and evaluate the following models for all (ﬁve) mid-stream tasks: from our baselines, the mini Longformer, the MiniHAT-AH2 -including the four randomly initialized CSE encoders-, and the I1, I3, EC2, LC1 variants of MiniHATs; to cover the best model per layout (AH, I, EC, LC), including the most computationally efﬁcient one (I1).
+Table 4 shows the development results across all tasks. We observe that in both SMLM tasks, as the percentage of masked tokens increases from 40-100%, the performance of AH2 is much worse than alternative MiniHATs. These results can be explained as I1, I3, and LC1 have cross-segment encoders; hence they can leverage cross-segment information to compensate for the decrease of unmasked segment-wise context (neighbor tokens).
+Moving to the rest of the mid-stream tasks, we observe that the I3 variant has the best overall results, followed by I1 and LC1. In case of the Multiple-Choice Masked Sentence Prediction (MC-MSP), and Document Topic Classiﬁcation (DC), the AH2 models are substantially outperformed by the rest of the models. This result signiﬁes that fully (end-to-end) pre-training of MiniHATs is beneﬁcial, compared to plugging randomly initialized cross-segment (CS) encoders in an ad-hoc fashion; similarly to what Chalkidis et al. (2022), and Dai et al. (2022) did in their work. We also observe that the EC2 variant is substantially outperformed by the rest (I1, I3, LC1) that use throughout (interleaved) or late-contextualization, which sounds reasonable since multiple-choice QA-like tasks heavily rely
+
+on cross-segment contextualization, and possibly early-contextualization of poor (early) segment representations is not ideal. Lastly, LC1 seems to perform better to DTC compared to I models, while EC2 has the worst performance, which can be explained as early-contextualization may be insufﬁcient for document classiﬁcation tasks.
+Primary Observations: Based on the results with miniature models, we make the following observations: (a) End-to-end pre-training HATs is beneﬁcial compared to ad-hoc solutions; (b) Layouts with more segment-wise encoders perform better than more cross-segment encoders; (c) Interleaving segment-wise and cross-segment blocks is the most promising layout given the overall results; and (d) Interleaved HATs perform better compared to an equally memory-intensive, but slower, Longformer.
+5.2 Larger Language Models
+To further solidify our ﬁndings, we extend our work to larger models. We consider the best variant of HAT (I3), given the overall results in Section 5.1. Speciﬁcally, we train 16-layer models, consisting of 12 segment-wise and 4 cross-segment encoders, in a 4×(3SWE-1CSE) topology), warm-started from the 12-layer RoBERTa model of Liu et al. (2019). We also consider a 12-layer Longformer, and a 16-layer ad-hoc HAT, as baselines.
+In this stage, we focus on even larger sequences (up to 4096 tokens; 32× segments of 128 tokens each). We use C4 (Raffel et al., 2020) to build datasets for upstream and midstream tasks to cover more diverse (and challenging) corpora, similar to those used by Liu et al.. As in our experiments in Section 5.1, we pre-train models for 50k steps with sequences of at least 1024 tokens.
+For reference, we also report results on downstream tasks with the original Longformer of Beltagy et al. (2020) and BigBird of Zaheer et al. (2020) with the default larger attention window size (512).
+
+Model Name
+
+Downstream Tasks
+
+WS MIMIC ContractNLI ECtHR-LJP ECtHR-ARG QuALITY
+
+F1 (↑)
+
+acc. (↑)
+
+F1 (↑)
+
+acc. (↑)
+
+F1 (↑)
+
+Longformer (ours) 128 78.9 / 78.7 73.6 / 70.1 80.1 / 78.6 66.6 / 66.7 36.0 / 38.8
+
+Ad-hoc HAT (ours) 128 79.0 / 78.8
+
+HAT (ours)
+
+128 79.0 / 78.9
+
+Longformer (2020) 512 78.9 / 78.9
+
+BigBird (2020)
+
+512 73.8 / 73.6
+
+72.0 / 71.3 72.2 / 72.1
+71.9 / 71.4 72.1 / 69.8
+
+80.2 / 80.4 80.8 / 79.8
+80.2 / 78.9 80.1 / 78.8
+
+84.4 / 81.7 84.6 / 82.6
+80.3 / 80.4 84.6 / 81.4
+
+27.8 / 25.1 35.8 / 39.2
+tba∗ tba∗
+
+Table 5: Results on downstream tasks for all examined RoBERTa-based models. WS refers to the local attention window size. We report both development and test scores (development / test). ∗ Results to be announced.
+
+Model Name
+Longformer Ad-hoc HAT HAT
+
+Upstream/Midstream Tasks MLM SOP MC-MSP loss (↓) mae (↓) acc. (↑)
+
+1.47 4.88
+
+99.9
+
+1.96 4.40
+
+99.9
+
+1.54 4.35
+
+99.9
+
+Table 6: Development results on midstream tasks for all examined RoBERTa-based models.
+
+Results: We present experimental results for the upstream, a selection of midstream (SOP, MCMSP), and downstream tasks:
+• Upstream Task (MLM): In Table 6, we present the results for the MLM pre-training task. We observe that the 12-layer Longformer is slightly better than HAT (approx. 0.07 loss reduction). The small improvement can be explained by recalling that Longformer has direct cross-segment contextualization via the window-based local attention, while it also utilized global attention across all 12 layers, compared to HAT with 4 cross-segment encoders. Both models perform substantially better than the ad-hoc HAT baseline, which does not consider cross-segment contextualization (approx. 0.45 loss reduction).
+• Midstream Tasks: We again consider SOP and MC-MSP tasks, which heavily rely on segmentlevel representations, compared to token-level tasks (SMLM). We omit experiments with DTC since we have several downstream document classiﬁcation tasks (MIMIC, ContractNLI, ECtHRLJP). We observe that HAT models (ad-hoc or not) are better in SOP compared to Longformer; similar to our ﬁndings in Section 5.1. This highlights the beneﬁts of having “clear” (independent) segment representations for segment-level tasks. On the second task (MC-MSP), all models in this
+
+larger setting make almost perfect predictions, so there is no room for observations.
+• Downstream Tasks: In Table 5, we present the results for all down-stream tasks (Section 4.1). We observe that there is not a single model that uniformly outperforms the rest of the models. Nonetheless, HAT seems to perform overall better across tasks (document and paragraph classiﬁcation, NLI, and multiple-choice QA). HATs also outperform the original Longformer of Beltagy et al. (2020) and BigBird of Zaheer et al. (2020) that use much larger local attention windows (512 tokens), and hence are substantially more computationally intensive.
+Both HAT models (ad-hoc or not) severely outperform our Longformer (with similarly sized windows) on ECtHR-ARG (approx. 15%). We believe this is due to the more standarized processing of the input by HATs, i.e., encoding paragraphs as separate segments. Contrary, the difference is much lower (approx. 1-2%) compared to the original Longformer of Beltagy et al. (2020) and BigBird of Zaheer et al. (2020), since these models use much larger windows, hence the task resembles windowed sentence classiﬁcation.
+These two observations highlight the importance of cross-segment contextualization in sequential sentence/paragraph classiﬁcation tasks. Interestigly, our Longformer has comparable results to the more memory-intensive Longformer, and BigBird in all but one tasks, which highlights how we can balance the trade-off of shorter local attention windows using additional global tokens, in a similar fashion with HATs.
+Multiple-choice QA is the only task type where we observe a substantial difference between fully pre-trained models (Longformer, HAT) and the
+
+Model Name
+
+Computational Considerations
+
+WS Params
+
+MLM
+
+Doc CLS
+
+Par CLS
+
+MCQA
+
+Mem Speed Mem Speed Mem Speed Mem Speed
+
+Longformer (ours) 128
+
+Ad-hoc HAT (ours) 128
+
+HAT (ours)
+
+128
+
+148M 152M
+»
+
++10%
+»
+
++39%
+»
+
++17%
+»
+
++43%
+»
+
++18%
+»
+
++43%
+»
+
++20%
+»
+
++46%
+»
+
+Longformer (2020) 512
+
+BigBird (2020)
+
+512
+
+148M 128M
+
+—
+
+-66% -305% -70% -87%
+
+tba∗
+
+—
+
+-76% -276% -75% -73%
+
+tba∗
+
+Table 7: Computational considerations (number of parameters, and memory and speed improvements over our Longformer) for RoBERTa-based models. WS refers to the local attention window size. ∗ Results to be announced.
+
+partially pre-trained one (ad-hoc HAT). We hypothesize that there are two main reasons: (a) the model follows a stacked layout, where contextualization across document segments (crosssegment attention), the query and the answer choice is performed in the latter stage of the model; (b) the cross-segment encoders are not pre-trained; hence the model “learns” how to perform cross-segment contextualization during ﬁnetuning, which may be particularly important in tasks that heavily rely on cross-segment contextualization (e.g., in multiple-choice QA, where the model has to consider the relative importance of document, query and alternative option).
+Computational Considerations: HATs give comparable or better performance than Longformer in downstream tasks. We now consider whether there are computational beneﬁts to HATs based on the statistics presented in Table 7 (top part):
+• Upstream Task (MLM): In terms of efﬁciency, HATs use approx. 10% less memory (e.g., 1GB per 10GBs of VRAM), and are approx. 40% faster compared to Longformer in these experiments with larger models. In other words we have a model with comparable performance in the pre-training task, which is much more efﬁcient, especially speed-wise. Given these computational considerations, one could possibly train HATs for almost twice as many steps as Longformer with a similar computational budget (GPU hours), and possibly get much better results.
+• Downstream Tasks: With respect to ﬁne-tuning across downstream tasks, HATs use approx. 20% less memory (e.g., 2GB per 10GBs of VRAM), and are approx. 45% faster compared to our Longformer, i.e., one can train HAT models almost twice as fast, given less compute.
+
+Moving to model deployment (inference), we ﬁnd that HATs use 10-20% less memory, and are 2030% faster.6 In other words, even after the training phase, there are substantial computational gains for deploying HATs over our Longformer.
+Comparing with the original Longformer of Beltagy et al. (2020) and BigBird of Zaheer et al. (2020) we observe even greater gains. These models are far more computationally expensive even compared to our Longformer, since they use much larger windows (512 tokens, 4× larger compared to ours). Overall, in terms of computational consideration HATs are superior to Longformer and its variants (e.g., BigBird). This has a real-life impact with economical, environmental, and other implications (e.g., access to technology, etc.).
+Release of Resources: Our implementation of HATs relies on the HuggingFace Transformers (Wolf et al., 2020) library; we release our code for reproducibility.7 All examined language models are available on HuggingFace Hub.8
+6 Conclusions
+In this work, we examined Hierarchical Attention Transformers (HATs) in terms of efﬁcacy (performance) and efﬁciency (computational considerations) comparing to Longformer, a widely-used sparse attention Transformer. We now conclude answering the three main questions related to the development and potential of such models:
+• (a) Which conﬁgurations of segment- and crosssegment attention layers in HATs perform best? We ﬁnd that HAT models with cross-segment contextualization throughout the model performs best comparing to other variants (Section 5.1).
+6Detailed results presented in Appendix C. 7https://github.com/coastalcph/hierar chical-transformers 8https://huggingface.co/kiddothe2b
+
+• (b) What is the effect of pre-training HATs end-toend, compared to ad-hoc (partially pre-trained) ones? We ﬁnd that pre-trained HAT models perform substantially better in our small-scale study (Section 5.1). The results on larger models are more comparable in most downstream tasks, except document multiple-choice QA on QuALITY.
+• (c) Are there computational or downstream beneﬁts of using HATs compared to Longformer? We ﬁnd that our best pre-trained HAT model performs comparably or better than an equally-sized Longformer across several downstream long document classiﬁcation tasks, while being substantially faster (40-45% time decrease) and less memory intensive (10-20% less GPU memory).
+Limitations
+In this work, we consider MLM as our pre-training objective for all examined models; MLM can only be expected to produce high-quality token-level representations, but not high-quality segment-level or document-level representations. We considered plausible alternatives that can address this limitation for segment-level or document-level representations that rely on Siamese Networks, such as SimCLR (Chen et al., 2020) and VICReg (Bardes et al., 2022), but we do not have the resources to perform such compute-intensive experiments.
+Similarly, we do not examine models on document-to-document retrieval tasks (Yang et al., 2020; Chalkidis et al., 2021b), since task-speciﬁc architectures rely on Siamese Networks, i.e., encode two or three documents at a time, nor generative tasks, i.e., using Transformer-based encoderdecoder architectures, e.g., long document summarization (Shen et al., 2022).
+On another note, the scaling laws of neural language models suggest that larger and more intensively trained, i.e., trained over more data for a longer period, models perform better compared to smaller ones (Kaplan et al., 2020; Hoffmann et al., 2022). In our study, we consider models up to 150M parameters that may be considered small for today’s standards, where models with billions of parameters are released; since we are compute-bound with access to limited compute resources.
+Lastly, we follow a bottom-up approach, where we initially consider several alternative miniature HAT models (Section 5.1), and continue our experiments considering the most promising HAT based on the initial results to build and evaluate larger
+
+models (Section 5.2). This approach was inevitable with respect to computational considerations. Ideally, we would like to build and evaluate larger version of all HAT variants to have a complete understanding of how different variants perform in the larger conﬁguration.
+Acknowledgments
+This work is also partly funded by the Innovation Fund Denmark (IFD)9 under File No. 017500011A. This project was also supported by the TensorFlow Research Cloud (TFRC)10 program that provided instances of Google Cloud TPU v3-8 for free that were used to pre-train all HAT language models.
+References
+Adrien Bardes, Jean Ponce, and Yann LeCun. 2022. Vicreg: Variance-invariance-covariance regularization for self-supervised learning. In The International Conference on Learning Representations (ICLR).
+Iz Beltagy, Matthew E. Peters, and Arman Cohan. 2020. Longformer: The Long-Document Transformer. arXiv:2004.05150 [cs]. ArXiv: 2004.05150.
+Ilias Chalkidis, Ion Androutsopoulos, and Nikolaos Aletras. 2019. Neural Legal Judgment Prediction in English. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics, pages 4317–4323, Florence, Italy. Association for Computational Linguistics.
+Ilias Chalkidis, Manos Fergadiotis, and Ion Androutsopoulos. 2021a. MultiEURLEX - a multi-lingual and multi-label legal document classiﬁcation dataset for zero-shot cross-lingual transfer. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing, pages 6974–6996, Online and Punta Cana, Dominican Republic. Association for Computational Linguistics.
+Ilias Chalkidis, Manos Fergadiotis, Nikolaos Manginas, Eva Katakalou, and Prodromos Malakasiotis. 2021b. Regulatory compliance through Doc2Doc information retrieval: A case study in EU/UK legislation where text similarity has limitations. In Proceedings of the 16th Conference of the European Chapter of the Association for Computational Linguistics: Main Volume, pages 3498–3511, Online. Association for Computational Linguistics.
+Ilias Chalkidis, Manos Fergadiotis, Dimitrios Tsarapatsanis, Nikolaos Aletras, Ion Androutsopoulos, and Prodromos Malakasiotis. 2021c. Paragraph-level
+9https://innovationsfonden.dk/en 10https://sites.research.google/trc/ab out/
+
+rationale extraction through regularization: A case study on European court of human rights cases. In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, pages 226–241, Online. Association for Computational Linguistics.
+Ilias Chalkidis, Abhik Jana, Dirk Hartung, Michael Bommarito, Ion Androutsopoulos, Daniel Katz, and Nikolaos Aletras. 2022. LexGLUE: A benchmark dataset for legal language understanding in English. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 4310–4330, Dublin, Ireland. Association for Computational Linguistics.
+Ting Chen, Simon Kornblith, Mohammad Norouzi, and Geoffrey Hinton. 2020. A simple framework for contrastive learning of visual representations. arXiv preprint arXiv:2002.05709.
+Krzysztof Marcin Choromanski, Valerii Likhosherstov, David Dohan, Xingyou Song, Andreea Gane, Tamas Sarlos, Peter Hawkins, Jared Quincy Davis, Afroz Mohiuddin, Lukasz Kaiser, David Benjamin Belanger, Lucy J Colwell, and Adrian Weller. 2021. Rethinking attention with performers. In International Conference on Learning Representations.
+Arman Cohan, Iz Beltagy, Daniel King, Bhavana Dalvi, and Dan Weld. 2019. Pretrained language models for sequential sentence classiﬁcation. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP), pages 3693–3699, Hong Kong, China. Association for Computational Linguistics.
+Xiang Dai, Ilias Chalkidis, Sune Darkner, and Desmond Elliott. 2022. Revisiting transformerbased models for long document classiﬁcation. In Findings of the Association for Computational Linguistics: EMNLP 2022, Abu Dhabi, UAE. Association for Computational Linguistics.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. arXiv:1810.04805 [cs]. ArXiv: 1810.04805.
+Albert Gu, Karan Goel, and Christopher Ré. 2022. Efﬁciently modeling long sequences with structured state spaces. In The International Conference on Learning Representations (ICLR).
+Albert Gu, Isys Johnson, Karan Goel, Khaled Kamal Saab, Tri Dao, Atri Rudra, and Christopher Re. 2021. Combining recurrent, convolutional, and continuous-time models with linear state space layers. In Advances in Neural Information Processing Systems.
+
+Mandy Guo, Joshua Ainslie, David Uthus, Santiago Ontanon, Jianmo Ni, Yun-Hsuan Sung, and Yinfei Yang. 2022. LongT5: Efﬁcient text-to-text transformer for long sequences. In Findings of the Association for Computational Linguistics: NAACL 2022, pages 724–736, Seattle, United States. Association for Computational Linguistics.
+Ankit Gupta, Albert Gu, and Jonathan Berant. 2022. Diagonal state spaces are as effective as structured state spaces.
+Ivan Habernal, Daniel Faber, Nicola Recchia, Sebastian Bretthauer, Iryna Gurevych, Indra Spiecker genannt Döhmann, and Christoph Burchard. 2022. Mining legal arguments in court decisions.
+Jordan Hoffmann, Sebastian Borgeaud, Arthur Mensch, Elena Buchatskaya, Trevor Cai, Eliza Rutherford, Diego de Las Casas, Lisa Anne Hendricks, Johannes Welbl, Aidan Clark, Tom Hennigan, Eric Noland, Katie Millican, George van den Driessche, Bogdan Damoc, Aurelia Guy, Simon Osindero, Karen Simonyan, Erich Elsen, Jack W. Rae, Oriol Vinyals, and Laurent Sifre. 2022. Training compute-optimal large language models.
+Alistair E W Johnson, Tom J Pollard, Lu Shen, H Lehman Li-Wei, Mengling Feng, Mohammad Ghassemi, Benjamin Moody, Peter Szolovits, Leo Anthony Celi, and Roger G Mark. 2016. MIMIC-III, a freely accessible critical care database. Sci. Data, 3.
+Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B. Brown, Benjamin Chess, Rewon Child, Scott Gray, Alec Radford, Jeffrey Wu, and Dario Amodei. 2020. Scaling laws for neural language models. CoRR, abs/2001.08361.
+A. Katharopoulos, A. Vyas, N. Pappas, and F. Fleuret. 2020. Transformers are rnns: Fast autoregressive transformers with linear attention. In Proceedings of the International Conference on Machine Learning (ICML).
+Nikita Kitaev, Lukasz Kaiser, and Anselm Levskaya. 2020. Reformer: The efﬁcient transformer. In International Conference on Learning Representations.
+Yuta Koreeda and Christopher Manning. 2021. ContractNLI: A dataset for document-level natural language inference for contracts. In Findings of the Association for Computational Linguistics: EMNLP 2021, pages 1907–1919, Punta Cana, Dominican Republic. Association for Computational Linguistics.
+Yang Liu, Jiaxiang Liu, Li Chen, Yuxiang Lu, Shikun Feng, Zhida Feng, Yu Sun, Hao Tian, Hua Wu, and Haifeng Wang. 2022. Ernie-sparse: Learning hierarchical efﬁcient transformer through regularized selfattention.
+
+Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov. 2019. RoBERTa: A Robustly Optimized BERT Pretraining Approach. arXiv:1907.11692 [cs]. ArXiv: 1907.11692.
+Bo Pang, Erik Nijkamp, Wojciech Krys´cin´ski, Silvio Savarese, Yingbo Zhou, and Caiming Xiong. 2022. Long document summarization with top-down and bottom-up inference.
+Richard Yuanzhe Pang, Alicia Parrish, Nitish Joshi, Nikita Nangia, Jason Phang, Angelica Chen, Vishakh Padmakumar, Johnny Ma, Jana Thompson, He He, and Samuel R. Bowman. 2021. Quality: Question answering with long input texts, yes! CoRR, abs/2112.08608.
+Colin Raffel, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou, Wei Li, and Peter J. Liu. 2020. Exploring the limits of transfer learning with a uniﬁed text-totext transformer. Journal of Machine Learning Research, 21(140):1–67.
+Zejiang Shen, Kyle Lo, Lauren Yu, Nathan Dahlberg, Margo Schlanger, and Doug Downey. 2022. Multilexsum: Real-world summaries of civil rights lawsuits at multiple granularities. In Thirty-sixth Conference on Neural Information Processing Systems Datasets and Benchmarks Track.
+Yi Tay, Mostafa Dehghani, Samira Abnar, Yikang Shen, Dara Bahri, Philip Pham, Jinfeng Rao, Liu Yang, Sebastian Ruder, and Donald Metzler. 2021. Long range arena : A benchmark for efﬁcient transformers. In International Conference on Learning Representations.
+Yi Tay, Mostafa Dehghani, Dara Bahri, and Donald Metzler. 2022. Efﬁcient transformers: A survey. ACM Comput. Surv.
+Iulia Turc, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. Well-read students learn better: The impact of student initialization on knowledge distillation. CoRR, abs/1908.08962.
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Ł ukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. In Advances in Neural Information Processing Systems, volume 30. Curran Associates, Inc.
+Thomas Wolf, Lysandre Debut, Victor Sanh, Julien Chaumond, Clement Delangue, Anthony Moi, Pierric Cistac, Tim Rault, Remi Louf, Morgan Funtowicz, Joe Davison, Sam Shleifer, Patrick von Platen, Clara Ma, Yacine Jernite, Julien Plu, Canwen Xu, Teven Le Scao, Sylvain Gugger, Mariama Drame, Quentin Lhoest, and Alexander Rush. 2020. Transformers: State-of-the-Art Natural Language Processing. In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing:
+
+System Demonstrations, pages 38–45, Online. Association for Computational Linguistics.
+
+Chuhan Wu, Fangzhao Wu, Tao Qi, and Yongfeng Huang. 2021. Hi-transformer: Hierarchical interactive transformer for efﬁcient and effective long document modeling. In Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 2: Short Papers), pages 848–853, Online. Association for Computational Linguistics.
+
+Wenhan Xiong, Barlas Og˘uz, Anchit Gupta, Xilun Chen, Diana Liskovich, Omer Levy, Wen-tau Yih, and Yashar Mehdad. 2021. Simple Local Attentions Remain Competitive for Long-Context Tasks. arXiv, 2112.07210.
+
+Liu Yang, Mingyang Zhang, Cheng Li, Michael Bendersky, and Marc Najork. 2020. Beyond 512 tokens: Siamese multi-depth transformer-based hierarchical encoder for long-form document matching. In Proceedings of the 29th ACM International Conference on Information and Knowledge Management, CIKM ’20, page 1725–1734, New York, NY, USA. Association for Computing Machinery.
+
+Zichao Yang, Diyi Yang, Chris Dyer, Xiaodong He, Alex Smola, and Eduard Hovy. 2016. Hierarchical attention networks for document classiﬁcation. In Proceedings of the 2016 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, pages 1480–1489, San Diego, California. Association for Computational Linguistics.
+
+Manzil Zaheer, Guru Guruganesh, Kumar Avinava Dubey, Joshua Ainslie, Chris Alberti, Santiago Ontanon, Philip Pham, Anirudh Ravula, Qifan Wang, Li Yang, et al. 2020. Big bird: Transformers for longer sequences. Advances in Neural Information Processing Systems, 33.
+
+A Experimental Details
+
+A.1 Task-speciﬁc Architectures We consider the following architectures per task:
+
+Token Classiﬁcation/Regression: For token-level
+tasks, e.g., the Masked Language Modelling task
+described in Section 4.1, we feed each document to
+HAT to produce contextualized token-level representations (HATiw), and then feed those to a shared fully-connected projection layer (PR) to produce the ﬁnal token representations (Oiw):
+
+Oiw = PR(HATiw))
+
+(1)
+
+PR consist of a feed-forward layer (RH →− RH ), where H is model’s hidden dimensionality, followed by a Tanh activation, similar to the one used in BERT (Devlin et al., 2019).
+
+Segment Classiﬁcation/Regression: For segmentlevel tasks, e.g., the Segment Order Prediction task described in Section 4.1, we feed each document to HAT followed by a shared PR (applied per segment output, HATsi ) to produce the ﬁnal segment representations (Ois):
+
+Ois = PR(HATsi ))
+
+(2)
+
+Document Classiﬁcation/Regression: For
+document-level tasks, e.g., the Document Topic
+Classiﬁcation task described in Section 4.1, we use
+a max-pooling operator on top of the projected segment representations (Ois, Equation 2) to gather information across segments, followed by PR:
+
+D = PR(MaxPool([C1, C2, . . . , CN ])) (3)
+
+We opt the MaxPool operator over other alternatives (MeanPool, AttentivePool) based on the ﬁndings in the literature (Wu et al., 2021; Liu et al., 2022).
+Document NLI: For document NLI, e.g., ContractNLI described in Section 4.1, we feed the model with the sequence of document segments and the hypothesis, i.e., each sample is formatted as [C1, C2, . . . , CN , Ch], where Ch is the hypothesis segment. We consider the last segment (output) representation as the pair (<document, hypothesis>) representation, since the last segment is the one representing the hypothesis (Ch), which is under examination.
+Across all four task types a classiﬁcation layer (RH →− RL), where L is the number of labels, is placed on top of the ﬁnal output (token, segment, document) representations to produce logits.
+Multiple-Choice QA: For multiple-choice QA tasks, e.g., the Multiple-Choice Masked Segment Prediction (MC-MSP) task described in Section 4.1, we feed the model with the sequence of document segments, the query (question), if any, and one out of K alternative choices at a time, i.e., each sample is formatted as [C1, C2, . . . , Cn, CQ[k], CAC[k]], where CQ[k] is the query (question) segment, if any, and CAC[k] is the the Kth alternative choice appended as a ﬁnal segment. We consider the last segment (output) representation as the pair (<document, query, Kth choice>) representation, which is fed to a fullyconnected projection layer (RH →− R1). The ﬁnal model output is the sequence of all pairs scores
+
+(logits), i.e., O = [O1, O2, . . . , OK]. Similar to NLI, we opt the last segment representation, which represents the examined choice.
+
+A.2 Datasets
+Midstream Tasks: For Sentence Order Prediction (SOP) and Multiple-Choice Masked Segment Prediction (MC-MSP), we use documents from Wikipedia or C4, respectively. For the Document Topic Classiﬁcation (DTC) task, we use the English part of MultiEURLEX (Chalkidis et al., 2021a) with the 20-labels set, which includes generic concepts (e.g., ﬁnance, agriculture, trade, education, etc.).
+Donwstream Tasks: In Table 1, we present details on the datasets used for downstream tasks, which where described in Section 4.1. We use a custom split for MIMIC-III, since we consider the task of classifying discharge summaries for the 1st level concepts of the MeSH taxonomy We do so by backtracking all last-level (leaf node) original labeling to the respective 1st level concepts. This a lenient version of the original task with thousands of classes. For QuALITY, we use the standard training set of (Pang et al., 2021), and split the original development subset 50/50 in two parts (custom development, and test subsets), since the labeling of the original test set is hidden, i.e., an online submission is needed to retrieve scores.
+
+Dataset Name
+MIMIC-III ECtHR-LJP ContractNLI QuALITY ECtHR-ARG
+
+Ad-Hoc HAT
+1e-5 1e-5 1e-5 1e-5 1e-5
+
+HAT
+1e-5 2e-5 1e-5 2e-5 3e-5
+
+Longformer
+1e-5 1e-5 1e-5 1e-5 1e-5
+
+Table 8: Best learning rate used per model and task based on the performance on the development subset.
+
+A.3 Hyper-parameters
+For MLM, we use a learning rate of 1e-4, with 5% warm-up ratio with a linear scheduling, i.e., the learning rate linearly raises up to its maximum value (1e-4) in the ﬁrst 5% of the training steps and then linearly decreases for the rest. For the rest of the tasks (midstream and downstream), we manually tune the learning-rate in {1e-5, 2e-5} based on performance on the development subset of each task, while we also use a 5% warm-up ratio. We also use early stopping considering the perfor-
+
+Figure 4: Example of a Hierarchical Attention Network with N × interleaved blocks.
+
+mance on the development subset. In Table 8, we report the learning rates used per model and task.
+
+WU Strategy
+S0 S1 S2.1 S2.2 S2.3
+
+Train MLM
+3.10 2.46 2.35 2.34 2.46
+
+Dev MLM
+2.92 2.25 2.18 2.17 2.25
+
+Table 9: MLM results (measuring cross-entropy loss) for alternative warm-up strategies (Section A.4).
+
+A.4 Warm-Starting
+In preliminary experiments, we considered alternative warm-up strategies, i.e., initialize HAT model weights from an already pre-trained BERT (or RoBERTa) model.
+• (S0) None: The ﬁrst option is to not warm-up the model, and initialize all weights randomly.
+• (S1) Embeddings Only: The second option is to warm-up only the (word and position) embedding layers, and let all Transformer blocks randomly intiialized.
+• (S2.1) Embeddings + SW encoders: The third option is to warm-up the embedding layers, and all segment-wise encoders, since they perform the exact same operations as the pre-trained model.
+• (S2.2) Embeddings + all encoders (Paired): The fourth option is to warm-up the embedding layers, and all segment-wise and cross-segment encoders in pairs, i.e., whenever a segment-wise encoder
+
+is followed by a cross-segment one, they are initialized with the very same weights.
+• (S2.3) Embeddings + all encoders (Unpaired): The last options is to warm-up the embedding layers, and all segment-wise and cross-segment encoders independently, i.e., the weights of each Transformer block of the original pre-trained model are assigned to a segment-wise or crosssegment encoder.
+In Table 9, we present the results for all alternative warm-up strategies applied to HAT (I1). We observe that any form of warm-up is better than no warm-up at all. Considering the rest of the options, the Paired warm-up leads to better MLM results.
+B HAT Implementation Details
+B.1 Use of positional embeddings
+In Figure 4, we present a detailed depiction of HAT inputs and one pair of segment-wise and cross-segment encoders. The models takes as inputs sequence of tokens, organized in equally-sized segments ([C1, C2, C3]). Special CLS tokens are prepended per segment. The tokens are represented by their word embedding (Wij), and segment-wise position embedding ((Pjsw)). Each segment is encoded indepedently through a shared segment-wise encoder (SWE), which produced locally contextualized token representations (Wij). Segment representations (WiCLS) augmented with cross-segment positional embeddings ((Pjcs)) are fed to the successive cross-segment encoder (CSE), if any. The outputs of each block are the contextualized segment representations (WiCLS)) produced by the CS
+
+Figure 5: Text Segmentation Strategies (Greedy, Sentence-wise, Dynamic). In the presented example we have a text which comprises 4 sentences, each one with a different number of tokens. Greedy segmentation leads to split sentences across segments, e.g., the last token of S2 and S4 has been placed in a different segment compared to the rest of the tokens. Sentence-wise segmentation leads to excessive padding and document truncation, e.g., the last sentence (S4) does not ﬁt in the models since the model can encode up to 3 segments. Dynamic segmentation avoids spliting sentences and balances padding and truncation.
+
+encoder, and the contextualized token representations ((Wij)) produced by the SW encoder. HATs usually consist of a stack of such paired (or not) blocks according to the speciﬁc layout in use (as presented in Section 3.2).
+B.2 Document Segmentation Strategies
+As described in Section 3.1, we opted for a dynamic segmentation strategy. In Figure 5, we present an example of the three plausible alternatives that we considered, to express the limitation of the rest compared to the one (dynamic) used in work.
+• Greedy: In this segmentation strategy the text is split greedily in segments, i.e., there is no preservation of text structure by any means. The speciﬁc strategy is used by Liu et al. (2022). While this strategy optimize for minimizing the need for truncation, it has two important limitations: (a) ignores the text structure (hierarchy), thus sentences are split at random to ﬁll in segments, which can be proved catastrophic is speciﬁc scenarios (corner cases), where contextualization is particularly important, and (b) cannot be used for segment-level tasks.
+• Sentence-wise: In this segmentation strategy the text is split into sentences, i.e., each segment is equivalent to a single sentence. In this case text structure (hierarchy) is respected, but there is one crucial limitation. In case, there are lots of small-sized sentences, more than the maximum number of segments, the text will be severely truncated. In other words, many segments will be over-padded, while sentences will be truncated (not considered by the model).
+
+• Dynamic: In this segmentation strategy, the text is split into sentences, which are then grouped in larger segments up to the maximum segment length (N ). In this case, we balance the tradeoff between the preservation of the text structure (avoid sentence truncation), and the minimization of padding, which minimizes document truncation as a result. The only limitation is that sentence grouping is ad-hoc and differs across documents, since a more informed decision for sentence grouping per case (document) cannot be inferred.
+C Computational Considerations
+In order to assess the computational complexity in terms of speed (time) and memory, we conduct a controlled study, where we benchmark HAT, our Longformer, Longformer of Beltagy et al. (2020), and BigBird of Zaheer et al. (2020) across different tasks. To account for any computational instability (hardware latency), we repeat benchmarking three times in a single NVIDIA A100 and report the best (lower) scores.11 Across the three runs, we compute the averaged Batch/Sec rate, and the maximum GPU utilization (memory peak) across 100 steps.
+In the top part of Table 10, we present the Batch/Sec rate (SpeedUp) of both models, while in thw bottom part of the same table, we present the maximum GPU memory allocation. We present both measures on training (forward-backward pass) and inference (forward only) time.
+11The results across runs are stable with a few exceptions; that’s why we report the best to exclude outliers.
+
+Model Type
+Longformer (ours) HAT (ours) Longformer (2020) BigBird (2020)
+Longformer (ours) HAT Longformer (2020) BigBird (2020)
+
+Masked Language Modeling
+
+train
+0.266 0.162
+
+diff. (+39%)
+— —
+
+infer.
+0.065 diff. 0.051 (+22%)
+
+train
+17.3GB 15.5GB (ours)
+
+diff. (+10%)
+— —
+
+infer.
+3.9GB diff. 3.9GB (0%)
+
+Document Classiﬁcation
+
+SpeedUp (Batch/Sec)
+
+train
+
+infer.
+
+0.210 0.121
+
+diff. (+43%)
+
+0.053 0.039
+
+diff. (22%)
+
+0.852 0.795
+
+(-305%) 0.223 (-321%) (-276%) 0.207 (-291%)
+
+GPU Utilization
+
+train
+
+infer.
+
+10.7GB diff. 1.0GB diff . 8.9GB (+17%) 0.9GB (+10%)
+
+17.8GB (-66%) 1.7GB (-70%) 18.8GB (-76%) 1.8GB (-80%)
+
+Segment Classiﬁcation
+
+train
+
+0.459 0.343
+
+diff. (+25%)
+
+0.895 0.795
+
+(-87%) (-73%)
+
+infer.
+
+0.131 0.115
+
+diff. (+14%)
+
+0.236 (-105%) 0.207 (-80%)
+
+train
+10.8GB diff. 8.9GB (+18%)
+18.4GB (-70%) 18.9GB (-75%)
+
+infer.
+
+1.0GB 0.9GB
+
+diff. (10%)
+
+1.7GB (-70%) 1.8GB (-80%)
+
+Multiple-Choice QA
+
+train
+
+infer.
+
+0.386 0.207
+
+diff. 0.100 diff. (+46%) 0.072 (+28%)
+
+— —
+
+train
+
+infer.
+
+19.3GB diff. 1.4GB diff. 15.4GB (+20%) 1.2GB (+14%)
+
+— —
+
+Table 10: SpeedUp (Batch/Sec) and GPU memory allocation per RoBERTa-based model (HAT, Longformer, Longformer ®, and BigBird ®) on NVIDIA A100.
+

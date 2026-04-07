@@ -1,0 +1,461 @@
+From Tokens to Thoughts: How LLMs and Humans Trade Compression for
+Meaning
+
+arXiv:2505.17117v2 [cs.CL] 26 May 2025
+
+Chen Shani Stanford University cshani@stanford.edu
+Yann LeCun New York University, Meta - FAIR
+
+Dan Jurafsky Stanford University jurafsky@stanford.edu
+Ravid Shwartz-Ziv New York University, Wand.AI
+
+Abstract
+Humans organize knowledge into compact categories through semantic compression by mapping diverse instances to abstract representations while preserving meaning (e.g., robin and blue jay are both birds; most birds can fly). These concepts reflect a trade-off between expressive fidelity and representational simplicity. Large Language Models (LLMs) demonstrate remarkable linguistic abilities, yet whether their internal representations strike a human-like trade-off between compression and semantic fidelity is unclear. We introduce a novel information-theoretic framework, drawing from Rate-Distortion Theory and the Information Bottleneck principle, to quantitatively compare these strategies. Analyzing token embeddings from a diverse suite of LLMs against seminal human categorization benchmarks, we uncover key divergences. While LLMs form broad conceptual categories that align with human judgment, they struggle to capture the fine-grained semantic distinctions crucial for human understanding. More fundamentally, LLMs demonstrate a strong bias towards aggressive statistical compression, whereas human conceptual systems appear to prioritize adaptive nuance and contextual richness, even if this results in lower compressional efficiency by our measures. These findings illuminate critical differences between current AI and human cognitive architectures, guiding pathways toward LLMs with more human-aligned conceptual representations.
+
+1 Introduction: The Enigma of Meaning in Large Language Models
+“The categories defined by constructions in human languages may vary from one language to the next, but they are mapped onto a common conceptual space, which represents a common cognitive heritage, indeed the geography of the human mind.” –Croft [2001] p. 139
+The human capacity for concept formation is a cornerstone of intelligence, enabling us to manage information overload by deriving meaning from complex signals. We achieve this by identifying essential features and compressing experiences into cognitively tractable summaries [Murphy, 2004]. This conceptual architecture, often hierarchical (e.g., a robin is a bird, an animal [Rosch et al., 1976]), is a powerful semantic compression: diverse instances are mapped to compact representations. Crucially, this process balances representational efficiency (compression) with the preservation of essential semantic fidelity (meaning), a trade-off fundamental to learning and understanding.
+Preprint. Under review.
+
+Large Language Models (LLMs) exhibit striking capabilities in processing and generating human language, performing tasks that often appear to require deep semantic understanding [Singh et al., 2024, Li et al., 2024]. Despite this, a fundamental enigma persists: Do LLMs truly grasp concepts and meaning analogously to humans, or is their success primarily rooted in sophisticated statistical pattern matching over vast datasets? This question is particularly salient given the human ability to effortlessly distill extensive input into compact, meaningful concepts, a process governed by the inherent trade-off between informational compression and semantic fidelity [Tversky, 1977, Rosch, 1973b].
+As the mental scaffolding of human cognition, concepts enable efficient interpretation, generalization from sparse data, and rich communication. For LLMs to transcend surface-level mimicry and achieve more human-like understanding, it is critical to investigate how their internal representations navigate the crucial trade-off between information compression and the preservation of semantic meaning. Do LLMs develop conceptual structures mirroring the efficiency and richness of human thought, or do they employ fundamentally different representational strategies?
+To address this, we introduce a novel quantitative methodology rooted in information theory. We develop and apply a framework drawing from Rate-Distortion Theory [Shannon, 1948] and the Information Bottleneck principle [Tishby et al., 2000] to systematically compare how LLMs and human conceptual structures balance representational complexity (compression) with semantic fidelity. As a crucial human baseline, we leverage seminal datasets from cognitive psychology detailing human categorization [Rosch, 1973a, 1975, McCloskey and Glucksberg, 1978]. A contribution of this work is the digitization and public release of these classic datasets, which offer benchmarks of high empirical rigor often exceeding modern crowdsourced alternatives. Our framework is tailored to dissect how these different systems navigate the compression-meaning trade-off.
+Our comparative analysis across a diverse suite of LLMs reveals divergent representational strategies. While LLMs generally form broad conceptual categories aligned with human judgment, they often fail to capture the fine-grained semantic distinctions pivotal to human understanding. More critically, we uncover a stark contrast in priorities: LLMs exhibit a strong drive towards aggressive statistical compression, whereas human conceptual systems appear to favor adaptive nuance and contextual richness, even at a potential cost to sheer compressional efficiency by our measures. This divergence underscores fundamental differences and informs pathways for developing AI with more humanaligned conceptual understanding.
+2 Research Questions and Scope
+Advancing AI beyond pattern matching towards deeper semantic understanding hinges on whether LLMs develop conceptual structures analogous to human cognition. Human concepts efficiently balance semantic richness with cognitive manageability, a trade-off between meaning and informational compression. This paper investigates if and how LLMs replicate this fundamental balance.
+Prior work has explored the conceptual landscape of LLMs, including their grasp of relational knowledge [Shani et al., 2023], methods for extracting interpretable concepts [Hoang-Xuan et al., 2024, Maeda et al., 2024], emergent representations via sparse activations [Li et al., 2024], embedding geometry concerning hierarchies [Park et al., 2024], and autoregressive concept prediction [Barrault et al., 2024]. While insightful, these studies often lack a deep, quantitative comparison of the compression-meaning trade-off using an information-theoretic lens benchmarked against rich human cognitive data, or they may not ground concept definitions in established cognitive theory. Consequently, a rigorous comparative evaluation of how LLMs and humans balance representational efficiency with semantic fidelity remains a key open area. Separately, cognitive science has applied information theory to human concept learning [Imel and Zaslavsky, 2024, Tucker et al., 2025, Wolff, 2019, Sorscher et al., 2022], yet typically without connecting to modern AI models.
+This work aims to bridge this gap by integrating cognitive psychology, information theory, and modern NLP. We pose three central research questions to guide our investigation:
+[RQ1]: To what extent do concepts emergent in LLMs align with human-defined conceptual categories?
+[RQ2]: Do LLMs and humans exhibit similar internal geometric structures within these concepts, especially concerning item typicality?
+2
+
+[RQ3]: How do humans and LLMs differ in their strategies for balancing representational compression with the preservation of semantic fidelity when forming concepts?
+These three questions steer our investigation, which approaches each through the unifying lens of the information-theoretic framework detailed in Section 4. RQ1 begins by examining the alignment of broad conceptual categories, a key aspect of how information is compressed. RQ2 then delves into the finer-grained internal structures of these categories, probing the preservation of semantic nuances such as item typicality. Building on these analyses, RQ3 employs the full framework to comprehensively compare how LLMs and humans may divergently optimize the overall trade-off between compression and meaning. To ground these comparisons, we consistently utilize seminal human categorization datasets [Rosch, 1973a, 1975, McCloskey and Glucksberg, 1978] as empirical benchmarks. Our overarching aim is to use this comparative, information-theoretic approach not only to evaluate current LLMs but also to advance our understanding of efficient and meaningful representation in both artificial and natural intelligence.
+3 Benchmarking Against Human Cognition
+Empirically investigating the relationship between LLM representations and human conceptual structures requires two critical components: robust benchmarks of human categorization and a diverse selection of LLMs. This section details these components.
+3.1 Human Conceptual Baselines: Empirical Data from Seminal Cognitive Science
+Our comparison is anchored by data from seminal studies in cognitive psychology that mapped human categorization processes. These studies offer rich empirical evidence of how humans form concepts, judge category membership, and perceive typicality. Critically, unlike many modern crowdsourced datasets which can be noisy, these classic benchmarks were meticulously curated by cognitive science experts, reflecting deep cognitive patterns rather than superficial associations, and were grounded in then-advancing theories of conceptual structure. We focus on three influential works:
+Rosch (1973): This foundational work by Rosch [1973a] explored semantic categories as part of the research program leading to prototype theory [Rosch, 1973c]. This theory posits that categories are organized around “prototypical” members rather than strict, equally shared features. The dataset includes 48 items in eight common semantic categories (e.g., furniture, bird), with prototypicality rankings (e.g., ‘robin‘ as a typical bird, ‘bat‘ as atypical).
+Rosch (1975): Building on prototype theory, Rosch [1975] further detailed how semantic categories are cognitively represented. This work provides extensive typicality ratings for a larger set of 552 items across ten categories (e.g., ‘orange‘ as a prototypical fruit, ‘squash‘ as less so).
+McCloskey & Glucksberg (1978): McCloskey and Glucksberg [1978] investigated the “fuzzy“ boundaries of natural categories, showing that membership is often graded rather than absolute. Their data covers 449 items in 18 categories, with typicality scores and membership certainty ratings (e.g., ‘dress‘ is typical clothing, ‘bandaid‘ less so).
+While originating from different research groups with distinct theoretical emphases, these datasets share rigorous experimental designs and provide data on both category assignments and item typicality. We aggregated data from these studies, creating a unified benchmark of 1,049 items across 34 categories. This aggregated dataset, which we have digitized and make publicly available (see Appendix A.1), offers a crucial, high-fidelity empirical foundation for evaluating the human-likeness of computational models and we encourage its use for future research.
+3.2 Large Language Models Under Study
+We include a diverse array of LLMs to assess how conceptual representation might vary with computational architecture and scale. This selection covers prevalent architectural paradigms (encoder-only, decoder-only) and a wide spectrum of model sizes, from 300 million to 72 billion parameters.
+Our analysis features encoder-only models from the BERT family (e.g., BERT-Large [Devlin et al., 2019, He et al., 2020, Zhuang et al., 2021]). The majority are decoder-only autoregressive models,
+3
+
+including: six Llama family models (1B to 70B, e.g., Llama 3.1 70B [Touvron et al., 2023a,b, Grattafiori et al., 2024]); five Gemma family models (2B to 27B [Team et al., 2024, 2025]); thirteen Qwen family models (0.5B to 72B [Bai et al., 2023, Yang et al., 2024]); four Phi family models (e.g., Phi-4 [Javaheripi et al., 2023, Abdin et al., 2024, Abouelenin et al., 2025]); and a Mistral 7B model [Karamcheti et al., 2021]. Appendix A.2 provides a comprehensive list of all model variants, identifiers, and architectural details.
+For each LLM, we extract static, token-level embeddings from its input embedding layer (the ‘E‘ matrix). This choice aligns our analysis with the context-free nature of stimuli typical in human categorization experiments, ensuring a comparable representational basis. These embeddings form the foundation for deriving LLM-generated conceptual clusters in our subsequent analyses.
+4 A Framework for Comparing Compression and Meaning
+To understand how LLMs and human cognition grapple with the fundamental challenge of representing meaning, we introduce an information-theoretic framework. This framework is designed to analyze the critical trade-off, or tension, between compressing information into efficient representations and preserving the rich semantic fidelity essential for true understanding. Drawing upon core principles from Rate-Distortion Theory (RDT) [Shannon, 1948] and the Information Bottleneck (IB) principle [Tishby et al., 2000], our approach provides a cohesive lens for addressing all three of our research questions. Our investigation progresses by first exploring distinct facets of this trade-off related to representational compactness and semantic preservation, before synthesizing these insights to evaluate the overall efficiency of conceptual representation. Our research questions, viewed through this progressive information-theoretic perspective, are approached as follows:
+[RQ1] Probing Representational Compactness via Categorical Alignment: We begin by examining how information is condensed into categorical structures. Both human categorization and LLM-derived clustering simplify diverse items X into structured groups C. For RQ1, we assess alignment between model-based clusters (CLLM ) and human categories (CHuman) by quantifying shared information (e.g., via Adjusted Mutual Information), offering an initial view on how similarly compactness is achieved. The principles of efficient input representation here relate to the “Complexity” aspect of our framework.
+[RQ2] Probing Semantic Preservation via Internal Structure: Next, we assess how well meaning is preserved within these compressed representations. An effective system must retain crucial semantic nuances. For RQ2, we investigate this by correlating LLM-internal measures of item centrality with human typicality judgments, probing how faithfully finegrained semantic information is represented, that is, can LLMs capture the internal structure of CHuman? This relates to the “Distortion” (or fidelity) aspect of our framework.
+[RQ3] Evaluating the Integrated Trade-off for Total Representational Efficiency: Finally, having explored compactness and preservation, we leverage our full framework. RQ3 employs a unified objective function, L (detailed below), to quantitatively assess the total efficiency with which LLMs and human systems navigate this fundamental trade-off.
+The following subsections detail the theoretical underpinnings of this framework.
+4.1 Theoretical Underpinnings: Rate-Distortion Theory and the Information Bottleneck
+To rigorously formalize the balance between representational compactness and preserved meaning, we draw upon information theory. Rate-Distortion Theory (RDT) [Shannon, 1948] provides the foundational language. RDT quantifies the minimal “rate” R (representational complexity) needed to represent a source X as C, subject to a maximum “distortion” D (fidelity loss). The goal is often to optimize R + λD, offering a principled evaluation of representational efficiency.
+The Information Bottleneck (IB) principle [Tishby et al., 2000] is a related approach. IB seeks a compressed representation C of an input X that maximizes information about a relevant variable Y while minimizing I(X; C), the mutual information C retains about X (the bottleneck’s “cost”). This is typically framed as minimizing I(X; C) − βI(C; Y ).
+4
+
+Our analytical framework directly applies RDT’s core idea of balancing rate and distortion. We formulate an objective function, L, designed to explicitly balance a complexity term (analogous to RDT’s rate), which quantifies the informational cost of representing items X through their conceptual clusters C, and a distortion term (analogous to RDT’s D), which measures semantic information lost or obscured within these clusters. Our complexity term, incorporating I(X; C), resonates with the IB principle. However, our distortion term directly measures intra-cluster semantic fidelity loss (specifically, the variance of item embeddings relative to their cluster centroids), differing from canonical IB formulations where distortion is often implicitly tied to an external relevance variable Y . This direct approach allows us to evaluate how any given clustering C, whether derived from human cognitive data or LLM embeddings, intrinsically balances its own structural compactness and the meaningfulness of its components with respect to the original data X.
+
+4.2 The L Objective: Balancing Representational Complexity and Semantic Distortion
+
+Building on these information-theoretic foundations, this section formally defines the two key components of our framework–Complexity and Distortion. These components allow us to quantitatively address the aspects of representational compactness (core to [RQ1]) and semantic preservation (central to [RQ2]) that were introduced earlier. We then combine these into a unified objective function, L, designed to evaluate the overall efficiency of the compression-meaning trade-off, which is the primary focus of [RQ3]. The L function evaluates the efficiency of the conceptual clusters C derived from items X (e.g., token embeddings):
+
+L(X, C; β) = Complexity(X, C) + β · Distortion(X, C).
+
+(1)
+
+Here, β ≥ 0 is a hyperparameter that balances the relative importance of the two terms.
+
+The Complexity (Rate) Term: The first component, Complexity(X, C), measures the informational
+
+cost or intricacy of representing the original items X through their assignments to clusters C. It is
+
+quantified by the mutual information I(X; C) between the items and their cluster labels. A lower
+
+I(X; C) signifies greater compression, meaning the cluster assignments C make the specific items
+
+X more predictable (i.e., require less information to specify beyond the cluster label). Defining
+
+I(X; C) = H(X) − H(X|C), and assuming |X| equiprobable unique items for the initial entropy
+
+calculation (H(X)
+
+=
+
+log2 |X|),
+
+the conditional entropy is H(X|C)
+
+=
+
+1 |X |
+
+c∈C |Cc| log2 |Cc|.
+
+This assumes that for this complexity calculation, items within each cluster Cc (of size |Cc|) are
+
+indistinguishable beyond their shared label c. Thus:
+
+1 Complexity(X, C) = log2 |X| − |X| |Cc| log2 |Cc|. (2)
+c∈C
+
+This term formalizes the representational compactness aspect central to [RQ1].
+
+The Distortion Term: The second component, Distortion(X, C), quantifies the loss of semantic
+
+fidelity incurred by grouping items into clusters. It is measured as the average intra-cluster variance
+
+of the item embeddings, reflecting how tightly items are bound to their cluster’s central tendency and
+
+thus the cluster’s semantic coherence. This directly relates to the preservation of fine-grained semantic
+
+information,
+
+an
+
+idea
+
+explored
+
+in
+
+[RQ2].
+
+For
+
+each
+
+cluster
+
+c
+
+∈
+
+C,
+
+its
+
+centroid
+
+is
+
+xc
+
+=
+
+1 |Cc |
+
+x∈c x
+
+(the
+
+mean
+
+embedding
+
+of
+
+its
+
+items).
+
+Its
+
+internal
+
+variance
+
+is
+
+σ2
+c
+
+=
+
+1 |Cc |
+
+x∈c ∥x − xc∥2. The total
+
+distortion for the clustering C is the weighted average of these variances:
+
+Distortion(X, C) = 1 |Cc| · σc2. (3) |X| c∈C
+
+A lower distortion value implies that, on average, items are close to their respective cluster centroids, suggesting better preservation of shared semantic features within each cluster.
+
+The Unified Objective Function: Substituting the formal definitions of Complexity (Equation 2) and Distortion (Equation 3) into our general formulation for L (Equation 1) yields the complete objective function that underpins our comparative analysis:
+
+L(X, C; β) = log2 |X| − 1 |Cc| log2 |Cc| + β · 1 |Cc| · σc2 . (4)
+
+|X| c∈C
+
+|X| c∈C
+
+5
+
+This L function provides a single, principled measure for evaluating how effectively a given clustering C balances the need for informational compression against the imperative to preserve semantic meaning, serving as the direct quantitative tool for addressing [RQ3].
+With the L objective now fully specified, our information-theoretic framework provides a comprehensive toolkit. The Complexity term (Equation 2) allows us to quantify aspects of representational compactness pertinent to [RQ1], while the Distortion term (Equation 3) enables the assessment of semantic preservation, crucial for [RQ2]. The overall L function (Equation 4) then directly facilitates the evaluation of the integrated compression-meaning trade-off, central to [RQ3]. Thus, this framework equips us to systematically and quantitatively investigate how LLMs and human cognition manage the balance between informational efficiency and semantic richness. We apply this framework in our empirical investigation detailed in Section 5.
+5 Unpacking Representational Strategies: An Empirical Investigation
+Building on our information-theoretic framework (Section 4) and established benchmarks (Section 3), we now empirically investigate our research questions. This section details the specific methodologies employed to compare LLM and human conceptual strategies across the key dimensions of conceptual alignment, internal semantic structure, and overall representational efficiency.
+[RQ1] Assessing Conceptual Alignment To investigate how LLM-derived conceptual categories align with human-defined ones (RQ1), probing representational compactness, we cluster LLM token embeddings using k-means (K set by human category counts per dataset). Alignment with human categories is quantified using Adjusted Mutual Information (AMI), Normalized Mutual Information (NMI), and Adjusted Rand Index (ARI), against a random clustering baseline.
+[RQ2] Examining Internal Cluster Geometry and Semantic Preservation To assess how LLM representations capture human-like typicality (RQ2), examining internal category geometry, we calculate the cosine similarity of each item’s token embedding to the token embedding of its humanassigned category name (e.g., ‘robin‘ to ‘bird‘). These LLM-derived similarities are then correlated (Spearman’s ρ) with human typicality ratings from our cognitive science datasets.
+[RQ3] Evaluating the Efficiency of the Compression-Meaning Trade-off To evaluate the overall balance of compression and meaning (RQ3), we apply our framework by computing the L objective (Equation 4, β = 1) for both human and LLM-derived conceptual structures (the latter from k-means over a range of K). This compares how each system balances Complexity I(X; C) against Distortion. Cluster entropy is an ancillary measure of compactness.
+For robustness, all k-means clustering involves one hundred random initializations with averaged results. Appendix A.3 provides details on supplementary metrics like Silhouette scores.
+5.1 [RQ1] The Big Picture: Alignment of Conceptual Categories
+We first investigate whether LLMs form conceptual categories aligned with human judgment.
+Key Finding: Broad Alignment with Human Categories
+LLM-derived clusters significantly align with human-defined conceptual categories, suggesting they capture key aspects of human conceptual organization. Notably, certain encoder models exhibit surprisingly strong alignment, sometimes outperforming much larger models, highlighting that factors beyond sheer scale influence human-like categorical abstraction.
+Experimental Recap: LLM token embeddings from our benchmark datasets [Rosch, 1973a, 1975, McCloskey and Glucksberg, 1978] were clustered (k-means; K matching human category counts). Alignment with human categories was measured using AMI, NMI, and ARI (AMI shown in Figure 1; see Appendices A.3, A.4 for full details).
+Results and Observations: Across all tested LLMs, derived conceptual clusters aligned with human categories significantly above random chance (Figure 1, showing averaged AMI scores). This indicates their semantic spaces encode information supporting human-like grouping at a macro level.
+6
+
+Notably, the BERT family (especially BERT-large-uncased) demonstrated robust alignment, often comparable to or exceeding that of much larger decoder-only models. This suggests that architectural or pre-training factors, not just scale, influence the formation of human-like categorical structures.
+Figure 1: LLM-derived Clusters Show Above-Chance Alignment with Human Conceptual Categories. Adjusted Mutual Information (AMI) between human categories and LLM-embedding clusters versus model size. Results are averaged over three psychological datasets. All models perform significantly better than random clustering. BERT’s performance is notably strong.
+Interpretation: These findings confirm that LLMs can recover broad, human-like categories from their embeddings, validating deeper comparative analyses. This macro-level agreement necessitates examining the finer-grained internal geometry of these categories, which we address next.
+5.2 [RQ2] Delving Deeper: Fidelity to Fine-Grained Semantics Having established that LLMs broadly align with human conceptual categories (Section 5.1), we next investigate a more nuanced question: Do LLMs also capture the internal semantic structure of these categories, particularly human-like item typicality?
+Key Finding: Limited Capture of Semantic Nuance
+While LLMs effectively form broad conceptual categories, their internal representations demonstrate only modest alignment with human-perceived fine-grained semantic distinctions, such as item typicality or psychological distance to category prototypes. This suggests a divergence in how LLMs and humans structure information within concepts.
+Experimental Recap: For this RQ, as detailed in this section’s introduction, we compared human typicality judgments from the cognitive science datasets [Rosch, 1973a, 1975, McCloskey and Glucksberg, 1978] with an LLM-based measure. Specifically, we calculated the cosine similarity between each item’s token embedding and the token embedding of its *human-assigned category name* (e.g., ‘robin‘ vs. ‘bird‘). These item-to-category-label similarities were then correlated (Spearman’s ρ [Wissler, 1905]) with human-rated typicality scores. Results and Observations: Spearman correlations between LLM-derived item-to-category-label similarities and human typicality judgments are generally modest across most models and datasets (Table 2 in Appendix A.5; Figure 6). Although some correlations reach statistical significance (p < 0.05), their magnitudes typically indicate a limited correspondence. This pattern suggests that items humans perceive as highly typical of a category are not consistently represented by LLMs as substantially more similar to that category label’s embedding. While BERT-large-uncased occasionally exhibited slightly stronger correlations, these remained moderate (Table 2). Consequently, no tested model robustly replicated the full spectrum of human typicality gradients using this measure. Appendix A.6 provides further visualizations supporting these observations. Interpretation: These findings suggest that while LLMs can identify features for broad categorization, their organization of semantic space around explicit category labels does not fully mirror the nuanced
+7
+
+prototype structures evident in human typicality judgments. The factors driving an item’s embedding similarity to its category label’s embedding in LLMs may differ from the rich, multifaceted criteria (e.g., perceptual attributes, functional roles) underpinning human typicality. LLMs might instead capture a more statistically uniform association to category labels, thereby under-representing the graded, prototype-centric nature of human concepts. This divergence in capturing fine-grained semantics leads to our subsequent inquiry into overall information processing efficiency.
+5.3 [RQ3] The Efficiency Angle: The Compression-Meaning Trade-off
+Having explored categorical alignment (RQ1) and internal semantic structure (RQ2), we now address our central question: How do LLM and human representational strategies compare in overall efficiency when balancing informational compression against semantic meaning preservation? Our informationtheoretic framework directly probes this trade-off.
+Key Finding: Divergent Efficiency Strategies
+LLMs demonstrate markedly superior information-theoretic efficiency in their conceptual representations compared to human conceptual structures. Evaluated via our L objective, LLM-derived clusters consistently achieve a more “optimal“ balance (by this measure) between representational complexity (compression) and semantic distortion. Human conceptualizations, while richer, appear less statistically compact, suggesting optimization for pressures beyond pure statistical compressibility.
+Experimental Recap: As detailed in this section’s introduction, we analyzed human-defined categories and LLM-derived clusters (from k-means across various K) using two primary informationtheoretic measures: mean cluster entropy (Sα) [Giraldo et al., 2014, Wei et al., 2025] and our L objective function (Equation 4, with β = 1).
+Results and Observations: Illustrative results from one dataset (Rosch, 1975) are shown in Figure 2; trends were consistent across all datasets (full results in Appendix A.8).
+Cluster Entropy Insights: Human concepts consistently exhibit higher mean entropy than LLMderived clusters, even at similar K values (Figure 2, left). This suggests that, by this measure, human categories are less statistically “compact“ and encompass greater internal diversity than LLM clusters.
+Information-Theoretic Objective (L) Insights: The L objective reveals an even starker divergence (Figure 2, right). LLM-derived clusters consistently achieve significantly lower L values than human conceptual categories across most tested K. Since a lower L signifies a more statistically “optimal” trade-off between minimizing complexity and distortion within our framework, this implies LLMs are more “efficient” by this specific information-theoretic benchmark.
+Interpretation: The combined results from entropy and the L objective strongly indicate a fundamental difference in representational strategy. LLMs appear highly optimized for statistical compactness, achieving information-theoretically “efficient” representations by minimizing redundancy and internal variance. Human conceptual systems, in contrast, while appearing “suboptimal“ by these statistical measures, are likely shaped by a broader array of functional imperatives. These include the demands of adaptive generalization, rich causal and functional inference, the constraints of neural embodiment, and the requirements of nuanced communication–pressures that may favor representations less statistically “tidy” but ultimately more flexible and powerful for navigating a complex world.
+6 Discussion and Conclusion
+Our information-theoretic investigation reveals a fundamental divergence: LLMs and humans employ starkly different strategies in balancing informational compression with semantic meaning. While LLMs achieve broad categorical alignment with human judgment (RQ1; Section 5.1), they falter in capturing fine-grained semantic nuances such as typicality (RQ2; Section 5.2) and, critically, exhibit vastly different representational efficiency profiles (RQ3; Section 5.3). This pattern strongly suggests that LLMs and humans are optimizing for different objectives.
+8
+
+(a) Human conceptual categories exhibit higher mean entropy. Mean cluster entropy (Sα) vs. number of clusters (K) for LLMs and human categories (fixed K). Higher entropy indicates less compression.
+
+(b) LLMs achieve more optimal L trade-off. Our information-theoretic objective (L) vs. K. Lower L indicates a more statistically optimal compressionmeaning balance.
+
+Figure 2: LLMs Show More Statistically “Optimal” Compression Than Humans in Cluster Entropy and the L Measure. (a) Mean cluster entropy as a function of K used for k-means clustering. (b) IB-RDT objective (L) as a function of K used for k-means clustering. Human categories consistently show higher entropy and L values. Results shown for Rosch (1975) dataset; full results in Appendix A.8.
+
+LLMs appear aggressively optimized for statistical compactness. They form information-theoretic efficient representations, as evidenced by their lower cluster entropy and more “optimal” L scores. This hints they minimize redundancy and maximize statistical regularity, likely a consequence of their training on immense text corpora. This intense focus on compression, however, limits their capacity to fully encode the rich, prototype-based semantic details vital for deep, human-like understanding.
+Human cognition prioritizes adaptive richness, contextual flexibility, and broad functional utility, even if this incurs a cost in statistical compactness as measured by our framework. The higher entropy and L scores observed for human concepts likely reflect an optimization for a wider array of complex cognitive demands. These include nuanced representations for robust generalization, supporting potent inferential capabilities (causal, functional, goal-oriented), enabling effective communication through learnable and shareable structures, and grounding concepts in rich, multimodal experiences. The brain’s neural architecture itself may inherently favor distributed, context-sensitive, and adaptable representations over statically optimal compression. Human cognition, therefore, appears to “invest” in what our statistical measures register as inefficiency for better adaptability and versatility.
+The noteworthy performance of smaller encoder models like BERT in specific alignment tasks (Section 5.1) also underscores that architectural design and pre-training objectives significantly influence a model’s ability to abstract human-like conceptual information. This observation highlights important avenues for future AI development focused on enhancing human-AI alignment.
+These divergent representational strategies carry significant implications. For AI development, achieving more human-like understanding demands moving beyond current paradigms often centered on scaling and statistical pattern matching. Future efforts should explore principles that explicitly foster richer, more nuanced conceptual structures; our information-theoretic framework and L objective (Section 4) offer a potential class of tools for guiding and evaluating models toward this more human-like balance. For cognitive science, LLMs, with their distinct optimization biases, serve as valuable computational foils. Comparing their operational strategies against human performance can illuminate the unique constraints and multifaceted objectives that have shaped human concept formation, providing a powerful testbed for cognitive theories.
+In essence, LLMs excel at statistical compressibility, treading a representational path fundamentally distinct from human cognition, which champions adaptive richness and functional utility, often above sheer statistical efficiency. This core difference is critical: it highlights current limitations in AI’s pursuit of human-like understanding and charts vital directions for future research. Progressing AI
+9
+
+“from tokens to thoughts“, towards systems that genuinely comprehend and reason, will necessitate embracing principles that cultivate this richer, contextually-aware conceptual structure. Our framework offers a quantitative step in this direction, encouraging further exploration of how apparent “inefficiencies” might, in fact, be hallmarks of robust, human-like intelligence.
+References
+Marah Abdin, Jyoti Aneja, Hany Awadalla, Ahmed Awadallah, Ammar Ahmad Awan, Nguyen Bach, Amit Bahree, Arash Bakhtiari, Jianmin Bao, Harkirat Behl, et al. Phi-3 technical report: A highly capable language model locally on your phone. arXiv preprint arXiv:2404.14219, 2024.
+Abdelrahman Abouelenin, Atabak Ashfaq, Adam Atkinson, Hany Awadalla, Nguyen Bach, Jianmin Bao, Alon Benhaim, Martin Cai, Vishrav Chaudhary, Congcong Chen, et al. Phi-4-mini technical report: Compact yet powerful multimodal language models via mixture-of-loras. arXiv preprint arXiv:2503.01743, 2025.
+Jinze Bai, Shuai Bai, Yunfei Chu, Zeyu Cui, Kai Dang, Xiaodong Deng, Yang Fan, Wenbin Ge, Yu Han, Fei Huang, et al. Qwen technical report. arXiv preprint arXiv:2309.16609, 2023.
+Loïc Barrault, Paul-Ambroise Duquenne, Maha Elbayad, Artyom Kozhevnikov, Belen Alastruey, Pierre Andrews, Mariano Coria, Guillaume Couairon, Marta R Costa-jussà, David Dale, et al. Large concept models: Language modeling in a sentence representation space. arXiv preprint arXiv:2412.08821, 2024.
+William Croft. Radical construction grammar: Syntactic theory in typological perspective. Oxford University Press, USA, 2001.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. BERT: Pre-training of deep bidirectional transformers for language understanding. In Jill Burstein, Christy Doran, and Thamar Solorio, editors, Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers), pages 4171–4186, Minneapolis, Minnesota, June 2019. Association for Computational Linguistics. doi: 10.18653/v1/N19-1423. URL https://aclanthology. org/N19-1423/.
+Luis Gonzalo Sanchez Giraldo, Murali Rao, and Jose C Principe. Measures of entropy from data using infinitely divisible kernels. IEEE Transactions on Information Theory, 61(1):535–548, 2014.
+Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783, 2024.
+Pengcheng He, Xiaodong Liu, Jianfeng Gao, and Weizhu Chen. Deberta: Decoding-enhanced bert with disentangled attention. arXiv preprint arXiv:2006.03654, 2020.
+Nhat Hoang-Xuan, Minh Vu, and My T Thai. Llm-assisted concept discovery: Automatically identifying and explaining neuron functions. arXiv preprint arXiv:2406.08572, 2024.
+Nathaniel Imel and Noga Zaslavsky. Optimal compression in human concept learning. In Proceedings of the Annual Meeting of the Cognitive Science Society, volume 46, 2024.
+Mojan Javaheripi, Sébastien Bubeck, Marah Abdin, Jyoti Aneja, Sebastien Bubeck, Caio César Teodoro Mendes, Weizhu Chen, Allie Del Giorno, Ronen Eldan, Sivakanth Gopi, et al. Phi-2: The surprising power of small language models. Microsoft Research Blog, 1(3):3, 2023.
+Siddharth Karamcheti, Laurel Orr, Jason Bolton, Tianyi Zhang, Karan Goel, Avanika Narayan, Rishi Bommasani, Deepak Narayanan, Tatsunori Hashimoto, Dan Jurafsky, et al. Mistral–a journey towards reproducible language model training, 2021.
+Yuxiao Li, Eric J Michaud, David D Baek, Joshua Engels, Xiaoqing Sun, and Max Tegmark. The geometry of concepts: Sparse autoencoder feature structure. arXiv preprint arXiv:2410.19750, 2024.
+10
+
+Akihiro Maeda, Takuma Torii, and Shohei Hidaka. Decomposing co-occurrence matrices into interpretable components as formal concepts. In Findings of the Association for Computational Linguistics ACL 2024, pages 4683–4700, 2024.
+Michael E McCloskey and Sam Glucksberg. Natural categories: Well defined or fuzzy sets? Memory & Cognition, 6(4):462–472, 1978.
+Gregory Murphy. The big book of concepts. MIT press, 2004.
+Kiho Park, Yo Joong Choe, Yibo Jiang, and Victor Veitch. The geometry of categorical and hierarchical concepts in large language models. arXiv preprint arXiv:2406.01506, 2024.
+E Rosch. On the internal structure of perceptual and semantic categories. Cognitive development and the acquisition of language/New York: Academic Press, 1973a.
+Eleanor Rosch. Prototype theory. Cognitive development and the acquisition of language, pages 111–144, 1973b.
+Eleanor Rosch. Cognitive representations of semantic categories. Journal of experimental psychology: General, 104(3):192, 1975.
+Eleanor Rosch, Carol Simpson, and R Scott Miller. Structural bases of typicality effects. Journal of Experimental Psychology: Human perception and performance, 2(4):491, 1976.
+Eleanor H Rosch. Natural categories. Cognitive psychology, 4(3):328–350, 1973c.
+Chen Shani, Jilles Vreeken, and Dafna Shahaf. Towards concept-aware large language models. In Findings of the Association for Computational Linguistics: EMNLP 2023, pages 13158–13170, 2023.
+Claude Elwood Shannon. A mathematical theory of communication. The Bell system technical journal, 27(3):379–423, 1948.
+Chandan Singh, Jeevana Priya Inala, Michel Galley, Rich Caruana, and Jianfeng Gao. Rethinking interpretability in the era of large language models. arXiv preprint arXiv:2402.01761, 2024.
+Ben Sorscher, Surya Ganguli, and Haim Sompolinsky. Neural representational geometry underlies few-shot concept learning. Proceedings of the National Academy of Sciences, 119(43): e2200800119, 2022.
+Gemma Team, Thomas Mesnard, Cassidy Hardin, Robert Dadashi, Surya Bhupatiraju, Shreya Pathak, Laurent Sifre, Morgane Rivière, Mihir Sanjay Kale, Juliette Love, et al. Gemma: Open models based on gemini research and technology. arXiv preprint arXiv:2403.08295, 2024.
+Gemma Team, Aishwarya Kamath, Johan Ferret, Shreya Pathak, Nino Vieillard, Ramona Merhej, Sarah Perrin, Tatiana Matejovicova, Alexandre Ramé, Morgane Rivière, et al. Gemma 3 technical report. arXiv preprint arXiv:2503.19786, 2025.
+Naftali Tishby, Fernando C Pereira, and William Bialek. The information bottleneck method. arXiv preprint physics/0004057, 2000.
+Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne Lachaux, Timothée Lacroix, Baptiste Rozière, Naman Goyal, Eric Hambro, Faisal Azhar, et al. Llama: Open and efficient foundation language models. arXiv preprint arXiv:2302.13971, 2023a.
+Hugo Touvron, Louis Martin, Kevin Stone, Peter Albert, Amjad Almahairi, Yasmine Babaei, Nikolay Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti Bhosale, et al. Llama 2: Open foundation and fine-tuned chat models. arXiv preprint arXiv:2307.09288, 2023b.
+Mycal Tucker, Julie Shah, Roger Levy, and Noga Zaslavsky. Towards human-like emergent communication via utility, informativeness, and complexity. Open Mind, 9:418–451, 2025.
+Amos Tversky. Features of similarity. Psychological review, 84(4):327, 1977.
+11
+
+Lan Wei, Dong Wang, and Yu Wang. Generalized relative entropy: New look at rényi entropy and its exploration from complexity measures to sparsity measures with applications in machine condition monitoring. Mechanical Systems and Signal Processing, 223:111917, 2025.
+Clark Wissler. The spearman correlation formula. Science, 22(558):309–311, 1905. J Gerard Wolff. Information compression as a unifying principle in human learning, perception, and
+cognition. Complexity, 2019(1):1879746, 2019. An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li,
+Dayiheng Liu, Fei Huang, Haoran Wei, et al. Qwen2. 5 technical report. arXiv preprint arXiv:2412.15115, 2024. Liu Zhuang, Lin Wayne, Shi Ya, and Zhao Jun. A robustly optimized BERT pre-training approach with post-training. In Sheng Li, Maosong Sun, Yang Liu, Hua Wu, Kang Liu, Wanxiang Che, Shizhu He, and Gaoqi Rao, editors, Proceedings of the 20th Chinese National Conference on Computational Linguistics, pages 1218–1227, Huhhot, China, August 2021. Chinese Information Processing Society of China. URL https://aclanthology.org/2021.ccl-1.108/.
+12
+
+A Limitations
+While this study offers valuable insights, several limitations should be considered.
+• Our analysis primarily focuses on English; generalizability across languages with different structures is an open question.
+• Human categorization data as a benchmark may not fully capture cognitive complexity and could introduce biases.
+• Our IB-RDT objective is applied to specific LLMs; other models or representations might behave differently.
+• We focus on static, context-free representations. LLMs may fall short in capturing context sensitivity, as human concepts are influenced by factors beyond raw compression efficiency (experience, social interaction, cultural context).
+• Our analysis is limited to textual input and does not explore image-based representations.
+Future work could address these by expanding to other languages, exploring alternative cognitive models, dynamic representations, and testing these principles on different architectures or in realworld applications.
+A.1 Dataset Access Details
+The aggregated and digitized human categorization datasets from Rosch [1973a, 1975], McCloskey and Glucksberg [1978] are made available in CSV format at: [Link reduced for anonymity].
+A.2 LLM Details
+• BERT family: deberta-large, bert-large-uncased, roberta-large [Devlin et al., 2019, He et al., 2020, Zhuang et al., 2021].
+• QWEN family: qwen2-0.5b, qwen2.5-0.5b, qwen1.5-0.5b, qwen2.5-1.5b, qwen5-1.5b, qwen1.5-1.5b, qwen1.5-4b, qwen2.5-4b, qwen2-7b, qwen1.5-14b, qwen1.5-32b, qwen1.572b [Bai et al., 2023, Yang et al., 2024].
+• Llama family: llama-3.2-1b, llama-3.1-8b, llama-3-8b, llama-3-70b, llama-3.1-70b [Touvron et al., 2023a,b, Grattafiori et al., 2024].
+• Phi family: phi-1.5, phi-1, phi-2, phi-4 [Javaheripi et al., 2023, Abdin et al., 2024, Abouelenin et al., 2025].
+• Gemma family: gemma-2b, gemma-2-2b, gemma-7b, gemma-2-9b, gemma-2-27b [Team et al., 2024, 2025].
+• Mistral family: mistral-7b-v0.3 [Karamcheti et al., 2021].
+A.3 Additional Clustering Metrics
+To further validate our cluster alignment findings (Section 5.1), in addition to Adjusted Mutual Information (AMI) and the Normalized Mutual Information (NMI), we also computed the Adjusted Rand Index (ARI) for the k-means clusters derived from LLM embeddings against human-defined categories. ARI measures the similarity between two data clusterings, correcting for chance. Like AMI, a score of 1 indicates perfect agreement and 0 indicates chance agreement.
+Across all tested LLMs, the ARI and NMI scores largely mirrored the trends observed with AMI, showing significantly above-chance alignment with human categories and similar relative model performances. Silhouette scores, while more variable, generally indicated reasonable cluster cohesion for both LLM-derived and human categories. Detailed tables of these scores are provided below.
+These supplementary metrics reinforce the conclusion that LLMs capture broad human-like conceptual groupings.
+A.4 Detailed AMI Scores per Model and Dataset
+Table 1 provides a more granular view of the AMI scores for each LLM across the three individual psychological datasets.
+13
+
+Figure 3: LLM-derived Clusters Show Above-Chance Alignment with Human Conceptual Categories. Normalized Mutual Information (NMI) between human-defined categories and clusters from LLM embeddings. Results are averaged over three psychological datasets. All models perform significantly better than random clustering. BERT’s performance is notably strong.
+
+Figure 4: LLM-derived Clusters Show Above-Chance Alignment with Human Conceptual Categories. Adjusted Rand Index (ARI) between human-defined categories and clusters from LLM embeddings. Results are averaged over three psychological datasets. All models perform significantly better than random clustering. BERT’s performance is notably strong.
+
+Dataset [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975]
+
+Model bert-large-uncased bert-large-uncased bert-large-uncased FacebookAI/roberta-large FacebookAI/roberta-large FacebookAI/roberta-large google-t5/t5-large google-t5/t5-large google-t5/t5-large google/gemma-2-27b google/gemma-2-27b google/gemma-2-27b google/gemma-2-2b google/gemma-2-2b google/gemma-2-2b google/gemma-2-9b google/gemma-2-9b
+
+14
+
+NMI 0.19453 0.16547 0.12003 0.1021 0.12138 0.06271 0.16583 -0.03799 0.06146 0.08523 0.04276 0.07814 0.04029 0.04529 0.09953 0.1222 0.07841
+
+AMI 0.2011 0.27324 0.15934 0.10666 0.23938 0.08873 0.16855 0.04179 0.08825 0.09065 0.10062 0.10274 0.04107 0.14844 0.13593 0.12757 0.16126
+
+ARI 0.11336 0.2216 0.06306 0.03393 0.14165 0.03173 0.03676 0.00758 0.0082 0.04158 0.06244 0.04364 0.01212 0.07596 0.06326 0.06053 0.09617
+
+[McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978]
+
+google/gemma-2-9b google/gemma-2b google/gemma-2b google/gemma-2b google/gemma-7b google/gemma-7b google/gemma-7b meta-llama/Llama-3.1-70B meta-llama/Llama-3.1-70B meta-llama/Llama-3.1-70B meta-llama/Llama-3.1-8B meta-llama/Llama-3.1-8B meta-llama/Llama-3.1-8B meta-llama/Llama-3.2-1B meta-llama/Llama-3.2-1B meta-llama/Llama-3.2-1B meta-llama/Llama-3.2-3B meta-llama/Llama-3.2-3B meta-llama/Llama-3.2-3B meta-llama/Meta-Llama-3-70B meta-llama/Meta-Llama-3-70B meta-llama/Meta-Llama-3-70B meta-llama/Meta-Llama-3-8B meta-llama/Meta-Llama-3-8B meta-llama/Meta-Llama-3-8B microsoft/deberta-large microsoft/deberta-large microsoft/deberta-large microsoft/phi-1_5 microsoft/phi-1_5 microsoft/phi-1_5 microsoft/phi-1 microsoft/phi-1 microsoft/phi-1 microsoft/phi-2 microsoft/phi-2 microsoft/phi-2 microsoft/phi-4 microsoft/phi-4 microsoft/phi-4 mistralai/Mistral-7B-v0.3 mistralai/Mistral-7B-v0.3 mistralai/Mistral-7B-v0.3 Qwen/Qwen1.5-0.5B Qwen/Qwen1.5-0.5B Qwen/Qwen1.5-0.5B Qwen/Qwen1.5-1.8B Qwen/Qwen1.5-1.8B Qwen/Qwen1.5-1.8B Qwen/Qwen1.5-14B Qwen/Qwen1.5-14B Qwen/Qwen1.5-14B Qwen/Qwen1.5-32B Qwen/Qwen1.5-32B Qwen/Qwen1.5-32B Qwen/Qwen1.5-4B Qwen/Qwen1.5-4B Qwen/Qwen1.5-4B Qwen/Qwen1.5-72B Qwen/Qwen1.5-72B Qwen/Qwen1.5-72B
+
+0.10879 0.04336 -0.00353 0.03472 0.04459 -0.03055 0.03338 0.03008 -0.07026 -0.04773 0.00473 -0.03928 -0.02671 0.01936 -0.01876 0.03625 0.03757 0.01893 0.03914 0.02289 -0.06428 -0.04595 0.03512 -0.06011 -0.0355 0.03748 0.16568 0.03217 0.02102 0.03989 0.00895 0.0249 -0.03625 -0.01148 0.03703 -0.03654 -0.00254 0.03075 -0.06737 -0.01789 0.0425 -0.05018 -0.01264 0.00148 -0.01538 0.02559 0.03397 -0.01129 -0.00541 0.0372 -0.02604 0.00124 0.02638 -0.03413 -0.01991 0.03803 -0.03309 -0.03997 0.03697 -0.06184 -0.02022
+
+0.13997 0.04616 0.04483 0.05484 0.04547 0.02644 0.05724 0.03528 0.02636 0.00972 0.00393 0.05489 0.02208 0.01567 0.05663 0.06798 0.03537 0.09619 0.07395 0.03133 0.0185 0.01068 0.02852 0.03694 0.0219 0.03909 0.28993 0.06175 0.01786 0.13887 0.05215 0.01698 0.02811 0.03085 0.02968 0.04227 0.02531 0.03043 0.00092 0.02705 0.03507 0.01217 0.03902 -0.00225 0.04833 0.06023 0.03232 0.05803 0.03614 0.02738 0.05153 0.04136 0.02436 0.02526 0.02124 0.04058 0.03988 0.00548 0.02892 0.02213 0.02918
+
+0.06439 0.01593 0.01577 0.02142 0.01052 0.01506 0.02176 0.01936 0.00392 0.00236 0.00023 0.01884 6.00E-05 0.00246 0.00782 0.01352 0.00876 0.03193 0.0202 0.01514 0.00554 0.00272 0.00225 0.00676 0.00676 0.01467 0.20527 0.03019 0.0075 0.04305 0.00639 0.00133 0.00217 0.00371 0.00404 0.03942 0.00533 0.01076 -0.01361 0.00066 0.00357 0.0177 0.00931 0.00399 0.0095 0.00771 0.01034 0.00683 0.00538 0.0028 0.01211 0.00338 0.00409 -0.00665 -0.00059 0.01742 0.01678 -0.00028 0.00144 0.0017 0.00297
+
+15
+
+[Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978] [Rosch, 1973c] [Rosch, 1975] [McCloskey and Glucksberg, 1978]
+
+Qwen/Qwen2-0.5B Qwen/Qwen2-0.5B Qwen/Qwen2-0.5B Qwen/Qwen2-1.5B Qwen/Qwen2-1.5B Qwen/Qwen2-1.5B Qwen/Qwen2-7B Qwen/Qwen2-7B Qwen/Qwen2-7B Qwen/Qwen2.5-0.5B Qwen/Qwen2.5-0.5B Qwen/Qwen2.5-0.5B Qwen/Qwen2.5-1.5B Qwen/Qwen2.5-1.5B Qwen/Qwen2.5-1.5B Qwen/Qwen2.5-3B Qwen/Qwen2.5-3B Qwen/Qwen2.5-3B Qwen/Qwen2.5-7B Qwen/Qwen2.5-7B Qwen/Qwen2.5-7B
+
+0.02266 0.0515 0.01508 0.02956 -0.03595 0.01768 0.06424 0.0333 0.05329 0.03165 -0.06534 0.0062 0.04838 0.03785 0.06166 0.03882 0.03977 0.03416 0.0529 -0.00905 0.00222
+
+0.01923 0.14571 0.04357 0.02779 0.03443 0.05407 0.06439 0.09155 0.07599 0.03291 -0.0196 0.04191 0.0489 0.113 0.08675 0.0348 0.10821 0.07307 0.05051 0.03227 0.02759
+
+0.00662 0.04999 0.00643 0.00544 -0.01099 0.01604 0.02067 0.02832 0.01977 0.01029 -0.01165 0.0054 0.0129 0.02761 0.03162 0.00465 0.04302 0.02959 0.01605 0.01044 0.00551
+
+Table 1: Mutual information measures (normalized mutual information, adjusted mutual information, adjusted rand index) per model per dataset. Aggregated results are shown in the main paper and the Figures in the Appendix.
+
+A.5 Correlation between Human Typicality Judgments and LLM Internal Cluster Geometry
+A.6 Typicality and Cosine Similarity [RQ2]
+Figure 5 shows representative scatter plots illustrating the relationship between human typicality scores (or psychological distances) and the LLM-derived item-centroid cosine similarities for selected categories and models. These plots visually demonstrate the often modest correlations discussed in Section 5.2.
+Figure 6 shows the aggregated Spearman correlation across model families and datasets. These correlations are very weak and mostly non-significant.
+
+A.7 Theoretical Extreme Case Exploration for L
+
+(Content from your original Appendix Section A: “Theoretical Extreme Case Exploration“ would go here, ensuring it refers to L as defined in Equation 4).
+
+In the case where |C| = |X| (each data point is a cluster of size 1, so |Cc| = 1 ∀c ∈ C), then H(X|C) =
+
+1 |X |
+
+c∈C 1 · log2 1 = 0. The distortion term σc2 = 0 for each cluster as the item is its own centroid. Thus,
+
+L = I(X; C) + β · 0 = H(X) − H(X|C) = H(X) = log2 |X|. This represents the cost of encoding each
+
+item perfectly without any compression via clustering, and zero distortion.
+
+In the case where |C| = 1 (one cluster CX contains all |X| data points, so |CCX | = |X|), then H(X|C) =
+
+1 |X |
+
+|X |
+
+log2
+
+|X |
+
+=
+
+log2
+
+|X |.
+
+Thus,
+
+I (X ;
+
+C)
+
+=
+
+H (X ) − H (X |C )
+
+=
+
+log2
+
+|X | − log2
+
+|X |
+
+=
+
+0.
+
+This
+
+represents
+
+maximum compression (all items are treated as one). The distortion term becomes β · |X| 1 |X| · σX2 = β · σX2 ,
+
+where σX2 is the variance of all items X with respect to the global centroid of X. So, L = 0 + β · σX2 = β · σX2 .
+
+This represents the scenario of maximum compression where the cost is purely the distortion incurred by
+
+representing all items by a single prototype.
+
+A.8 Compression Figures
+Figure 7 shows the mean cluster entropy (Sα) versus the number of clusters (K) aggregated across the different LLM families, compared against human-defined categories (represented as distinct points or lines at their fixed K values from the datasets). Higher entropy values indicate less compressed or more diverse clustering.
+Figure 8 depicts the IB-RDT objective (L) vs. K. Lower L indicates a more optimal balance between compression (I(X; C)) and semantic fidelity (distortion). Human categories (fixed K) show higher L values.
+
+16
+
+Model
+
+Dataset Correlation (Spearman ρ) Rosch (1973) Rosch (1975) McCloskey (1978)
+
+Qwen1.5-72B Llama-3-70B Llama-3.1-70B Qwen1.5-32B gemma-2-27b Qwen1.5-14B phi-4 gemma-2-9b Llama-3.1-8B Llama-3-8B Mistral-7B-v0.3 Qwen2-7B Qwen2.5-7B gemma-7b Llama-3.2-3B phi-2 gemma-2b gemma-2-2b Qwen1.5-1.8B Qwen2.5-1.5B phi-1.5 phi-1 Llama-3.2-1B Qwen1.5-0.5B Qwen2-0.5B Qwen2.5-0.5B roberta-large bert-large-uncased deberta-large
+
+-0.237 -0.124∗∗ -0.125∗∗ -0.051 -0.166 -0.197 -0.061 -0.282 -0.184 -0.162
+0.015 -0.021 0.033 -0.135 -0.007 0.049 -0.176 -0.283 -0.106 -0.003 0.134 -0.219 -0.062 -0.122 -0.044 -0.018 0.088 -0.427 0.016
+
+-0.049 -0.085 -0.084 -0.064∗∗ -0.116 -0.052 -0.044 -0.074 -0.075 -0.073 -0.112 -0.105 -0.066 -0.047∗∗ 0.000 -0.108∗∗ -0.055 -0.107 -0.085 -0.035 -0.134 -0.138 -0.004∗∗ -0.004 0.009 -0.009 -0.047 -0.198∗∗ -0.042
+
+-0.016 0.016 0.015 0.007 0.038 -0.029 0.025 0.117 -0.058 -0.053 0.040 -0.008 -0.030 0.010 0.001 -0.001 0.052 0.117 0.021 0.015 0.007 0.013 -0.003 -0.001 -0.009 -0.007 -0.074 0.206∗∗ -0.023
+
+Table 2: Correlation between Human Typicality Judgments and LLM Internal Cluster Geometry. Spearman rank correlations between human-rated psychological typicality/distance (higher
+human scores = less typical/more distant) and item-to-centroid cosine similarity (higher similarity = more central to LLM cluster). Negative correlations suggest alignment. ∗∗p < 0.05.
+
+17
+
+Figure 5: Weak-to-No Correlation Between LLM Embedding Distance and Human Typicality Judgments. Scatter plot examples of the cosine similarity versus the human typicality of items belonging to the category compared to items from other categories.
+Figure 6: Weak and Mostly Non-Significant Spearman Correlation Values Between Human Typicality Judgments and LLM Cosine Similarity Indicating Different Structure Representing Concepts. Mean Spearman correlation values across the models belonging to the same family and across the three datasets.
+18
+
+Figure 7: Human Conceptual Categories Exhibit Higher Mean Entropy than LLM-Derived Clusters. Mean cluster entropy (Sα) versus the number of clusters (K) for various LLMs, compared against human-defined categories (represented as distinct points or lines at their fixed K values from the datasets). Higher entropy values indicate less compressed or more diverse clusterings.
+Figure 8: LLMs Achieve a More “Optimal” Compression-Meaning Trade-off by the L Measure. IB-RDT objective (L) vs. K. Lower L indicates a more optimal balance between compression (I(X; C)) and semantic fidelity (distortion). Human categories (fixed K) show higher L values.
+19
+

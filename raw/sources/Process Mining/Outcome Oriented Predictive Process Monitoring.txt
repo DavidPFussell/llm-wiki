@@ -1,0 +1,3352 @@
+arXiv:1707.06766v4 [cs.AI] 23 Oct 2018
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+IRENE TEINEMAA, University of Tartu MARLON DUMAS, University of Tartu MARCELLO LA ROSA, e University of Melbourne FABRIZIO MARIA MAGGI, University of Tartu
+Predictive business process monitoring refers to the act of making predictions about the future state of ongoing cases of a business process, based on their incomplete execution traces and logs of historical (completed) traces. Motivated by the increasingly pervasive availability of ne-grained event data about business process executions, the problem of predictive process monitoring has received substantial a ention in the past years. In particular, a considerable number of methods have been put forward to address the problem of outcomeoriented predictive process monitoring, which refers to classifying each ongoing case of a process according to a given set of possible categorical outcomes – e.g., Will the customer complain or not? Will an order be delivered, canceled or withdrawn? Unfortunately, di erent authors have used di erent datasets, experimental se ings, evaluation measures and baselines to assess their proposals, resulting in poor comparability and an unclear picture of the relative merits and applicability of di erent methods. To address this gap, this article presents a systematic review and taxonomy of outcome-oriented predictive process monitoring methods, and a comparative experimental evaluation of eleven representative methods using a benchmark covering 24 predictive process monitoring tasks based on nine real-life event logs.
+CCS Concepts: •Applied computing → Business process monitoring;
+Additional Key Words and Phrases: business process, predictive monitoring, sequence classi cation
+1 INTRODUCTION A business process is a collection of inter-related events, activities, and decision points that involve a number of actors and objects, which collectively lead to an outcome that is of value to a customer [11]. A typical example is an order-to-cash process: a process that starts when a purchase order is received and ends when the product/service is delivered and the payment is con rmed. An execution of a business process is called a case. In an order-to-cash process, each purchase order gives rise to a case.
+Business process monitoring is the act of analyzing events produced by the executions of a business process at runtime, in order to understand its performance and its conformance with respect to a set of business goals [11]. Traditional process monitoring techniques provide dashboards and reports showing the recent performance of a business process in terms of key performance indicators such as mean execution time, resource utilization or error rate with respect to a given notion of error.
+Predictive (business) process monitoring techniques go beyond traditional ones by making predictions about the future state of the executions of a business process (i.e. the cases). For example, a predictive monitoring technique may seek to predict the remaining execution time of each ongoing case of a process [33], the next activity that will be executed in each case [12], or the
+nal outcome of a case, with respect to a possible set of business outcomes [25–27]. For instance, in an order-to-cash process , the possible outcomes of a case may be that the purchase order is closed satisfactorily (i.e., the customer accepted the products and paid) or unsatisfactorily (e.g., the
+
+1:2
+
+I. Teinemaa et al.
+
+order was canceled or withdrawn). Another set of possible outcomes is that the products were delivered on time (with respect to a maximum acceptable delivery time), or delivered late.
+Recent years have seen the emergence of a rich eld of proposed methods for predictive process monitoring in general, and predictive monitoring of (categorical) case outcomes in particular – herein called outcome-oriented predictive process monitoring. Unfortunately, there is no uni ed approach to evaluate these methods. Indeed, di erent authors have used di erent datasets, experimental se ings, evaluation measures and baselines.
+is paper aims at lling this gap by (i) performing a systematic literature review of outcomeoriented predictive process monitoring methods; (ii) providing a taxonomy of existing methods; and (iii) performing a comparative experimental evaluation of eleven representative methods, using a benchmark of 24 predictive monitoring tasks based on nine real-life event logs.
+e contribution of this study is a categorized collection of outcome-oriented predictive process monitoring methods and a benchmark designed to enable researchers to empirically compare new methods against existing ones in a uni ed se ing. e benchmark is provided as an opensource framework that allows researchers to run the entire benchmark with minimal e ort, and to con gure and extend it with additional methods and datasets.
+e rest of the paper is structured as follows. Section 2 introduces some basic concepts and de nitions. Section 3 describes the search and selection of relevant studies. Section 4 surveys the selected studies and provides a taxonomy to classify them. Section 5 reports on benchmark evaluation of the selected studies while Section 6 discusses threats to validity. Finally, Section 7 summarizes the ndings and outlines directions for future work.
+2 BACKGROUND e starting point of predictive process monitoring are event records representing the execution
+of activities in a business process. An event record has a number of a ributes. ree of these a ributes are present in every event record, namely the event class (a.k.a. activity name) specifying which activity the event refers to, the timestamp specifying when did the event occur, and the case id indicating which case of the process generated this event. For example, in an order-to-cash process, the purchase order identi er is the case id, since every event occurring in an execution of this process is associated with a purchase order. In other words, every event represents the occurrence of an activity at a particular point in time and in the context of a given case. An event record may carry additional a ributes in its payload. ese are called event-speci c a ributes (or event a ributes for short). For example, in an order-to-cash process, the amount of the invoice may be recorded as an a ribute of an event referring to activity “Create invoice”. Other a ributes, namely case a ributes, belong to the case and are hence shared by all events generated by the same case. For example in an order-to-cash process, the customer identi er is likely to be a case a ribute. If so, this a ribute will appear in every event of every case of the order-to-cash process, and it has the same value for all events generated by a given case. In other words, the value of a case a ribute is static, i.e., it does not change throughout the lifetime of a case, as opposed to a ributes in the event payload, which are dynamic as they change from an event to the other.
+Formally, an event record is de ned as follows:
+De nition 2.1 (Event). An e ent is a tuple (a, c, t, (d1, 1), . . . , (dm, m)) where a is the activity name, c is the case id, t is the timestamp and (d1, 1) . . . , (dm, m) (where m ≥ 0) are the event or case a ributes and their values.
+Herein, we use the term event as a shorthand for event record. e universe of all events is hereby denoted by E.
+e sequence of events generated by a given case forms a trace. Formally:
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:3
+
+σ1 = [(consultation, 1, 10:30AM, (age, 33), (gender, female), (amountPaid, 10), (department, radiotherapy)), . . . , (ultrasound, 1, 10:55AM, (age, 33), (gender, female), (amountPaid, 15), (department, NursingWard))]
+σ2 = [(order blood, 2, 12:30PM, (age, 56), (gender, male), (department, GeneralLab), . . . , (payment, 2, 2:30PM, (age, 56), (gender, male), (amountPaid, 100), (deparment, FinancialDept))]
+
+Fig. 1. Extract of an event log.
+
+De nition 2.2 (Trace). A trace is a non-empty sequence σ = [e1, . . . , en] of events such that ∀i ∈ [1..n], ei ∈ E and ∀i, j ∈ [1..n] ei .c = ej .c. In other words, all events in the trace refer to the same case.
+e universe of all possible traces is denoted by S. A set of completed traces (i.e., traces recording the execution of completed cases) is called an event log. As a running example, we consider a simple log of a patient treatment process containing two cases (cf. Figure 1). e activity name of the rst event in trace σ1 is consultation, it refers to case 1 and occurred at 10:30AM. e additional event a ributes show that the cost of the procedure was 10 and the activity was performed in the radiotherapy department. ese two are event a ributes. Note that not all events carry every possible event a ribute. For example, the rst event of trace σ2 does not have the a ribute amountPaid. In other words, the set of event a ributes can di er from one event to another even within the same trace. e events in each trace also carry two case a ributes: the age of the patient and the gender. e la er a ributes have the same value for all events of a trace. An event or a case a ribute can be of numeric, categorical, or of textual data type. Each data type requires di erent preprocessing to be usable by the classi er. With respect to the running example, possible event and case a ributes and their type are presented in Table 1.
+Table 1. Data a ributes in the event log
+
+Type
+
+Example
+
+Case (static) categorical numeric textual
+Event (dynamic) categorical numeric textual
+
+patient’s gender patient’s age description of the application
+activity, resource amount paid patient’s medical history
+
+In predictive process monitoring, we aim at making predictions for traces of incomplete cases, rather than for traces of completed cases. erefore, we make use of a function that returns the
+rst l events of a trace of a (completed) case.
+De nition 2.3 (Pre x function). Given a trace σ = [e1, . . . , en] and a positive integer l ≤ n, pre x(σ , l) = [e1, . . . , el ].
+Given a trace, outcome-oriented predictive process monitoring aims at predicting its class label (expressing its outcome according to some business goal), given a set of completed cases with their known class labels.
+
+1:4
+
+I. Teinemaa et al.
+
+De nition 2.4 (Labeling function). A labeling function : S → Y is a function that maps a trace σ to its class label (σ ) ∈ Y with Y being the domain of the class labels. For outcome predictions, Y is a nite set of categorical outcomes. For example, for a binary outcome Y = {0, 1}.
+
+Predictions are made using a classi er that takes as input a xed number of independent variables (herein called features) and learns a function to estimate the dependent variable (class label). is means that in order to use the data in an event log as input of a classi er, each trace in the log must be encoded as a feature vector.
+De nition 2.5 (Sequence/trace encoder). A sequence (or trace) encoder f : S → X1 × · · · × Xp is a function that takes a (partial) trace σ and transforms it into a feature vector in the p-dimensional vector space X1 × · · · × Xp with Xj ⊆ R, 1 ≤ j ≤ p being the domain of the j-th feature.
+e features extracted from a trace may encode information on activities performed during the execution of a trace and their order (herein called control- ow features), and features that correspond to event/case a ributes (herein referred to as data payload features).
+A classi er is a function that assigns a class label to a feature vector.
+
+De nition 2.6 (Classi er). A classi er cls : X1 × · · · × Xp → Y is a function that takes an encoded p-dimensional sequence and estimates its class label.
+
+e construction of a classi er (a.k.a. classi er training) for outcome-oriented predictive process monitoring is achieved by applying a classi cation algorithm over a set of pre xes of an event log. Accordingly, given a log L, we de ne its pre x log log L∗ to be the event log that contains all pre xes of L, i.e., L∗ = {pre f ix(σ , l) : σ ∈ L, 1 ≤ l ≤ |σ |}. Since the main aim of predictive process monitoring is to make predictions as early as possible (rather than when a case is about
+
+to complete), we o en focus on the subset of the pre x log containing traces of up to a given
+
+length. Accordingly, we de
+
+ne the length-
+
+ltered pre
+
+x
+
+log
+
+L∗
+k
+
+to be the subset of L∗ containing
+
+only pre xes of size less than or equal to k.
+
+With respect to the broader literature on machine learning, we note that predictive process
+
+monitoring corresponds to a problem of early sequence classi cation. In other words, given a set of labeled sequences, the goal is to build a model that for a sequence pre x predicts the label this
+
+pre x will get when completed. A survey on sequence classi cation presented in [46] provides
+
+an overview of techniques in this eld. is la er survey noted that, while there is substantial
+
+literature on the problem of sequence classi cation for simple symbolic sequences (e.g., sequences of
+
+events without payloads), there is a lack of proposals addressing the problem for complex symbolic
+
+sequences (i.e., sequences of events with payloads). e problem of outcome-oriented predictive
+
+process monitoring can be seen as an early classi cation over complex sequences where each
+
+element has a timestamp, a discrete a ribute referring to an activity, and a payload made of a
+
+heterogeneous set of other a ributes.
+
+3 SEARCH METHODOLOGY
+In order to retrieve and select studies for our survey and benchmark, we conducted a Systematic Literature Review (SLR) according to the approach described in [20]. We started by specifying the research questions. Next, guided by these goals, we developed relevant search strings for querying a database of academic papers. We applied inclusion and exclusion criteria to the retrieved studies in order to lter out irrelevant ones, and last, we divided all relevant studies into primary and subsumed ones based on their contribution.
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:5
+
+3.1 Research questions e purpose of this survey is to de ne a taxonomy of methods for outcome-oriented predictive
+monitoring of business processes. e decision to focus on outcome-oriented predictive monitoring is to have a well-delimited and manageable scope, given the richness of the literature in the broader
+eld of predictive process monitoring, and the fact that other predictive process monitoring tasks rely on entirely di erent techniques and evaluation measures.
+In line with the selected scope, the survey focuses speci cally on the following research question:
+RQ0 Given an event log of completed business process execution cases and the nal outcome (class) of each case, how to train a model that can accurately and e ciently predict the outcome of an incomplete (partial) trace, based on the given pre x only?
+We then decomposed this overarching question into the following subquestions:
+RQ1 What methods exist for predictive outcome-oriented monitoring of business processes? RQ2 How to categorize these methods in a taxonomy? RQ3 What is the relative performance of these methods?
+In the following subsections, we describe our approach to identifying existing methods for predictive outcome-oriented process monitoring (RQ1). Subsequent sections address the other two research questions.
+3.2 Study retrieval First, we came up with relevant keywords according to the research question of predictive outcomeoriented process monitoring (RQ1) and our knowledge of the subject. We considered the following keywords relevant:
+• “(business) process” — a relevant study must take as input an event log of business process execution data;
+• “monitoring” — a relevant study should concern run-time monitoring of business processes, i.e., work with partial (running) traces;
+• “prediction” — a relevant study needs to estimate what will happen in the future, rather than monitor what has already happened.
+We deliberately le out “outcome” from the set of keywords. e reason for this is that we presumed that di erent authors might use di erent words to refer to this prediction target. erefore, in order to obtain a more exhaustive set of relevant papers, we decided to lter out studies that focus on other prediction targets (rather than the nal outcome) in an a-posteriori ltering phase.
+Based on these selected keywords, we constructed three search phrases: “predictive process monitoring”, “predictive business process monitoring”, and “business process prediction”. We applied these search strings to the Google Scholar academic database and retrieved all studies that contained at least one of the phrases in the title, keywords, abstract, or the full text of the paper. We used Google Scholar, a well-known electronic literature database, as it encompasses all relevant databases such as ACM Digital Library and IEEE Xplore, and also allows searching within the full text of a paper.
+e search was conducted in August 2017 and returned 93 papers, excluding duplicates.
+3.3 Study selection All the retrieved studies were matched against several inclusion and exclusion criteria to further determine their relevance to predictive outcome-oriented process monitoring. In order to be considered relevant, a study must satisfy all of the inclusion criteria and none of the exclusion criteria.
+
+1:6
+
+I. Teinemaa et al.
+
+e assessment of each study was performed independently by two authors of this paper, and the results were compared to resolve inconsistencies with the mediation of a third author.
+3.3.1 Inclusion criteria. e inclusion criteria are designed for assessing the relevance of studies in a super cial basis. Namely, these criteria are checked without working through the full text of the paper. e following inclusion criteria were applied to the retrieved studies:
+IN1 e study is concerned with predictions in the context of business processes (this criterion was assessed by reading title and abstract).
+IN2 e study is cited at least ve times.
+e application of these inclusion criteria to the original set of retrieved papers resulted in eight relevant studies. We proceeded with one-hop-snowballing, i.e., we retrieved the papers that are related to (cite or are cited by) these eight studies and applied the same inclusion criteria. is procedure resulted in 545 papers, of which we retained 70 unique papers a er applying the inclusion criteria.1
+3.3.2 Exclusion criteria. e list of studies that passed the inclusion criteria were further assessed according to a number of exclusion criteria. Determining if the exclusion criteria are satis ed could require a deeper analysis of the study, e.g., examining the approach and/or results sections of the paper. e applied exclusion criteria are:
+EX1 e study does not actually propose a predictive process monitoring method. EX2 e study does not concern outcome-oriented prediction. EX3 e technique proposed in the study is tailored to a speci c labeling function. EX4 e study does not take an event log as input.
+e EX1 criterion excludes overview papers, as well as studies that, a er a more thorough examination, turned out to be focusing on some research question other than predictive process monitoring. EX2 excludes studies where the prediction target is something other than the nal outcome. Common examples of other prediction targets that are considered irrelevant to this study are remaining time and next activity prediction. Using EX3, we excluded studies that are not directly about classi cation, i.e., that do not follow a black-box prediction of the case class. For example, studies that predict deadline violations by means of se ing a threshold on the predicted remaining time, rather than by directly classifying the case as likely to violate the deadline or not. e reason for excluding such studies is that, in essence, they predict a numeric value, and are thus not applicable for predicting an arbitrarily de ned case outcome. EX4 concerns studies that propose methods that do not utilize at least the following essential parts of an event log: the case identi er, the timestamp and the event classes. For instance, we excluded methods that take as input numerical time series without considering the heterogeneity in the control ow (event classes). In particular, this is the case in manufacturing processes which are of linear nature (a process chain). e reason for excluding such studies is that the challenges when predicting for a set of cases of heterogenous length are di erent from those when predicting for linear processes. While methods designed for heterogenous processes are usually applicable to those of linear nature, it is not so vice versa. Moreover, the linear nature of a process makes it possible to apply other, more standard methods that may achieve be er performance.
+e application of the exclusion criteria resulted in 14 relevant studies out of the 70 studies selected in the previous step.
+
+1All retrieved papers that satisfy the inclusion criteria can be found at h p://bit.ly/2uspLRp
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:7
+
+3.4 Primary and subsumed studies Among the papers that successfully passed both the inclusion and exclusion criteria, we determined primary studies that constitute an original contribution for the purposes of our benchmark, and subsumed studies that are similar to one of the primary studies and do not provide a substantial contribution with respect to it.
+Speci cally, a study is considered subsumed if: • there exists a more recent and/or more extensive version of the study from the same authors (e.g., a conference paper is subsumed by an extended journal version), or • it does not propose a substantial improvement/modi cation over a method that is documented in an earlier paper by other authors, or • the main contribution of the paper is a case study or a tool implementation, rather than the predictive process monitoring method itself, and the method is described and/or evaluated more extensively in a more recent study by other authors.
+is procedure resulted in seven primary and seven subsumed studies, listed in Table 2. In the next section we present the primary studies in detail, and classify them using a taxonomy.
+Table 2. Primary and subsumed studies
+
+Primary study
+
+Subsumed studies
+
+de Leoni et al. [8] Maggi et al. [25] Lakshmanan et al. [21] di Francescomarino et al. [10] Leontjeva et al. [22] Verenich et al. [45] Castellanos et al. [4]
+
+de Leoni et al. [7] Conforti et al. [5, 6] van der Spoel et al. [43] Schwegmann et al. [36, 37], Gha as et al.[18]
+
+4 ANALYSIS AND TAXONOMY In this section we present a taxonomy to classify the seven primary studies that we selected through our SLR. E ectively, with this section we aim at answering RQ1 (What methods exist?) and RQ2 (How to categorize them?) – cf. Section 3.1. e taxonomy is framed upon a general work ow for predictive process monitoring, which we derived by studying all the methods surveyed. is work ow is divided into two phases: o ine, to train a prediction model based on historical cases, and online, to make predictions on running process cases. e o ine phase, shown in Fig. 2, consists of four steps. First, given an event log, case pre xes are extracted and ltered (e.g., to retain only pre xes up to a certain length). Next, the identi ed pre xes are divided into buckets (e.g., based on process states or similarities among pre xes) and features are encoded from these buckets for classi cation. Finally, each bucket of encoded pre xes is used to train a classi er.
+e online phase, shown in Fig. 3, concerns the actual prediction for a running trace, by reusing the elements (buckets, classi ers) built in the o ine phase. Speci cally, given a running trace and a set of buckets of historical pre xes, the correct bucket is rst determined. Next, this information is used to encode the features of the running trace for classi cation. In the last step, a prediction is extracted from the encoded trace using the correct classi er for the determined bucket.
+We note that there is an exception among the surveyed methods that does not perfectly t the presented work ow. Namely, the KNN approach proposed by Maggi et al. [25] omits the
+
+1:8
+
+I. Teinemaa et al.
+
+Fig. 2. predictive process monitoring workflow (o line phase)
+
+Fig. 3. predictive process monitoring workflow (online phase)
+
+o ine phase. Instead, in this approach the bucket (a set of similar traces from the training set) is determined and a classi er is trained during the online phase, separately for each running case.
+Table 3 lists the seven primary studies identi ed in our SLR, and shows their characteristics according to the four steps of the o ine phase (pre x selection and ltering, trace bucketing, sequence encoding and classi cation algorithm). In the rest of this section we survey these studies based on these characteristics, and use this information to build a taxonomy that allows us to classify the studies.
+
+Table 3. Classification of the seven primary studies according to the four steps of the o line phase.
+
+Pre x extraction and
+
+Sequence encoding
+
+Primary study
+
+ltering
+
+Trace bucketing
+
+Control ow Data
+
+Classi cation algorithm
+
+de Leoni et al. [8] Maggi et al. [25] Lakshmanan et al. [21] di Francescomarino et al. [10]
+Leontjeva et al. [22]
+
+all all all pre x length 1-21, with gap 3, 5, or 10 pre x length 2-20
+
+Verenich et al. [45] Castellanos et al. [4]
+
+pre x length 2-20 all
+
+Single KNN State Cluster
+
+agg, last state agg last state agg
+
+agg, last state last state last state last state
+
+DT DT DT DT, RF
+
+Pre x length
+Pre x length + cluster Domain knowledge
+
+index index agg index unknown
+
+index last state index unknown
+
+DT, RF, GBM, SVM RF RF RF DT
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:9
+
+4.1 Prefix extraction and filtering A er analyzing the identi ed studies, we found that all of them take as input a pre x log (as de ned in Section 2) to train a classi er. is choice is natural given that at runtime, we need to make predictions for partial traces rather than completed ones. Using a pre x log for training ensures that our training data is comparable to the testing data. For example, for a complete trace consisting of a total of 5 events, we could consider up to 4 pre xes: the partial trace a er executing the rst event, the partial trace a er executing the rst and the second event, and so on.
+Using all possible pre xes raises multiple problems. Firstly, the large number of pre xes as compared to the number of traces considerably slows down the training of the prediction models. Secondly, if the length of the original cases is very heterogenous, the longer traces produce much more pre xes than shorter ones and, therefore, the prediction model is biased towards the longer cases. Accordingly, it is common to consider pre xes up to a certain number of events only. For example, Di Francescomarino et al. [10] limit the maximum pre x length to 21, while Leontjeva et al. [22] use pre xes of up to 20 events only. In other words, in their training phase, these approaches take as input the length- ltered pre x log Lk for k = 21 and k = 20.
+Di Francescomarino et al. [10] propose a second approach to lter the pre x log using so-called gaps. Namely, instead of retaining all pre xes of up to a certain length, they retain pre xes whose length is equal to a base number (e.g., 1) plus a multiple of a gap (e.g., 1, 6, 11, 16, 21 for a gap of 5) .
+is approach helps to keep the pre x log su ciently small for applications where e ciency of the calculations is a major concern.
+We observe that length-based or gap-based ltering can be applied to any predictive process monitoring method. In other words, the choice of length or gap ltering is not an inherent property of a method.
+4.2 Trace bucketing Most of existing predictive process monitoring approaches train multiple classi ers rather than a single one. In particular, the pre x traces in the historical log are divided into several buckets and di erent classi ers are trained for each such buckets. At run-time, the most suitable bucket for the ongoing case is determined and the respective classi er is applied to make a prediction. In the following, we describe the bucketing approaches that have been proposed by existing predictive process monitoring methods.
+4.2.1 Single bucket. All pre x traces are considered to be in the same bucket. A single classi er is trained on the whole pre x log and applied directly to the running cases. e single bucket approach has been used in the work by de Leoni et al. [8].
+4.2.2 KNN. In this bucketing approach, the o ine training phase is skipped and the buckets are determined at run-time. Namely, for each running pre x trace, its k nearest neighbors are selected from the historical pre x traces and a classi er is trained (at run-time) based on these k neighbors.
+is means that the number of buckets (and classi ers) is not xed, but grows with each executed event at run-time.
+e KNN method for predictive process monitoring was proposed by Maggi et al. [25]. Namely, they calculate the similarities between pre x traces using string-edit distance on the control ow. All instances that exceed a speci ed similarity threshold are considered as neighbors of the running trace. If the number of neighbors found is less than 30, the top 30 similar neighbors are selected regardless of the similarity threshold.
+4.2.3 State. In state-based approaches, a process model is derived from the event log. en, relevant states (or decision points) are determined from the process model and one classi er is
+
+1:10
+
+I. Teinemaa et al.
+
+trained for each such state. At run-time, the current state of the running case is determined, and the respective classi er is used to make a prediction for the running case.
+Given an event log, Lakshmanan et al. [21] construct a so-called activity graph where there is one node per possible activity (event class) in the log, and there is a directed edge from node ai to aj i aj has occurred immediately a er ai in at least one trace. is type of graph is also known as the Directly-Follows Graph (DFG) of an event log [41]. We observe that the DFG is the state-transition system obtained by mapping each trace pre x in the log to a state corresponding to the last activity appearing in the trace pre x (and hence the state of a running case is fully determined by its last activity). Alternative methods for constructing state abstractions are identi ed in [42] (e.g., set-based, multiset-based and sequence-based state abstractions), but these have not been used for predictive process monitoring, and they are likely not to be suitable since they generate a very large number of states, which would lead to very large number of buckets. Most of these buckets would be too small to train a separate classi er.
+In Lakshmanan et al. [21], the edges in the DFG are annotated with transition probabilities. e transition probability from node ai to aj captures how o en a er performing activity ai , aj is performed next. We observe that this DFG annotated with transition probabilities is a rst order Markov chain. For our purposes however, the transition probabilities are not necessary, as we aim to make a prediction for any running case regardless of its frequency. erefore, in the rest of this paper, we will use the DFG without transition probabilities.
+Lakshmanan et al. [21] build one classi er per decision point — i.e., per state in the model where the execution splits into multiple alternative branches. Given that in our problem se ing, we need to be able to make a prediction for a running trace a er each event, a natural extension to their approach is to build one classi er for every state in the process model.
+4.2.4 Clustering. e cluster-based bucketer relaxes the requirement of a direct transition between the buckets of two subsequent pre xes. Conversely, the buckets (clusters) are determined by applying a clustering algorithm on the encoded pre x traces. is results in a number of clusters that do not exhibit any transitional structure. In other words, the buckets of pre f ix(σ , l) and pre f ix(σ , l + 1) are determined independently from each other. Both of these pre xes might be assigned to the same cluster or di erent ones.
+One classi er is trained per each resulting cluster, considering only the historical pre x traces that fall into that particular cluster. At run-time, the cluster of the running case is determined based on its similarity to each of the existing clusters and the respective classi er is applied.
+A clustering-based approach is proposed by di Francescomarino et al. [10]. ey experiment with two clustering methods, DBScan (with string-edit distance) and model-based clustering (with Euclidean distance on the frequencies of performed activities), while neither achieves constantly superior performance over the other. Another clustering-based method is introduced by Verenich et al. [45]. In their approach, the pre xes are encoded using index-based encoding (see 4.3.4) using both control ow and data payload, and then either hierarchical agglomerative clustering (HAC) or k-medoids clustering is applied. According to their results, k-medoids clustering consistently outperforms HAC.
+4.2.5 Prefix length. In this approach, each bucket contains only the partial traces of a speci c length. For example, one bucket contains traces where only the rst event has been executed, another bucket contains those where rst and second event have been executed, and so on. One classi er is built for each possible pre x length. e pre x length based bucketing was proposed by Leontjeva et al. [22]. Also, Verenich et al. [45] bucket the pre xes according to pre x length before applying a clustering method.
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:11
+
+4.2.6 Domain knowledge. While the bucketing methods described so far can detect buckets through an automatic procedure, it is possible to de ne a bucketing function that is based on manually constructed rules. In such an approach, the input from a domain expert is needed. e resulting buckets can, for instance, refer to context categories [18] or execution stages [4, 36].
+e aim of this survey and benchmark is to derive general principles by comparing methods that are applicable in arbitrary outcome-based predictive process monitoring scenarios and, thus, the methods that are based on domain knowledge about a particular dataset are le out of scope. For this reason, we do not further consider bucketing approaches based on domain knowledge.
+
+4.3 Sequence encoding In order to train a classi er, all pre x traces in the same bucket need to be represented as xed length feature vectors. e main challenge here comes from the fact that with each executed event, additional information about the case becomes available, while each trace in a bucket (independent of the number of executed events) should still be represented with the same number of features.
+is can be achieved by applying a trace abstraction technique [42], for example, considering only the last m events of a trace. However, choosing an appropriate abstraction is a di cult task, where one needs to balance the trade-o between the generality2 and loss of information. A er a trace abstraction is chosen, a set of feature extraction functions may be applied to each event data a ribute of the abstracted trace. erefore, a sequence encoding method can be thought of as a combination of a trace abstraction technique and a set of feature extraction functions for each data a ribute.
+In the following subsections we describe the sequence encoding methods that have been used in the existing predictive process monitoring approaches. As described in Section 2, a trace can contain any number of static case a ributes and dynamic event a ributes. Both the case and the event a ributes can be of numeric, categorical, or textual type. As none of the compared methods deal with textual data, hereina er we will focus on numeric and categorical a ributes only.
+4.3.1 Static. e encoding of case a ributes is rather straightforward. As they remain the same throughout the whole case, they can simply be added to the feature vector “as is” without any loss of information. In order to represent all the information as a numeric vector, we assume the “as is” representation of a categorical a ribute to be one hot encoding. is means that each value of a categorical a ribute is transformed into a bitvector ( 1, · · · , n), where m is the number of possible levels of that a ribute, i = 1 if the given value is equal to the ith level of the a ribute, and i = 0 otherwise.
+4.3.2 Last state. In this encoding method, only the last available snapshot of the data is used. erefore, the size of the feature vector is proportional to the number of event a ributes and is xed throughout the execution of a case. A drawback of this approach is that it disregards all the information that has happened in the past, using only the very latest data snapshot. To alleviate this problem, this encoding can easily be extended to the last m states, in which case the size of the feature vector increases m times. As the size of the feature vector does not depend on the length of the trace, the last state (or, the last m states) encoding can be used with buckets of traces of di erent lengths. Using the last state abstraction, only one value (the last snapshot) of each data a ribute is available. erefore, no meaningful aggregation functions can be applied. Similarly to the static
+
+2Generality in this context means being able to apply the abstraction technique to as many pre x traces as possible; as an example, the last m states abstraction is not meaningful for pre xes that are shorter than m events.
+
+1:12
+
+I. Teinemaa et al.
+
+encoding, the numeric a ributes are added to the feature vector “as is”, while one hot encoding is applied to each categorical a ribute.
+Last state encoding is the most common encoding technique, having been used in the KNN approach [25], state-based bucketing [21], as well as the clustering-based bucketing approach by Di Francescomarino et al. [10]. Furthermore, De Leoni et al. [8] mention the possibility of using the last and the previous (the last two) states.
+4.3.3 Aggregation. e last state encoding has obvious drawbacks in terms of information loss, neglecting all data that have been collected in the earlier stages of the trace. Another approach is to consider all events since the beginning of the case, but ignore the order of the events. is abstraction method paves the way to several aggregation functions that can be applied to the values that an event a ribute has taken throughout the case.
+In particular, the frequencies of performed activities (control ow) have been used in several existing works [10, 22]. Alternatively, boolean values have been used to express whether an activity has occurred in the trace. However, the frequency-based encoding has been shown to be superior to the boolean encoding [22]. For numerical a ributes, De Leoni et al. [8] proposed using general statistics, such as the average, maximum, minimum, and sum.
+4.3.4 Index. While the aggregation encoding exploits information from all the performed events, it still exhibits information loss by neglecting the order of the events. e idea of index-based encoding is to use all possible information (including the order) in the trace, generating one feature per each event a ribute per each executed event (each index). is way, a lossless encoding of the trace is achieved, which means that it is possible to completely recover the original trace based on its feature vector. A drawback of index-based encoding is that due to the fact that the length of the feature vector increases with each executed event, this encoding can only be used in homogenous buckets where all traces have the same length.
+Index-based encoding was proposed by Leontjeva et al. [22]. Additionally, in their work they combined the index-based encoding with HMM log-likelihood ratios. However, we decided not to experiment with HMMs in this study for mainly two reasons. Firstly, the HMMs did not consistently improve the basic index-based encoding in [22]. Secondly, rather than being an essential part of index-based encoding, HMMs can be thought of as an aggregation function that can be applied to each event a ribute, similarly to taking frequencies or numeric averages. erefore, HMMs are not exclusive to index-based encoding, but could also be used in conjunction with the aggregation encoding. Index-based encoding is also used in the approach of Verenich et al. [45].
+Summary. An overview of the encoding methods can be seen in Table 4. Note that the static encoding extracts di erent type of data from the trace (case a ributes) than the other three methods (event a ributes). erefore, for obtaining a complete representation for a trace, it is reasonable to concatenate the static encoding with one of the other three encodings. In our experiments, the static encoding is included in every method, e.g., the “last state” method in the experiments refers to the static encoding for case a ributes concatenated with the last state encoding for event a ributes.
+4.4 Classification algorithm e existing predictive process monitoring methods have experimented with di erent classi cation
+algorithms. e most popular choice has been decision tree (DT), which has obvious bene ts in terms of the interpretability of the results. Another popular method has been random forest [3] (RF), which usually achieves be er prediction accuracy than a single decision tree, but is harder to interpret. Additionally, Leontjeva et al. [22] experimented with support vector machines (SVM) and generalized boosted regression models (GBM), but found that their performance is inferior to RF.
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:13
+
+Table 4. Encoding methods
+
+Encoding
+
+Relevant
+
+Trace
+
+Feature extraction
+
+name
+
+a ributes
+
+abstraction
+
+Numeric Categorical
+
+Static Last state Aggregation
+Index
+
+Case Event Event
+Event
+
+Case a ributes Last event
+All events, unordered (set/bag)
+All events, ordered (sequence)
+
+as is as is min, max, mean, sum, std as is for each index
+
+one-hot one-hot frequencies or occurrences one-hot for each index
+
+Recently, gradient boosted trees [15] in conjunction with existing predictive process monitoring techniques have shown promising results, o en outperforming RF [34, 38].
+4.5 Discussion We have observed that the pre x ltering techniques are not inherent to any given predictive process monitoring method. Instead, these techniques are selected based on performance considerations and can be used in conjunction with any of the predictive process monitoring methods. In a similar vein, the choice of a classi cation algorithm is a general problem in machine learning and is not speci c to business process data. Indeed, all of the authors of the methods reviewed above claim that their method is applicable in conjunction with any classi er. erefore, we treat the pre x ltering technique and the classi cation algorithm employed as orthogonal aspects to the categorization of predictive process monitoring methods. However, while excluded from the taxonomy, the speci c pre x ltering technique and classi cation algorithm used still play an important role in obtaining good predictions, with their performance being in uenced by the particular se ings used.
+e considered methods also di er in terms of the event log a ributes that are used for making predictions. However, it has been shown [22] that including more information (i.e., combining control ow and data payload) can drastically increase the predictive power of the models. In order to provide a fair comparison of the di erent methods, it is preferable to provide the same set of a ributes as input to all methods, and preferably the largest possible set of a ributes. Accordingly, in the comparative evaluation below, we will encode traces using all the available case and event a ributes (covering both control ow and data payload).
+Based on the above, we conclude that existing outcome-oriented predictive process monitoring methods can be compared on two grounds:
+• how the pre x traces are divided into buckets (trace bucketing)? • how the (event) a ributes are transformed into features (sequence encoding)? Figure 4 provides a taxonomy of the relevant methods based on these two perspectives. Note that although the taxonomy is based on 7 primary studies, it contains 11 di erent approaches. e reason for this is that while the primary approaches tend to mix di erent encoding schemes, for example, use aggregation encoding for control ow and last state encoding for data payload (see Table 3), the taxonomy is constructed in a modular way, so that each encoding method constitutes a separate approach. In order to provide a fair comparison of di erent encoding schemes, we have decided to evaluate each encoding separately, while the same encoding is applied to both control ow and data payload. Still, the di erent encodings (that are valid for a given bucketing method) can be easily combined, if necessary. Similarly, the taxonomy does not contain combinations of
+
+1:14
+
+I. Teinemaa et al.
+
+several bucketing methods. An example of such “double bucket” approaches is the method by Verenich et al. [45], where the pre xes are rst divided into buckets based on pre x length and, in turn, clustering is applied in each bucket. We believe that comparing the performance of each bucketing method separately (rather than as a combination) provides more insights about the bene ts of each method. Furthermore, the double bucket approaches divide the pre xes into many small buckets, which o en leads to situations where a classi er receives too li le training instances to learn meaningful pa erns.
+We note that the taxonomy generalizes the state-of-the-art, in the sense that even if a valid pair of bucketing and encoding method has not been used in any existing approach in the literature, it is included in the taxonomy (e.g., the state-based bucketing approach with aggregation encoding). We also note that while the taxonomy covers the techniques proposed in the literature, all these techniques rely on applying a propositional classi er on an explicit vectorial representation of the traces. One could envisage alternative approaches that do not require an explicit feature vector as input. For instance, kernel-based SVMs have been used in the related se ing of predicting the cycle time of a case [44]. Furthermore, one could envisage the use of data mining techniques to extract additional features from the traces (e.g., latent variables or frequent pa erns). Although the taxonomy does not cover this aspect explicitly, applying such techniques is consistent with the taxonomy, since the derived features can be used in combination with any of the sequence encoding and bucketing approaches presented here. While most of the existing works on outcome-oriented predictive monitoring use the event/trace a ributes “as-is” without an additional mining step, Leontjeva et al. used Hidden Markov Models for extracting additional features in combination with index-based encoding [22]. Similarly, Teinemaa et al. applied di erent natural language processing techniques to extract features from textual data [40]. Further on, although not yet applied to outcome-oriented predictive process monitoring tasks, di erent pa ern mining techniques could be applied to extract useful pa erns from the sequences, occurrences of which could then be used as features in the feature vectors of the traces. Such techniques have been used in the domain of early time series/sequence classi cation [16, 17, 19, 23, 47] and for predicting numerical measures (e.g., remaining time) for business processes [14].
+
+Fig. 4. Taxonomy of methods for predictive monitoring of business process outcome.
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:15
+
+5 BENCHMARK A er conducting our survey, we proceeded with benchmarking the 11 approaches (shown in Figure 4) using di erent evaluation criteria (prediction accuracy, earliness and computation time), to address RQ3 (What is the relative performance of these methods?) – cf. Section 3.1.
+To perform our benchmark, we implemented an open-source, tunable and extensible predictive process monitoring framework in Python.3 All experiments were run using Python 3.6 and the scikit-learn library [31] on a single core of a Intel(R) Xeon(R) CPU E5-2660 v2 @ 2.20GHz with 64GB of RAM.
+In the rest of this section we rst introduce the evaluation datasets, then describe the evaluation procedure and conclude with discussing the results of the experiments.
+5.1 Datasets e benchmark is based on nine real-life event logs, out of which eight are publicly available and
+one is a private dataset. e public logs are accessible from the 4TU Centre for Research Data.4 e private log Insurance originates from a claims handling process at an Australian insurance
+company. e criterion for selecting the public event logs for the evaluation was that the log must contain both case a ributes (static) and event a ributes (dynamic). Based on this, we discarded the logs from years 2013-2014. We also discarded the BPIC 2016 dataset because it is a click-dataset of a Web service, rather than an event log of a business process.
+In case of some logs, we applied several labeling functions . In other words, the outcome of a case is de ned in several ways depending on the goals and needs of the process owner. Each such notion of the outcome constitutes a separate predictive process monitoring task with slightly di erent input datasets. In total, we formulated a total of 24 di erent outcome prediction tasks based on the nine original event logs. In the following paragraphs we describe the original logs, the applied labeling functions, and the resulting predictive monitoring tasks in more detail.
+BPIC2011. is event log contains cases from the Gynaecology department of a Dutch Academic Hospital. Each case assembles the medical history of a given patient, where the applied procedures and treatments are recorded as activities. Similarly to previous work [10, 22], we use four di erent labeling functions based on LTL rules [32]. Speci cally, we de ne the class label for a case σ according to whether an LTL rule φ is violated or satis ed by each trace σ .
+(σ ) = 1 if φ violated in σ 0 otherwise
+Table 5 introduces the semantics of the LTL operators.
+
+Table 5. LTL O
+
+S
+
+operator Xφ Gφ Fφ
+φ Uψ
+
+semantics φ has to hold in the next position of a path. φ has to hold always in the subsequent positions of a path. φ has to hold eventually (somewhere) in the subsequent positions of a path. φ has to hold in a path at least until ψ holds. ψ must hold in the current or in a future position.
+
+e four LTL rules used to formulate the four prediction tasks on the BPIC 2011 log are as follows:
+3 e code is available at h ps://github.com/irhete/predictive-monitoring-benchmark 4h ps://data.4tu.nl/repository/collection:event logs real
+
+1:16
+
+I. Teinemaa et al.
+
+• bpic2011 1: φ = F(“tumor marker CA − 19.9”) ∨ F(“ca − 125 usin meia”), • bpic2011 2: φ =
+G(“CEA − tumor marker usin meia” → F(“squamous cell carcinoma usin eia”)), • bpic2011 3: φ =
+(¬“histolo ical examination − biopsies nno”)U(“squamous cell carcinoma usin eia”), and • bpic2011 4: φ = F(“histolo ical examination − bi resectiep”).
+For example, the φ for bpic2011 1 expresses the rule that at least one of the activities “tumor marker CA-19.9” or “ca-125 using meia” must happen eventually during a case. Evidently, the class label of a case becomes known and irreversible when one of these two events has been executed. In order to avoid bias introduced by this phenomenon during the evaluation phase, all the cases are cut exactly before either of these events happens. Similarly, the cases are cut before the occurrence of “histological examination-biopsies nno” in the bpic2011 3 dataset and before “histological examination-big resectiep” in bpic2011 4. However, no cu ing is performed in the bpic2011 2 dataset, because the φ states that a “CEA-tumor marker using meia” event must always be followed by a “squamous cell carcinoma using eia” event sometime in the future. erefore, even if one occurrence of “CEA-tumor marker using meia” has successfully been followed by a “squamous cell carcinoma using eia” (φ is satis ed), another occurrence of “CEA-tumor marker using meia” will cause the φ to be violated again and, thus, the class label is not irreversibly known until the case completes.
+BPIC2015. is dataset assembles event logs from 5 Dutch municipalities, pertaining to the building permit application process. We treat the datasets from each municipality as separate event logs and apply a single labeling function to each one. Similarly to BPIC 2011, the labeling function is based on the satisfaction/violation of an LTL rule φ. e prediction tasks for each of the 5 municipalities are denoted as bpic2015 i, where i = 1 . . . 5 indicates the number of the municipality. e LTL rule used in the labeling functions is as follows:
+• bpic2015 i: φ = G(“send con f irmation receipt” → F(“retrie e missin data”)).
+No trace cu ing can be performed here, because, similarly to bpic2011 2, the nal satisfaction/violation of φ is not known until the case completes.
+Production. is log contains data from a manufacturing process. Each trace records information about the activities, workers and/or machines involved in producing an item. e labeling (production) is based on whether or not the number of rejected work orders is larger than zero.
+Insurance. is is the only private log we use in the experiments. It comprises of cases from an Australian insurance claims handling process. We apply two labeling functions:
+• insurance 1: is based on whether a speci c “key” activity is performed during the case or not.
+• insurance 2: is based on the time taken for handling the case, dividing them into slow and fast cases.
+Sepsis cases. is log records trajectories of patients with symptoms of the life-threatening sepsis condition in a Dutch hospital. Each case logs events since the patient’s registration in the emergency room until her discharge from the hospital. Among others, laboratory tests together with their results are recorded as events. Moreover, the reason of the discharge is available in the data in an obfuscated format.
+We created three di erent labelings for this log:
+• sepsis 1: the patient returns to the emergency room within 28 days from the discharge, • sepsis 2: the patient is (eventually) admi ed to intensive care,
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:17
+
+• sepsis 3: the patient is discharged from the hospital on the basis of something other than Release A (i.e., the most common release type).
+BPIC2012. is dataset, originally published in relation to the Business Process Intelligence Challenge (BPIC) in 2012, contains the execution history of a loan application process in a Dutch
+nancial institution. Each case in this log records the events related to a particular loan application. For classi cation purposes, we de ned some labelings based on the nal outcome of a case, i.e., whether the application is accepted, rejected, or canceled. Intuitively, this could be thought of as a multi-class classi cation problem. However, to remain consistent with previous work on outcomeoriented predictive process monitoring, we approach it as three separate binary classi cation tasks. In the experiments, these tasks are referred to as bpic2012 1, bpic2012 2, and bpic2012 3.
+BPIC2017. is event log originates from the same nancial institution as the BPIC2012 one. However, the data collection has been improved, resulting in a richer and cleaner dataset. As in the previous case, the event log records execution traces of a loan application process. Similarly to BPIC2012, we de ne three separate labelings based on the outcome of the application, referred to as bpic2017 1, bpic2017 2, and bpic2017 3.
+Hospital billing. is dataset comes from an ERP system of a hospital. Each case is an execution of a billing procedure for medical services. We created two labelings for this log:
+• hospital 1: the billing package not was eventually closed, • hospital 2: the case is reopened.
+Tra c nes. is log comes from an Italian local police force. e dataset contains events about noti cations sent about a ne, as well as (partial) repayments. Additional information related to the case and to the individual events include, for instance, the reason, the total amount, and the amount of repayments for each ne. We created the labeling (tra c) based on whether the ne is repaid in full or is sent for credit collection.
+e resulting 24 datasets exhibit di erent characteristics which can be seen in Table 6. e smallest log is production which contains 220 cases, while the largest one is tra c with 129615 cases. e most heterogenous in terms of case length are the bpic2011 labelled datasets, where the longest case consists of 1814 events. On the other hand, the most homogenous is the tra c log, where case length varies from 2 to 20 events. e class labels are the most imbalanced in the hospital 2 dataset, where only 5% of cases are labeled as positive ones (class label = 1). Conversely, in bpic2012 1, bpic2017 3, and tra c, the classes are almost balanced. In terms of event classes, the most homogenous are the insurance datasets, with only 9 distinct activity classes. e most heterogenous are the bpic2015 datasets, reaching 396 event classes in bpic2015 2. e datasets also di er in terms of the number of static and dynamic a ributes. e insurance logs contain the most dynamic a ributes (22), while the sepsis datasets contain the largest number of static a ributes (24).
+While most of the data a ributes can be readily included in the train and test datasets, timestamps should be preprocessed in order to derive meaningful features. In our experiments, we use the following features extracted from the timestamp: month, weekday, hour, duration from the previous event in the given case, duration from the start of the case, and the position of the event in the case. Additionally, some recent works have shown that adding features extracted from collections of cases (inter-case features) increases the accuracy of the predictive models, particularly when predicting deadline violations [6, 38]. For example, waiting times are highly dependent on the number of ongoing cases of a process (the so-called “Work-In-Process”). In turn, waiting times may a ect the outcome of a case, particularly if the outcome is de ned with respect to a deadline or with respect to customer satisfaction. Accordingly, we extract an inter-case feature re ecting the number of cases that are “open” at the time of executing a given event. All the abovementioned features are used as numeric dynamic (event) a ributes.
+
+1:18
+
+I. Teinemaa et al.
+
+Table 6. Statistics of the datasets used in the experiments.
+
+dataset
+
+min med max trunc # variants pos class # event # static # dynamic # static # dynamic # traces length length length length (a er trunc) ratio classes a r-s a r-s cat levels cat levels
+
+bpic2011 1 1140
+
+1
+
+25.0 1814 36
+
+815
+
+0.4
+
+193
+
+6
+
+14
+
+961
+
+290
+
+bpic2011 2 1140
+
+1
+
+54.5 1814 40
+
+977
+
+0.78
+
+251
+
+6
+
+14
+
+994
+
+370
+
+bpic2011 3 1121
+
+1
+
+21.0 1368 31
+
+793
+
+0.23
+
+190
+
+6
+
+14
+
+886
+
+283
+
+bpic2011 4 1140
+
+1
+
+44.0 1432 40
+
+977
+
+0.28
+
+231
+
+6
+
+14
+
+993
+
+338
+
+bpic2015 1 696
+
+2
+
+42.0 101
+
+40
+
+677
+
+0.23
+
+380
+
+17
+
+12
+
+19
+
+433
+
+bpic2015 2 753
+
+1
+
+55.0 132
+
+40
+
+752
+
+0.19
+
+396
+
+17
+
+12
+
+7
+
+429
+
+bpic2015 3 1328
+
+3
+
+42.0 124 40
+
+1280
+
+0.2
+
+380
+
+18
+
+12
+
+18
+
+428
+
+bpic2015 4 577
+
+1
+
+42.0 82
+
+40
+
+576
+
+0.16
+
+319
+
+15
+
+12
+
+9
+
+347
+
+bpic2015 5 1051
+
+5
+
+50.0 134 40
+
+1048
+
+0.31
+
+376
+
+18
+
+12
+
+8
+
+420
+
+production 220
+
+1
+
+9.0
+
+78
+
+23
+
+203
+
+0.53
+
+26
+
+3
+
+15
+
+37
+
+79
+
+insurance 1 1065
+
+6
+
+12.0 100
+
+8
+
+785
+
+0.16
+
+9
+
+0
+
+22
+
+0
+
+207
+
+insurance 2 1065
+
+6
+
+12.0 100 13
+
+924
+
+0.26
+
+9
+
+0
+
+22
+
+0
+
+207
+
+sepsis 1
+
+754
+
+5
+
+14.0 185
+
+30
+
+684
+
+0.14
+
+14
+
+24
+
+13
+
+195
+
+38
+
+sepsis 2
+
+782
+
+4
+
+13.0 60
+
+13
+
+656
+
+0.14
+
+15
+
+24
+
+13
+
+200
+
+40
+
+sepsis 3
+
+782
+
+4
+
+13.0 185
+
+22
+
+709
+
+0.14
+
+15
+
+24
+
+13
+
+200
+
+40
+
+bpic2012 1 4685 15 35.0 175 40
+
+3578
+
+0.48
+
+36
+
+1
+
+10
+
+0
+
+99
+
+bpic2012 2 4685 15 35.0 175 40
+
+3578
+
+0.17
+
+36
+
+1
+
+10
+
+0
+
+99
+
+bpic2012 3 4685 15 35.0 175 40
+
+3578
+
+0.35
+
+36
+
+1
+
+10
+
+0
+
+99
+
+bpic2017 1 31413 10 35.0 180 20
+
+2087
+
+0.41
+
+26
+
+3
+
+20
+
+13
+
+194
+
+bpic2017 2 31413 10 35.0 180 20
+
+2087
+
+0.12
+
+26
+
+3
+
+20
+
+13
+
+194
+
+bpic2017 3 31413 10 35.0 180 20
+
+2087
+
+0.47
+
+26
+
+3
+
+20
+
+13
+
+194
+
+tra c
+
+129615 2
+
+4.0
+
+20
+
+10
+
+185
+
+0.46
+
+10
+
+4
+
+14
+
+54
+
+173
+
+hospital 1 77525 2
+
+6.0 217
+
+6
+
+246
+
+0.1
+
+18
+
+1
+
+21
+
+23
+
+1756
+
+hospital 2 77525 2
+
+6.0 217
+
+8
+
+358
+
+0.05
+
+17
+
+1
+
+21
+
+23
+
+1755
+
+Not surprisingly, recent work along this la er direction has shown that adding features extracted from collections of cases (inter-case features) increases the accuracy of the predictive models, particularly when predicting deadline violations [6, 38].
+Each of the categorical a ributes has a xed number of possible values, called levels. For some a ributes, the number of distinct levels can be very large, with some of the levels appearing in only a few cases. In order to avoid exploding the dimensionality of the input dataset, we lter only the category levels that appear in at least 10 samples. is ltering is applied to each categorical a ribute except the event class (activity), where we use all category levels.
+5.2 Experimental set-up In this subsection, we start with describing the employed evaluation measures. We then proceed with describing our approach to spli ing the event logs into train and test datasets and optimizing the hyperparameters of the compared methods.
+5.2.1 Research questions and evaluation measures. In a predictive process monitoring use case, the quality of the predictions is typically measured with respect to two main dimensions based on the following desiderata: A good prediction should be accurate and it should be made in the early stages of the process. A prediction that is o en inaccurate is a useless prediction, as it cannot be relied on when making decisions. erefore, accuracy is, in a sense, the most important quality of a prediction. e earlier an accurate prediction is made, the more useful it is in practice, as it leaves more time to act upon the prediction. Based on this rationale, we formulate the rst subquestion (RQ3.1) as follows: How do the existing outcome-oriented predictive business process monitoring techniques compare in terms of accuracy and earliness of the predictions?
+Di erent metrics can be used to measure the accuracy of predictions. Rather than returning a hard prediction (a binary number) on the expected case outcome, the classi ers usually output a
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:19
+
+real-valued score, re ecting how likely it is that the case will end in one way or the other. A good classi er will give higher scores to cases that will end with a positive outcome, and lower values to those ending with a negative one. Based on this intuition, we use the area under the ROC curve (AUC) metric that expresses the probability that a given classi er will rank a positive case higher than a negative one. A major advantage of the AUC metric over the commonly used accuracy (the proportion of correctly classi ed instances) or F-score (the harmonic mean of precision and recall), is that the AUC remains unbiased even in case of a highly imbalanced distribution of class labels [2]. Furthermore, AUC is a threshold-independent measure, as it operates on the ranking of the scores rather than the binary class values. Still, relying on a single evaluation criterion may provide a biased viewpoint of the results; therefore, we report the F-scores (on the default threshold of 0.5) additionally to AUC.
+From the literature, two di erent approaches emerge for measuring the earliness of the predictions. One way [22] is to evaluate the models separately for each pre x length. In each step, the prediction model is applied to a subset of pre xes of exactly the given length. e improvement of prediction accuracy as the pre x length increases provides an implicit notion of earliness. In particular, the smaller the pre x length when an acceptable level of accuracy is reached, the be er the method in terms of earliness. If needed, earliness can be de ned explicitly as a metric — the smallest pre x length where the model achieves a speci ed accuracy threshold. Another option is to keep monitoring each case until the classi er gives an outcome prediction with a su ciently high con dence, and then we measure the earliness as the average pre x length when such a prediction is made [10, 40]. e la er approach is mostly relevant in failure prediction scenarios, when the purpose is to raise an alarm when the estimated risk becomes higher than a pre-speci ed threshold (for a survey of failure prediction models, see [35]). However, even when the predictions come with a high con dence score, they might not necessarily be accurate. In the benchmark, we employ the rst approach to measuring earliness, evaluating the models on each pre x length, because it provides a more straightforward representation of earliness that is relevant for all business processes. Also, it assures that the “early predictions” have reached a suitable level of accuracy.
+In order to be applicable in practice a prediction should be produced e ciently, i.e., the execution times should be suitable for a given application. To address this, we formulate the second subquestion (RQ3.2) as follows: How do the existing outcome-oriented predictive business process monitoring techniques compare in terms of execution times? When measuring the execution times of the methods, we distinguish the time taken in the o ine and the online modes. e o ine time is the total time needed to construct the classi er from the historic traces available in an event log. Namely, it includes the time for constructing the pre x log, bucketing and encoding the pre x traces, and training the classi er. Note that we do not add the time spent on model selection to the o ine time measurements. e reason for this is that we consider the extent of hyperparameter optimization to be largely dependent on the requirements and the constraints of a given project. Speci cally, if obtaining a nal model with minimal amount of time is critical in a project, one can se le for a smaller number of iterations for hyperparameter optimization, while if the accuracy of the nal model is of greater importance than the time for obtaining the model itself, more time can be spent on model selection. Still, a rough estimate of the total time needed for optimizing the hyperparameters can be obtained by multiplying the time taken for building the nal model with the number of optimization rounds to be performed. In the online phase, it is essential that a prediction is produced almost instantaneously, as the predictions are usually needed in real time. Accordingly, we de ne the online time as the average time for processing one incoming event (incl. bucketing, encoding, and predicting based on this new event).
+
+1:20
+
+I. Teinemaa et al.
+
+e execution times are a ected by mainly two factors. Firstly, since each pre x of a trace constitutes one sample, the lengths of the traces have a direct e ect on the number of (training) samples. It is natural that the more samples are used for training, the be er accuracy the predictive monitoring system could yield. At the same time, using more samples increases the execution times of the system. In applications where the e ciency of the predictions is of critical importance, reducing the number of training samples can yield a reasonable tradeo , bringing down the execution times to a suitable level, while accepting lower accuracy. One way to reduce the number of samples is gap-based ltering [10], where a pre x is added to the training set only a er each events in the trace. is leads us to the third subquestion (RQ3.3): To what extent does gap-based
+ltering improve the execution times of the predictions? e second factor that a ects the execution times is the number and the diversity of a ributes
+that need to be processed. In particular, the number of unique values (levels) in the categorical a ribute domains has a direct e ect on the length of the feature vector constructed for each sample, since each level corresponds to a feature in the vector (this holds for one hot encoding, as well as using occurrences or frequencies). e dimensionality of the vector can be controlled by ltering of the levels, for instance, by using only the most frequent levels for each categorical a ribute. However, such ltering may negatively impact the accuracy of the predictions. In the fourth subquestion (RQ3.4), we aim to answer the following: To what extent does ltering the levels of categorical a ributes based on their frequencies improve the execution times of the predictions?
+5.2.2 Train-test split. In order to simulate the real-life situation where prediction models are trained using historic data and applied to ongoing cases, we employ a temporal split to divide the event log into train and test cases. Namely, the cases are ordered according to the start time and the rst 80% are used for selecting the best model parameters and training the nal model, while the remaining 20% are used to evaluate the performance of the nal model. Speci cally, spli ing is done on the level of completed traces, so that di erent pre xes of the same trace remain in the same chunk (either all in the train set or all in the test set). In other words, the classi er is optimized and trained with all cases that started before a given date, and the testing is done only on cases that start a erwards. Note that, using this approach, some events in the training cases could still overlap with the test period. In order to avoid that, we cut the training cases so that events that overlap with the test period are discarded.
+5.2.3 Classifier learning and bucketing parameters. We selected four classi cation algorithms for the experiments: random forest (RF), gradient boosted trees (XGBoost), logistic regression (logit), and support vector machines (SVM). We chose logistic regression because of its simplicity and wide application in various machine learning applications. SVM and RF have been used in existing outcome-oriented predictive monitoring studies, whereas RF has shown to outperform many other methods (such as decision trees) in both predictive monitoring scenarios [22] and in more general empirical studies [13]. We also included the XGBoost classi er which has recently gained a ention and showed promising results when applied to business process data [34, 38]. Furthermore, a recent empirical study on the performance of classi cation algorithms across 165 datasets has shown that RF and boosted trees generally outperform other classi er learning techniques [28]. For the clustering-based bucketing approach (cf. Section 4.2.4), we use the k-means clustering algorithm, which is one of the most widely used clustering methods in general.
+e classi cation algorithms as well as some of the bucketing methods (clustering and KNN), require one to specify a number of parameters. In order to achieve good performance with each of the techniques, we optimize the hyperparameters using the Tree-structured Parzen Estimator (TPE) algorithm [1], separately for each combination of a dataset, a bucketing method, and a sequence
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:21
+
+encoding method. For each combination of parameter values (i.e., a con guration) we performed 3-fold cross validation within the whole set of pre x traces L∗ extracted from the training set, and we selected the con guration that led to the highest mean AUC calculated across the three folds.
+In the case of the pre x length based bucketing method, an optimal con guration was chosen
+for each pre x length separately (i.e., for each combination of a dataset, a bucketing method, an
+encoding approach and a pre x length). Table 7 presents the bounds and the sampling distributions
+for each of the parameters, given as input to the optimizer. In the case of RF and XGBoost, we
+found via exploratory testing that the results are almost una ected by the number of estimators (i.e., trees) trained per model. erefore, we use a xed value of n estimators = 500 throughout the experiments.
+
+Table 7. Hyperparameters and distributions used in optimization via TPE.
+
+Classi er RF
+XGBoost
+Logit SVM K-means KNN
+
+Parameter
+Max features
+Learning rate Subsample Max tree depth Colsample bytree Min child weight
+Inverse of regularization strength (C)
+Penalty parameter of the error term (C) Kernel coe cient (gamma)
+Number of clusters
+Number of neighbors
+
+Distribution
+Uniform
+Uniform Uniform Uniform integer Uniform Uniform integer
+Uniform integer
+Uniform integer Uniform integer
+Uniform integer
+Uniform integer
+
+Values
+x ∈ [0, 1]
+x ∈ [0, 1] x ∈ [0.5, 1] x ∈ [4, 30] x ∈ [0.5, 1] x ∈ [1, 6] 2x , x ∈ [−15, 15] 2x , x ∈ [−15, 15] 2x , x ∈ [−15, 15]
+x ∈ [2, 50]
+x ∈ [2, 50]
+
+Both k-means and KNN require us to map each trace pre x into a feature vector in order to compute the Euclidean distance between pairs of pre xes. To this end, we applied the aggregation encoding approach, meaning that we map each trace to a vector that tells us how many times each possible activity appears in the trace. In order to keep consistent with the original methods, we decided to use only the control ow information for the clustering and the determining of the nearest neighbors.
+In the case of the state-based bucketing, we need to specify a function that maps each trace pre x to a state. To this end, we used the last-activity encoding, meaning that one state is de ned per possible activity and a trace pre x is mapped to the state corresponding to the last activity in the pre x. Note that the number of buckets produced by this approach is equal to the number of unique activities in the dataset (see Table 6). e reason for this choice is because this approach leads to reasonably large buckets. We also experimented with the multiset state abstraction approach, but it led to too many buckets, some of small size, so that in general there were not enough samples per bucket to train a classi er with su cient accuracy.
+When using a state-based or a clustering-based bucketing method, it may happen that a given bucket contains too few trace pre xes to train a meaningful classi er. Accordingly, we set a minimum bucket size threshold. If the number of trace pre xes in a bucket is less than the threshold, we do not build a classi er for that bucket but instead, any trace pre x falling in that
+
+1:22
+
+I. Teinemaa et al.
+
+bucket is mapped to the label (i.e., the outcome) that is predominant in that bucket, with a likelihood score equal to the ratio of trace pre xes in the bucket that have the predominant label. To be consistent with the choice of the parameter K in the KNN approach proposed in [25], we xed the minimum bucket size threshold to 30. Similarly, when all of the training instances in a bucket belong to the same class, no classi er is trained for this bucket and, instead, the test instances falling to this bucket are simply assigned the same class (i.e., the assigned prediction score is either 0 or 1).
+In case of logit and SVM, the features are standardized by subtracting the mean and scaling to unit variance before given as input to the classi er.
+5.2.4 Filtering and feature encoding parameters. As discussed in Section 4.1, training a classi er over the entire pre x log L∗ (all pre xes of all traces) can be time-consuming. Furthermore, we are only interested in making predictions for earlier events rather than making predictions towards the end of a trace. Additionally, we observe that the distributions of the lengths of the traces can be di erent within the classes corresponding to di erent outcomes (see Figures 15-16 in Appendix). When all instances of long pre xes belong to the same class, predicting the outcome for these (or longer) pre xes becomes trivial. Accordingly, during both the training and the evaluating phases, we vary the pre x length from 1 to the point where 90% of the minority class have nished (or until the end of the given trace, if it ends earlier than this point). For computational reasons, we set the upper limit of the pre x lengths to 40, except for the bpic2017 datasets where we further reduced the limit to 20. We argue that se ing a limit to the maximum pre x length is a reasonable design choice, as the aim of predictive process monitoring is to predict as early as possible and, therefore, we are more interested in predictions made for shorter pre xes. When answering RQ3.3, we additionally apply the gap-based ltering to the training set with ∈ {3, 5}. For instance, in case of = 5, only pre xes of lengths 1, 6, 11, 16, 21, 26, 31, and 36 are included in the training set.
+In Section 4.3.3, we noted that the aggregation encoding requires us to specify an aggregation function for each event a ribute. For activities and resource a ributes we use the count (frequency) aggregation function (i.e., how many times a given activity has been executed, or how many activities has a given resource executed). e same principle is applied to any other event a ribute of a categorical type. For each numeric event a ribute, we include two numeric features in the feature vector: the mean and the standard deviation. Furthermore, to answer RQ3.4, we lter each of the categorical a ribute domains by using only the top {10, 25, 50, 75, 90} percent of the most frequent levels from each a ribute.
+For index-based encoding (Section 4.3.4), we focus on the basic index-encoding technique without the HMM extension proposed in [22]. e reason is that the results reported in [22] do not show that HMM provides any visible improvement, and instead this encoding adds complexity to the training phase.
+5.3 Results: accuracy and earliness Table 8 reports the overall AUC and F-score for each dataset and method using XGBoost, while Tables 13, 14 and 15 in the Appendix report the same results for RF, logit, and SVM. e overall metric values (AUR or F-score) are obtained by rst calculating the scores separately for each pre x length (using only pre xes of a given length) and then by taking the weighted average of the obtained scores, where the weights are assigned according to the number of pre xes used for the calculation of a given score. is weighting assures that the overall metrics are in uenced equally by each pre x in the evaluation set, instead of being biased towards longer pre xes (i.e., where many cases have already nished). e best-performing classi ers are XGBoost, which achieves the highest AUC in 15 out of 24 datasets and the highest F-score in 11 datasets, and RF, which achieves
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:23
+
+the best AUC in 11 datasets and the top F-score in 14. Logit achieves the highest AUC in 7 and the highest F-score in 6 datasets. SVM in general does not reach the same level of accuracy as the other classi ers, the only exceptions being bpic2012 3, tra c, and hospital 2 (and only in terms of AUC).
+In order to further assess the relative performance of the classi ers, we applied the Nemenyi test (as proposed in [9]) as a means for statistical comparison of classi ers over multiple datasets. In this se ing, we compared the best AUC scores obtained by each classi er for a given dataset, i.e. we selected the best combination of bucketing and encoding technique for each dataset and classi cation algorithm. e resulting critical di erence diagram (Figure 5), obtained using a 0.05 signi cance level, con rms that XGBoost is on average the best performing classi er, achieving an average rank of around 1.8. However, the di erence between XGBoost, RF, and logit is not statistically signi cant (indicated by the horizontal line connecting these three classi ers). On the other hand, SVM performs signi cantly worse than XGBoost and RF. In the following we analyze the results obtained by XGBoost in detail.
+
+Fig. 5. Comparison of all classifiers against each other with the Nemenyi test. The classifiers are compared in terms of the best AUC achieved in each of the 24 datasets. Groups of classifiers that are not significantly di erent (at p < .05) are connected.
+Concerning the bucketing and encoding methods, we can see in Table 8 that single agg achieves the best AUC in 10 out of 24 datasets (and the best F-score in 9 datasets), followed by pre x agg, which is best in 8 datasets (4 in terms of F-score). ey are followed by cluster agg, state agg, and pre x index, which obtain the best AUC in 6, 5, and 4 datasets, respectively. With a few exceptions, which are discussed separately below, the last state encodings in general perform worse than their aggregation encoding counterparts and KNN performs worse that the other bucketing methods.
+e critical di erence diagram in Figure 6 shows that in terms of the average rank, pre x agg slightly outperforms single agg, while both are closely followed by cluster agg and state agg. Despite a larger gap in the average ranks, the di erences from pre x agg to pre x index, cluster laststate, state laststate, and single laststate are not statistically signi cant either. On the other hand, pre x laststate, knn laststate, and knn agg are found to perform signi cantly worse than pre x agg.
+
+1:24
+
+I. Teinemaa et al.
+
+Table 8. Overall AUC (F-score) for XGBoost
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2011 1
+0.85 (0.73) 0.94 (0.86) 0.87 (0.86) 0.87 (0.85) 0.87 (0.73) 0.94 (0.84) 0.89 (0.74) 0.95 (0.84) 0.93 (0.79) 0.89 (0.76) 0.94 (0.87)
+
+bpic2011 2
+0.91 (0.82) 0.98 (0.95) 0.91 (0.93) 0.91 (0.93) 0.91 (0.84) 0.95 (0.91) 0.91 (0.86) 0.97 (0.94) 0.94 (0.82) 0.94 (0.86) 0.98 (0.94)
+
+bpic2011 3
+0.94 (0.78) 0.98 (0.94) 0.88 (0.81) 0.88 (0.82) 0.93 (0.8) 0.97 (0.89) 0.97 (0.9) 0.97 (0.9) 0.97 (0.8) 0.95 (0.74) 0.98 (0.85)
+
+bpic2011 4
+0.89 (0.8) 0.86 (0.78) 0.71 (0.64) 0.72 (0.64) 0.87 (0.77) 0.85 (0.75) 0.89 (0.8) 0.84 (0.75) 0.85 (0.74) 0.88 (0.78) 0.86 (0.77)
+
+insurance 1
+0.86 (0.36) 0.9 (0.5) 0.85 (0.49) 0.84 (0.52) 0.89 (0.55) 0.89 (0.59) 0.87 (0.38) 0.91 (0.57) 0.89 (0.55) 0.87 (0.42) 0.9 (0.6)
+
+insurance 2
+0.83 (0.44) 0.8 (0.51) 0.78 (0.49) 0.78 (0.5) 0.84 (0.59) 0.83 (0.6) 0.81 (0.45) 0.8 (0.45) 0.8 (0.55) 0.83 (0.53) 0.83 (0.6)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2015 1
+0.81 (0.42) 0.89 (0.62) 0.8 (0.37) 0.79 (0.39) 0.77 (0.46) 0.8 (0.54) 0.7 (0.39) 0.88 (0.58) 0.8 (0.46) 0.75 (0.32) 0.84 (0.6)
+
+bpic2015 2
+0.83 (0.34) 0.92 (0.75) 0.87 (0.64) 0.87 (0.67) 0.85 (0.56) 0.88 (0.67) 0.85 (0.46) 0.92 (0.73) 0.83 (0.39) 0.82 (0.28) 0.88 (0.7)
+
+bpic2015 3
+0.78 (0.45) 0.9 (0.75) 0.83 (0.6) 0.84 (0.61) 0.85 (0.56) 0.87 (0.61) 0.86 (0.66) 0.9 (0.72) 0.88 (0.63) 0.76 (0.4) 0.91 (0.71)
+
+bpic2015 4
+0.8 (0.41) 0.85 (0.62) 0.81 (0.55) 0.8 (0.56) 0.86 (0.46) 0.88 (0.63) 0.87 (0.61) 0.87 (0.64) 0.86 (0.5) 0.82 (0.4) 0.87 (0.6)
+
+bpic2015 5
+0.83 (0.67) 0.87 (0.77) 0.86 (0.72) 0.86 (0.72) 0.85 (0.66) 0.87 (0.72) 0.87 (0.71) 0.88 (0.76) 0.85 (0.64) 0.83 (0.62) 0.89 (0.75)
+
+production
+0.62 (0.57) 0.7 (0.59) 0.62 (0.56) 0.62 (0.55) 0.62 (0.51) 0.68 (0.56) 0.68 (0.57) 0.71 (0.59) 0.68 (0.57) 0.68 (0.56) 0.73 (0.57)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+sepsis 1
+0.4 (0.08) 0.33 (0.0) 0.49 (0.07) 0.45 (0.05) 0.39 (0.0) 0.42 (0.0) 0.48 (0.04) 0.46 (0.0) 0.44 (0.07) 0.47 (0.07) 0.48 (0.08)
+
+sepsis 2
+0.84 (0.48) 0.85 (0.42) 0.61 (0.01) 0.68 (0.05) 0.83 (0.42) 0.83 (0.43) 0.81 (0.42) 0.82 (0.44) 0.79 (0.36) 0.82 (0.38)
+0.8 (0.4)
+
+sepsis 3
+0.65 (0.24) 0.72 (0.35) 0.61 (0.23) 0.59 (0.15) 0.71 (0.13) 0.71 (0.2) 0.72 (0.11) 0.7 (0.28) 0.73 (0.15) 0.72 (0.06) 0.71 (0.21)
+
+bpic2012 1
+0.68 (0.61) 0.7 (0.59) 0.57 (0.72) 0.63 (0.61) 0.68 (0.62) 0.7 (0.59) 0.65 (0.6) 0.67 (0.6) 0.68 (0.61) 0.66 (0.61) 0.68 (0.61)
+
+bpic2012 2
+0.59 (0.09) 0.57 (0.16) 0.55 (0.34) 0.59 (0.05) 0.61 (0.12) 0.6 (0.13) 0.59 (0.12) 0.6 (0.17) 0.62 (0.13) 0.59 (0.1) 0.59 (0.13)
+
+bpic2012 3
+0.7 (0.38) 0.69 (0.36) 0.59 (0.45) 0.63 (0.48) 0.7 (0.35) 0.7 (0.33) 0.69 (0.3) 0.7 (0.29) 0.69 (0.35) 0.69 (0.35) 0.7 (0.35)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2017 1
+0.81 (0.66) 0.84 (0.71) 0.76 (0.66) 0.74 (0.59) 0.83 (0.7) 0.83 (0.7) 0.84 (0.69) 0.84 (0.7) 0.83 (0.72) 0.82 (0.7) 0.84 (0.71)
+
+bpic2017 2
+0.81 (0.42) 0.81 (0.45) 0.6 (0.04) 0.56 (0.0) 0.79 (0.45) 0.79 (0.46) 0.8 (0.39) 0.79 (0.44) 0.8 (0.45) 0.76 (0.44) 0.77 (0.45)
+
+bpic2017 3
+0.79 (0.73) 0.79 (0.76) 0.62 (0.53) 0.62 (0.52) 0.78 (0.72) 0.79 (0.73) 0.78 (0.72) 0.79 (0.73) 0.8 (0.73) 0.79 (0.72) 0.79 (0.73)
+
+tra c
+0.66 (0.67) 0.66 (0.67) 0.63 (0.69) 0.59 (0.7) 0.66 (0.67) 0.67 (0.66) 0.66 (0.67) 0.67 (0.66) 0.67 (0.66) 0.66 (0.66) 0.67 (0.66)
+
+hospital 1
+0.89 (0.66) 0.9 (0.63) 0.78 (0.37) 0.75 (0.47) 0.9 (0.65) 0.9 (0.65) 0.89 (0.64) 0.88 (0.64) 0.87 (0.64) 0.86 (0.63) 0.87 (0.64)
+
+hospital 2
+0.73 (0.11) 0.76 (0.08) 0.56 (0.06) 0.55 (0.01) 0.74 (0.11) 0.69 (0.11) 0.68 (0.12) 0.69 (0.09) 0.69 (0.11) 0.74 (0.08) 0.74 (0.1)
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:25
+
+Fig. 6. Comparison of the bucketing/encoding combinations with the Nemenyi test. The methods are compared in terms of AUC achieved in each of the 24 datasets using the XGBoost classifier. Groups of methods that are not significantly di erent (at p < .05) are connected.
+Figures 7 and 8 present the prediction accuracy in terms of AUC for the six best performing methods (according to Figure 6), evaluated over di erent pre x lengths5. Each evaluation point includes pre x traces of exactly the given length. In other words, traces that are altogether shorter than the required pre x are le out of the calculation. erefore, the number of cases used for evaluation is monotonically decreasing when increasing pre x length. In most of the datasets, we see that starting from a speci c pre x length the methods with aggregation encoding achieve perfect prediction accuracy (AU C = 1). It is natural that the prediction task becomes trivial when cases are close to completion, especially if the labeling function is related to the control ow or to the data payload present in the event log. However, there are a few exceptions from this rule, namely, in the bpic2012 and sepsis datasets, the results seem to decline on larger pre x sizes. To investigate this phenomenon, we recalculated the AUC scores on the longer traces only, i.e., traces that have a length larger than or equal to the maximum considered trace length (see Figure 21 in Appendix). is analysis con rmed (with the exception of sepsis 1, which we discuss separately later in this section) that the phenomenon is caused by the fact that the datasets contain some short traces for which it appears to be easy to predict the outcome. ese short traces are not included in the later evaluation points, as they have already nished by that time. erefore, we are le with longer traces only, which appear to be more challenging for the classi er, dragging down the total AUC score on larger pre x lengths.
+From the results presented above, we see that the choice of the bucketing method seems to have a smaller e ect on the results than the sequence encoding. Namely, the best results are usually achieved using the aggregation encoding with either the single bucket, clustering, pre x length based, or state-based bucketing. In general these methods achieve very comparable results. Still, it appears that in event logs with many trace variants (relative to the total number of traces), such as insurace, production, bpic2012, and bpic2015 4 (see Table 6) it may be preferred to use a
+5For a comparison of all the twelve methods, see Figures 19 and 20 in Appendix.
+
+1:26
+
+I. Teinemaa et al.
+
+Fig. 7. AUC across di erent prefix lengths using XGBoost
+multiclassi er instead of a single bucket. However, this only holds if each bucket receives enough data to learn relevant pa erns. For instance, when the number of categorical a ribute levels is very high (as in the bpic2011, bpic2015, and hospital datasets), a single classi er is usually able to produce be er predictions. Similarly, when the classes are very imbalanced (hospital, bpic2017 2, sepsis 2), it is likely that some buckets receive too limited information about the minority class and, therefore, a single classi er is recommended over a multiclassi er. e e ect of having too many buckets can easily be seen in case of state-based bucketing when the number of di erent event classes (and therefore, the number of buckets) is very large (see bpic2011 and bpic2015 in Figure 7 and the counts of training pre x traces in each bucket in Figures 17-18 in Appendix). As a result, each classi er receives a small number of traces for training, resulting in a very spiky performance across di erent pre x lengths. e same phenomenon can be seen in case of pre x agg, which usually achieves very good performance, but at times can produce unexpectedly inaccurate results (like in the longer pre xes of bpic2011 1 and bpic2012 2). On the contrary, single agg and cluster agg in general produce stable and reliable results on all datasets and across all pre x sizes. e optimal
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:27
+
+Fig. 8. AUC across di erent prefix lengths using XGBoost (continued)
+number of clusters in case of cluster agg with XGBoost was o en found to be small, i.e. between 2-7 (see Table 11 in Appendix), which explains why these two methods behave similarly. In some cases where the optimized number of clusters was higher, e.g., bpic2012 1 and hospital 2, the accuracy of cluster agg drops compared to single agg.
+We can see from Figure 7 that in several cases (e.g., bpic2011, bpic2015, bpic2012 1, and sepsis 2), all the methods achieve a similar AUC on shorter pre xes, but then quickly grow apart as the size of the pre x increases. In particular, the aggregation encoding seems to be able to carry along relevant information from the earlier pre xes, while the last state encoding entails more limited information that is o en insu cient for making accurate predictions. Comparing the overall AUC in Table 8, the last state encodings outperform the other methods in only three datasets. One such exceptional case is bpic2011 4, where single laststate and cluster laststate considerably outperform their aggregation encoding counterparts. A deeper investigation of this case revealed that this is due to over ing in the presence of a concept dri in the dataset. In particular, the aggregation encodings yielded a more complex classi er (e.g. the optimized maximum tree depth is 15 in case of single agg and
+
+1:28
+
+I. Teinemaa et al.
+
+6 in case of single laststate), memorizing the training data completely. However, a concept dri occurs in the relationship between some data a ributes and the class labeling, which a ects the aggregated features more than the “as-is” features (see Figure 22 in Appendix). Another exception is sepsis 1, where the best results are achieved by knn laststate. In this dataset, all the methods consistently yield an AUC less than 0.5 (i.e. worse than random). Further investigation revealed that this phenomenon is also due to a concept dri in the dataset, which makes it impossible to learn useful pa erns in case of a temporal train-test split. For instance, Figure 23 in Appendix illustrates that in the training set the values of CRP are larger in positive instances, while in the test set the CRP values are larger in negative instances. e third exceptional dataset is insurance 2, where state laststate slightly outperforms other techniques. We did not nd any peculiarities in this dataset that would explain this phenomenon, however, the di erences in scores (between, e.g. state laststate and state agg) are much smaller compared to the previous two datasets.
+We can also observe that the index-based encoding, although lossless, in general does not outperform the lossy encoding schemes, reaching the highest overall AUC only in 4 datasets: bpic2012 2, bpic2017 3, sepsis 3, and tra c. In these logs the number of levels in dynamic categorical a ributes is not very high (see Table 6), which helps to keep the size of the feature vector in reasonable bounds. Still, even in these cases the di erence in AUC compared to the other methods (such as pre x agg) is marginal. In fact, in some datasets (e.g., hospital 2 and sepsis 2) indexbased encoding performs even worse than the last state encoding. is suggests that in the given datasets, the order of events is not as relevant for determining the nal outcome of the case. Instead, combining the knowledge from all events performed so far provides much more signal. Alternatively, it may be that the order of events (i.e., the control- ow) does ma er in some cases, but the classi ers considered in this study (including XGBoost) are not able to infer high-level control- ow features by themselves, which would explain why we see that even the simple aggregation-based methods outperform index-based encoding. is phenomenon deserves a separate in-depth study.
+ese observations, further supported by the fact that KNN does not appear among the top performing methods, lead to the conclusion that it is preferable to build few classi ers (or even just a single one), with a larger number of traces as input. XGBoost seems to be a classi er sophisticated enough to derive the “bucketing pa erns” by itself when necessary. Another advantage of the single agg method over cluster agg is the simplicity of a single bucket. In fact, no additional preprocessing step for bucketing the pre x traces is needed. On the other hand, clustering (regardless of the clustering algorithm) comes with a set of parameters, such as the number of clusters in k-means, that need to be tuned for optimal performance. erefore, the time and e ort needed from the user of the system for se ing up the prediction framework can be considerably higher in case of cluster agg, which makes single agg the overall preferred choice of method in terms of accuracy and earliness. is discussion concludes the answer to RQ3.1.
+
+5.4 Results: time performance e time measurements for all of the methods and classi ers, calculated as averages over 5 identical
+runs using the nal (optimal) parameters, are presented in Tables 9 and 10 (XGBoost), Tables 16 and 17 (RF), Tables 18 and 19 (logit), and Tables 20 and 21 (SVM). In the o ine phase, the fastest of the four classi ers is logit. e ordering of the others di ers between the small (production, bpic2011, bpic2015, insurance, and sepsis) and the large (bpic2017, tra c, hospital) datasets. In the former group, the second fastest classi er is SVM, usually followed by RF and, then, XGBoost. Conversely, in the larger datasets, XGBoost appears to scale be er than the others, while SVM tends to be the slowest of the three. In terms of online time, logit, SVM, and XGBoost yield comparable
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:29
+
+performance, while RF is usually slower than the others. In the following, we will, again, analyse deeper the results obtained with the XGBoost classi er.
+Recall that the KNN method (almost) skips the o ine phase, since all the classi ers are built at runtime. e o ine time for KNN still includes the time for constructing the pre x log and se ing up the matrix of encoded historical pre x traces, which is later used for nding the nearest neighbors for running traces. erefore, the o ine times in case of the KNN approaches are almost negligible. e o ine phase for the other methods (i.e., excluding KNN) takes between 3 seconds on the smallest dataset (production) to 6 hours and 30 minutes on hospital 1. ere is no clear winner between the last state encoding and the corresponding aggregation encoding counterparts, which indicates that the time for applying the aggregation functions is small compared to the time taken for training the classi er. e most time in the o ine phase is, in general, taken by index-based encoding that constructs the sequences of events for each trace.
+In terms of bucketing, the fastest approach in the o ine phase is usually state-based bucketing, followed by either the pre x length or the clustering based method, while the slowest is single bucket. is indicates that the time taken to train multiple (“small”) classi ers, each trained with only a subset of the original data, is smaller than training a few (“large”) classi ers using a larger portion of the data.
+In general, all methods are able to process an event in less than 100 milliseconds during the online phase (the times in Tables 9 and 10 are in milliseconds per processed event in a partial trace). Exceptions are hospital 1 and hospital 2, where processing an event takes around 0.3-0.4 seconds. e online execution times are very comparable across all the methods, except for KNN and pre x index. While pre x index o en takes double the time of other methods, the pa erns for KNN are less straightforward. Namely, in some datasets (bpic2012, sepsis, production, insurance, and tra c), the KNN approaches take considerably more time than the other techniques, which can be explained by the fact that these approaches train a classi er at runtime. However, somewhat surprisingly, in other datasets (hospital and bpic2011 datasets) the KNN approaches yield the best execution times even at runtime. A possible explanation for this is that in cases where all the selected nearest neighbors are of the same class, no classi er is trained and the class of the neighbors is immediately returned as the prediction. However, note that the overall AUC in these cases is 7-21 percentage points lower than that of the best method (8). In the o ine phase, the overhead of applying aggregation functions becomes more evident, with the last state encoding almost always outperforming the aggregation encoding methods by a few milliseconds. e fastest method in the online phase tends to be pre x laststate, which outperforms the others in 17 out of 24 datasets. It is followed by knn laststate, state laststate, and single laststate.
+In terms of online execution times, the observed pa erns are in line with those of other classi ers. However, there are some di erences in the o ine phase. Namely, in case of RF, the single classi ers perform relatively be er as compared to bucketing methods. Furthermore, the di erence between the encoding methods becomes more evident, with the last state encodings usually outperforming their aggregation encoding counterparts. e index-based encoding is still the slowest of the techniques. In case of logit, all the methods achieve comparable o ine times, except for indexbased encoding and the clustering based bucketings, which are slower than the others. In case of SVM, the single laststate method tends to be much slower than other techniques. is discussion concludes the answer to RQ3.2.
+
+5.5 Results: gap-based filtering In order to investigate the e ects of gap-based ltering on the execution times and the accuracy, we selected 4 methods based on their performance in the above subsections: single agg, single laststate,
+
+1:30
+
+I. Teinemaa et al.
+
+Table 9. Execution times for XGBoost
+
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2011 1
+
+o ine total (s) online avg (ms)
+
+418.35 ± 0.56 317.18 ± 0.58
+5.9 ± 0.31 6.63 ± 0.12 142.53 ± 0.31 183.67 ± 0.79 211.88 ± 1.0 341.4 ± 1.89 763.8 ± 20.33 290.64 ± 1.44 172.8 ± 12.28
+
+69 ± 98 69 ± 99 44 ± 65 52 ± 76 52 ± 72 61 ± 84 66 ± 112 70 ± 113 114 ± 68 57 ± 86 56 ± 82
+
+bpic2011 4
+
+o ine total (s) online avg (ms)
+
+418.65 ± 17.42 319.27 ± 10.75
+8.99 ± 0.23 9.47 ± 0.07 156.45 ± 1.1 301.91 ± 7.54 274.97 ± 8.03 252.81 ± 6.36 794.59 ± 35.34 344.73 ± 13.5 441.82 ± 1.01
+
+62 ± 97 62 ± 98 42 ± 67 57 ± 86 48 ± 73 58 ± 90 69 ± 112 69 ± 112 111 ± 59 48 ± 80 63 ± 98
+
+bpic2015 3
+
+o ine total (s) online avg (ms)
+
+150.3 ± 0.44 627.3 ± 3.48 18.9 ± 0.68 19.57 ± 0.84 45.06 ± 0.03 86.47 ± 0.06 102.82 ± 0.26 181.85 ± 1.13 2155.36 ± 80.83 98.37 ± 0.7 108.91 ± 2.83
+
+21 ± 33 21 ± 35 37 ± 61 41 ± 69 29 ± 49 33 ± 53 35 ± 60 28 ± 45 55 ± 15 7±9 9±9
+
+production
+
+o ine total (s) online avg (ms)
+
+7.28 ± 0.12 4.3 ± 0.13 1.09 ± 0.01 0.76 ± 0.0 2.69 ± 0.11 4.37 ± 0.04 6.94 ± 0.06 6.35 ± 0.07 13.81 ± 0.04 5.62 ± 0.35 5.89 ± 0.01
+
+25 ± 21 28 ± 25 51 ± 49 62 ± 60 23 ± 19 30 ± 26 30 ± 30 35 ± 31 49 ± 10 28 ± 23 28 ± 23
+
+bpic2011 2
+
+o ine total (s) online avg (ms)
+
+581.68 ± 1.09 342.3 ± 2.02 9.82 ± 0.66 9.79 ± 0.44 181.87 ± 0.92 169.98 ± 0.47 592.92 ± 4.84 381.61 ± 1.87 1405.87 ± 88.64 264.71 ± 4.58 274.29 ± 9.08
+
+62 ± 96 62 ± 97 37 ± 59 46 ± 72 48 ± 74 58 ± 90 67 ± 112 62 ± 111 126 ± 62 50 ± 81 53 ± 82
+
+bpic2015 1
+
+o ine total (s) online avg (ms)
+
+263.56 ± 0.38 105.58 ± 0.39 8.44 ± 0.04 9.45 ± 0.06 25.2 ± 0.08 53.39 ± 0.34 46.71 ± 0.58 62.25 ± 0.48 396.03 ± 4.79 62.17 ± 0.26 57.14 ± 0.16
+
+20 ± 30 22 ± 34 31 ± 51 45 ± 72 25 ± 44 29 ± 48 37 ± 58 29 ± 46 51 ± 10 7±9 10 ± 10
+
+bpic2015 4
+
+o ine total (s) online avg (ms)
+
+67.21 ± 0.09 191.22 ± 0.21 7.38 ± 0.08
+7.5 ± 0.35 18.5 ± 0.06 30.76 ± 0.07 34.94 ± 0.19 61.06 ± 0.84 261.21 ± 0.5 37.59 ± 0.06 40.83 ± 0.38
+
+18 ± 27 19 ± 29 29 ± 50 34 ± 58 25 ± 42 29 ± 45 34 ± 62 26 ± 40 41 ± 8 6±7 8±8
+
+insurance 1
+
+o ine total (s) online avg (ms)
+
+36.0 ± 0.1 12.81 ± 0.12 0.66 ± 0.01 0.66 ± 0.0 11.45 ± 0.1 17.67 ± 0.11 32.75 ± 0.11 30.06 ± 0.2 58.79 ± 0.58 9.44 ± 0.03 17.17 ± 0.05
+
+38 ± 31 40 ± 33 49 ± 44 57 ± 53 31 ± 22 40 ± 31 39 ± 37 52 ± 43 90 ± 4 31 ± 21 35 ± 24
+
+bpic2011 3
+
+o ine total (s) online avg (ms)
+
+217.69 ± 1.38 271.33 ± 0.54 4.14 ± 0.06 4.57 ± 0.06 86.78 ± 0.52 119.84 ± 0.2 93.83 ± 0.48 94.45 ± 0.71 428.6 ± 19.49 108.84 ± 0.33 125.61 ± 7.42
+
+71 ± 96 71 ± 97 48 ± 72 61 ± 91 53 ± 70 62 ± 82 57 ± 98 72 ± 111 113 ± 69 59 ± 84 58 ± 80
+
+bpic2015 2
+
+o ine total (s) online avg (ms)
+
+134.87 ± 0.59 282.97 ± 8.14 11.46 ± 0.63 11.95 ± 0.12 30.28 ± 0.2 64.72 ± 0.08
+52.8 ± 1.6 135.33 ± 1.21 442.17 ± 8.47 45.27 ± 0.27 74.98 ± 1.04
+
+18 ± 29 20 ± 32 34 ± 59 38 ± 66 27 ± 45 31 ± 49 36 ± 60 28 ± 45 48 ± 13 6±7 8±8
+
+bpic2015 5
+
+o ine total (s) online avg (ms)
+
+83.78 ± 0.31 428.23 ± 1.24 17.22 ± 0.14 19.67 ± 0.53 37.97 ± 0.08 73.2 ± 0.46 72.76 ± 0.26 74.79 ± 0.7 550.87 ± 4.23 109.77 ± 0.1 92.61 ± 0.88
+
+17 ± 26 17 ± 28 36 ± 60 37 ± 87 23 ± 38 26 ± 41 35 ± 60 20 ± 34 48 ± 12 6±8 8±9
+
+insurance 2
+
+o ine total (s) online avg (ms)
+
+15.52 ± 0.09 78.17 ± 0.62 0.96 ± 0.01 1.06 ± 0.01 15.22 ± 0.06 30.62 ± 0.17 42.42 ± 0.15 47.2 ± 0.14 80.56 ± 0.12 22.3 ± 0.07 24.66 ± 0.07
+
+33 ± 30 34 ± 32 48 ± 36 69 ± 50 26 ± 21 35 ± 30 37 ± 34 45 ± 43 91 ± 4 26 ± 21 30 ± 24
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:31
+
+Table 10. Execution times for XGBoost (continued)
+
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+sepsis 1
+
+o ine total (s) online avg (ms)
+
+40.05 ± 0.15 39.65 ± 0.2 2.85 ± 0.04 2.91 ± 0.04 25.72 ± 0.22 28.85 ± 0.13 27.8 ± 0.1 21.22 ± 0.14 93.4 ± 1.62 21.86 ± 0.12 26.75 ± 0.15
+
+27 ± 31 29 ± 33 54 ± 58 61 ± 66 29 ± 33 32 ± 36 26 ± 32 28 ± 33 37 ± 24 26 ± 29 28 ± 31
+
+bpic2012 1
+
+o ine total (s) online avg (ms)
+
+402.09 ± 3.02 290.33 ± 0.99 29.8 ± 0.58 29.86 ± 0.59 234.38 ± 0.68 205.54 ± 4.88 718.57 ± 15.83 200.12 ± 0.45 2637.76 ± 3.59 313.24 ± 3.13 562.56 ± 7.46
+
+7 ± 11 8 ± 12 82 ± 93 143 ± 159 8 ± 10 10 ± 12 9 ± 14 9 ± 13 36 ± 12 4±3 5±5
+
+bpic2017 1
+
+o ine total (s) online avg (ms)
+
+1845.39 ± 36.22 4569.55 ± 89.68 124.61 ± 2.45
+134.2 ± 2.63 1568.31 ± 30.78 2357.57 ± 46.27 780.47 ± 15.32 2556.04 ± 50.16 19581.63 ± 384.29 2745.56 ± 53.88 4751.78 ± 93.25
+tra
+
+19 ± 23 19 ± 24 1476 ± 1389 1601 ± 1504 18 ± 20 20 ± 22 17 ± 21 16 ± 20 72 ± 9 14 ± 15 18 ± 24
+c
+
+o ine total (s) online avg (ms)
+
+3169.91 ± 76.52 4018.67 ± 82.0 400.63 ± 7.64 444.14 ± 8.93 1088.97 ± 18.94 828.18 ± 14.85 2152.68 ± 3.26 1572.57 ± 3.52 2895.03 ± 56.82 2963.04 ± 3.57 1669.98 ± 4.9
+
+62 ± 34 71 ± 40 96 ± 60 158 ± 101 74 ± 43 75 ± 41 64 ± 37 69 ± 40 102 ± 13 59 ± 32 62 ± 34
+
+sepsis 2
+
+o ine total (s) online avg (ms)
+
+18.68 ± 0.03 21.86 ± 0.15 1.04 ± 0.04 1.07 ± 0.03 15.5 ± 0.07 24.5 ± 0.06 17.28 ± 0.2 19.71 ± 0.07 23.02 ± 0.16 23.41 ± 0.12 20.73 ± 0.05
+
+33 ± 33 36 ± 35 64 ± 62 83 ± 78 35 ± 36 39 ± 39 37 ± 36 39 ± 39 41 ± 26 31 ± 29 34 ± 33
+
+bpic2012 2
+
+o ine total (s) online avg (ms)
+
+181.94 ± 6.17 268.54 ± 2.51 28.27 ± 0.26 30.07 ± 0.59 251.72 ± 0.8 640.61 ± 8.42 533.58 ± 2.9 741.83 ± 19.09 5857.46 ± 19.9 253.69 ± 1.02 409.94 ± 4.45
+
+7 ± 10 8 ± 12 117 ± 132 403 ± 434 8 ± 10 10 ± 12 9 ± 13 10 ± 16 36 ± 12 4±3 5±5
+
+bpic2017 2
+
+o ine total (s) online avg (ms)
+
+2116.09 ± 41.53 7042.71 ± 138.21
+125.47 ± 2.46 125.39 ± 2.46 2661.92 ± 66.32 4387.99 ± 194.51 2894.35 ± 56.8 4233.3 ± 83.08 15822.79 ± 310.52 1863.41 ± 36.57 2712.28 ± 53.23
+
+18 ± 22 21 ± 26 1474 ± 1386 1488 ± 1398 19 ± 23 22 ± 25 19 ± 23 20 ± 24 81 ± 7 17 ± 18 17 ± 17
+
+hospital 1
+
+o ine total (s) online avg (ms)
+
+23191.09 ± 455.13 5999.77 ± 6.31 117.9 ± 2.31 213.95 ± 4.2
+10056.83 ± 197.37 16417.43 ± 322.19 11463.75 ± 224.98
+3297.8 ± 64.72 16114.53 ± 316.25 6756.85 ± 132.6 11395.98 ± 223.65
+
+380 ± 249 401 ± 264 54 ± 37 79 ± 51 312 ± 257 392 ± 238 296 ± 270 339 ± 254 930 ± 136 380 ± 265 399 ± 241
+
+sepsis 3
+
+o ine total (s) online avg (ms)
+
+81.33 ± 0.08 54.24 ± 0.18 2.08 ± 0.03 1.95 ± 0.05 41.82 ± 0.17 61.92 ± 0.82 59.4 ± 0.33 64.08 ± 0.39 43.06 ± 0.29 28.9 ± 0.08 28.3 ± 0.19
+
+29 ± 31 31 ± 34 57 ± 60 68 ± 70 31 ± 33 34 ± 37 32 ± 35 33 ± 37 38 ± 25 27 ± 29 29 ± 31
+
+bpic2012 3
+
+o ine total (s) online avg (ms)
+
+454.27 ± 1.31 268.29 ± 1.14 34.41 ± 0.03 29.65 ± 0.55 132.18 ± 0.61 293.0 ± 3.62 141.21 ± 1.96 264.94 ± 6.29 2815.82 ± 14.87 240.8 ± 1.81 223.96 ± 10.6
+
+7 ± 11 8 ± 12 156 ± 171 38 ± 52 8 ± 10 9 ± 12 10 ± 15 10 ± 16 34 ± 11 4±3 5±5
+
+bpic2017 3
+
+o ine total (s) online avg (ms)
+
+2587.32 ± 50.78 2021.16 ± 39.67 125.41 ± 2.46 125.58 ± 2.46 2771.55 ± 54.39 3051.07 ± 59.88 2032.37 ± 39.89 1800.81 ± 35.34 17384.94 ± 341.18 1660.26 ± 32.58 2680.83 ± 52.61
+
+19 ± 23 20 ± 25 1477 ± 1390 1480 ± 1393 18 ± 20 20 ± 22 16 ± 20 17 ± 20 78 ± 13 15 ± 15 16 ± 17
+
+hospital 2
+
+o ine total (s) online avg (ms)
+
+5303.26 ± 104.08 8634.78 ± 169.46
+320.52 ± 6.29 315.68 ± 6.2 7321.59 ± 143.69 16783.7 ± 329.38 4704.15 ± 92.32 9174.11 ± 180.04 21000.14 ± 412.13 9208.33 ± 180.71 7993.41 ± 156.87
+
+410 ± 270 426 ± 281 104 ± 90 114 ± 93 293 ± 235 363 ± 212 302 ± 282 353 ± 264 960 ± 220 323 ± 219 353 ± 204
+
+1:32
+
+I. Teinemaa et al.
+
+pre x index, and pre x agg. e rst three of these methods were shown to take the most time in the o ine phase, i.e., they have the most potential to bene t from a ltering technique. Also, single agg and pre x agg achieved the highest overall AUC scores, which makes them the most a ractive candidates to apply in practice. Furthermore, we selected 6 datasets which are representative in terms of their sizes (i.e., number of traces), consist of relatively long traces on average, and did not yield a very high accuracy very early in the trace.
+Figures 9–11 plot the performance of the classi ers over di erent gap sizes, i.e. on the x-axis, = 1 corresponds to no ltering (using pre xes obtained a er every event), = 3 to using pre xes obtained a er every 3rd event, and = 5 to pre xes a er every 5th event. In Figure 9 we can see that using = 3 yields an improvement of about 2-3 times in the o ine execution times, while using = 5, the improvement is usually around 3-4 times, as compared to no ltering ( = 1). For instance, in case of single agg on the bpic2017 2 dataset with = 5, this means that the o ine phase takes about 30 minutes instead of 2 hours. At the same time, the overall AUC remains at the same level, sometimes even increasing when a ltering is applied (Figure 10). On the other hand, the gap-based ltering only has a marginal (positive) e ect on the online execution times, which usually remain on the same level as without ltering (Figure 11). is concludes the answer to RQ3.3.
+
+Fig. 9. O line times across di erent gaps (XGBoost)
+5.6 Results: categorical domain filtering To answer RQ3.4, we proceed with the 4 methods as discussed in the previous subsection. To be er investigate the e ect of ltering the categorical a ribute levels, we distinguish between the static and the dynamic categorical a ributes. For investigating the e ects of dynamic categorical domain ltering, we selected 9 datasets that contain a considerable number of levels in the dynamic categorical a ributes.
+Both the o ine (Figure 12) and the online (Figure 14) execution times tend to increase linearly when the proportion of levels is increased. As expected, the pre x index method bene ts the most
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:33
+
+Fig. 10. AUC across di erent gaps (XGBoost)
+
+Fig. 11. Online times across di erent gaps (XGBoost)
+from the ltering, since the size of the feature vector increases more rapidly than in the other methods when more levels are added (the vector contains one feature per level per event). Although the overall AUC is negatively a ected by the ltering of levels (see Figure 13), reasonable tradeo s can still be found. For instance, when using 50% of the levels in case of single agg on the hospital 2 dataset, the AUC is almost una ected, while the training time has decreased by more than 30 minutes and the online execution times have decreased by a half.
+
+1:34
+
+I. Teinemaa et al.
+
+Fig. 12. O line times across di erent filtering proportions of dynamic categorical a ribute levels (XGBoost)
+We performed similar experiments by ltering the static categorical a ribute domains, selecting 6 datasets that contain a considerable number of levels in these a ributes. However, the improvement in execution times were marginal compared to those obtained when using dynamic a ribute
+ltering (see Figures 24-26 in Appendix). is is natural, since the static a ributes have a smaller e ect on the size of the feature vector (each level occurs in the vector only once). is concludes the answer to RQ3.4.
+6 THREATS TO VALIDITY One of the threats to the validity of this study relates to the potential selection bias in the literature review. To minimize this, we described our systematic literature review procedure on a level of detail that is su cient to replicate the search. However, in time the search and ranking algorithms of the used academic database (Google Scholar) might be updated and return di erent results. Another potential source of bias is the subjectivity when applying inclusion and exclusion criteria, as well as when determining the primary and subsumed studies. In order to alleviate this issue, all the included papers were collected in a publicly available spreadsheet, together with decisions and reasons about excluding them from the study. Moreover, each paper was independently assessed against the inclusion and exclusion criteria by two authors, and inconsistencies were resolved with the mediation of a third author.
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:35
+
+Fig. 13. AUC across di erent filtering proportions of dynamic categorical a ribute levels (XGBoost)
+Another threat to validity is related to the comprehensiveness of the conducted experiments. In particular, only one clustering method was tested, a single state abstraction was used when building the transition systems for state-based bucketing, and four classi cation algorithms were applied. It is possible that there exists, for example, a combination of an untested clustering technique and a classi er that outperforms the se ings used in this study. Also, although the hyperparameters were optimized using a state-of-the-art hyperparameter optimization technique, it is possible that using more iterations for optimization or a di erent optimization algorithm, other parameter se ings would be found that outperform the se ings used in the current evaluation. Furthermore, the generalizability of the ndings is to some extent limited by the fact that the experiments were performed on a limited number of prediction tasks (24), constructed from nine event logs. Although these are all real-life event logs from di erent application elds that exhibit di erent characteristics, it may be possible that the results would be di erent using other datasets or di erent log preprocessing techniques for the same datasets. In order to mitigate these threats, we built an open-source so ware framework which allows the full replication of the experiments, and made this tool publicly available. Moreover, additional datasets, as well as new sequence classi cation and encoding methods can be plugged in. So the framework can be used for future experiments. Also, the preprocessed datasets constructed from the three publicly available event logs are included together with the tool implementation in order to enhance the reproducibility of the experiments.
+
+1:36
+
+I. Teinemaa et al.
+
+Fig. 14. Online times across di erent filtering proportions of dynamic categorical a ribute levels (XGBoost)
+7 CONCLUSION is study provided a survey and comparative analysis and evaluation of existing outcome-oriented
+predictive business process monitoring techniques. e relevant existing studies were identi ed through a systematic literature review (SLR), which revealed 14 studies (some described across multiple papers) dealing with the problem of predicting case outcomes. Out of these, seven were considered to contain a distinct contribution (primary studies). rough further analysis of the primary studies, a taxonomy was proposed based on two main aspects, the trace bucketing approach and sequence encoding method employed. Combinations of these two aspects led to a total of 11 distinct methods.
+e studies were characterized from di erent perspectives, resulting in a taxonomy of existing techniques. Finally, a comparative evaluation of the 11 identi ed techniques was performed using a uni ed experimental set-up and 24 predictive monitoring tasks constructed from 9 real-life event logs. To ensure a fair evaluation, all the selected techniques were implemented as a publicly available consolidated framework, which is designed to incorporate additional datasets and methods.
+e results of the benchmark show that the most reliable and accurate results (in terms of AUC) are obtained using a lossy (aggregation) encoding of the sequence, e.g., the frequencies of performed activities rather than the ordered activities. One of the main bene ts of this encoding is that it enables to represent all pre x traces, regardless of their length, in the same number of features. is
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:37
+
+way, a single classi er can be trained over all of the pre x traces, allowing the classi er to derive meaningful pa erns by itself. ese results disprove the existing opinion in the literature about the superiority of a lossless encoding of the trace (index-based encoding) that requires pre xes to be divided into buckets according to their length, while multiple classi ers are trained on each such subset of pre xes.
+e study also put into evidence the importance of checking for concept dri s when applying predictive monitoring methods. In the study, we found concept dri s in the data a ributes extracted from two datasets, and in both cases, these dri s signi cantly a ected the performance of all tested methods. is observation is aligned with previous studies in the eld of process mining, which have shown that concept dri s are common in the control ow of business processes [24, 29, 30]. Techniques for automated detection and characterization of process control- ow dri s from event logs and event streams are available [24, 29, 30]. Researchers and practitioners using predictive monitoring methods should consider applying these detection methods, as well as standard statistical tests on the features extracted, to ensure that there is no dri present, which could a ect the performance of the predictive models.
+e study paves the way to several directions of future work. In Section 2 we noted that case and event a ributes can be of categorical, numeric or textual type. e systematic review showed that existing methods are focused on handling categorical and numeric a ributes, to the exclusion of textual ones. Recent work has shown how text mining techniques can be used to extend the index-based encoding approach of [40] in order to handle text a ributes, however this la er work considered a reduced set of text mining techniques and has only been tested on two datasets of relatively small size and complexity.
+Secondly, the methods identi ed in the survey are mainly focused on extracting features from one trace at a time (i.e., intra-case features), while only a single inter-case feature (the number of open cases) is included. However, due to the fact that the ongoing cases of a process share the same pool of resources, the outcome of a case may depend also on other aspects of the current state of the rest of ongoing cases in the process. erefore, the accuracy of the models tested in this benchmark could be further improved by using a larger variety of inter-case features.
+Lastly, as long-short term memory (LSTM) networks have recently gained a ention in predicting remaining time and next activity of a running case of a business process [12, 39], another natural direction for future work is to study how LSTMs can be used for outcome prediction. In particular, could LSTMs automatically derive relevant features from collections of trace pre xes, and thus obviate the need for sophisticated feature engineering (aggregation functions), which has been so far the focus of predictive process monitoring research?
+ACKNOWLEDGMENTS is research is funded by the Australian Research Council (grant DP150103356), the Estonian
+Research Council (grant IUT20-55) and European Regional Development Fund (Dora Plus Program)
+REFERENCES
+[1] James S Bergstra, Re´mi Bardenet, Yoshua Bengio, and Bala´zs Ke´gl. 2011. Algorithms for hyper-parameter optimization. In Proc. of NIPS. 2546–2554.
+[2] Andrew P Bradley. 1997. e use of the area under the ROC curve in the evaluation of machine learning algorithms. Pa ern recognition 30, 7 (1997), 1145–1159.
+[3] Leo Breiman. 2001. Random forests. Machine learning 45, 1 (2001), 5–32. [4] Malu Castellanos, Norman Salazar, Fabio Casati, Umesh Dayal, and Ming-Chien Shan. 2005. Predictive business
+operations management. In International Workshop on Databases in Networked Information Systems. Springer, 1–14. [5] Ra aele Conforti, Massimiliano De Leoni, Marcello La Rosa, and Wil MP Van Der Aalst. 2013. Supporting risk-informed
+decisions during business process execution. In International Conference on Advanced Information Systems Engineering.
+
+1:38
+
+I. Teinemaa et al.
+
+Springer, 116–132. [6] Ra aele Conforti, Massimiliano de Leoni, Marcello La Rosa, Wil MP van der Aalst, and Arthur HM ter Hofstede. 2015.
+A recommendation system for predicting risks across multiple business process instances. Decision Support Systems 69 (2015), 1–19. [7] Massimiliano De Leoni, Wil MP van der Aalst, and Marcus Dees. 2014. A general framework for correlating business process characteristics. In International Conference on Business Process Management. Springer, 250–266. [8] Massimiliano de Leoni, Wil MP van der Aalst, and Marcus Dees. 2016. A general process mining framework for correlating, predicting and clustering dynamic behavior based on event logs. Information Systems 56 (2016), 235–257. [9] Janez Demsˇar. 2006. Statistical comparisons of classi ers over multiple data sets. Journal of Machine learning research 7, Jan (2006), 1–30. [10] Chiara Di Francescomarino, Marlon Dumas, Fabrizio M Maggi, and Irene Teinemaa. 2017. Clustering-based predictive process monitoring. IEEE Transactions on Services Computing (2017). [11] Marlon Dumas, Marcello La Rosa, Jan Mendling, and Hajo A. Reijers. 2018. Fundamentals of Business Process Management (2nd ed.). Springer. [12] Joerg Evermann, Jana-Rebecca Rehse, and Peter Fe ke. 2016. A Deep Learning Approach for Predicting Process Behaviour at Runtime. In Proceedings of the Business Process Management Workshops. Springer, 327–338. [13] Manuel Ferna´ndez-Delgado, Eva Cernadas, Sene´n Barro, and Dinani Amorim. 2014. Do we need hundreds of classi ers to solve real world classi cation problems. J. Mach. Learn. Res 15, 1 (2014), 3133–3181. [14] Francesco Folino, Massimo Guarascio, and Luigi Pontieri. 2014. Mining predictive process models out of low-level multidimensional logs. In International conference on advanced information systems engineering. Springer, 533–547. [15] Jerome H Friedman. 2001. Greedy function approximation: a gradient boosting machine. Annals of statistics (2001), 1189–1232. [16] Mohamed F Ghalwash and Zoran Obradovic. 2012. Early classi cation of multivariate temporal observations by extraction of interpretable shapelets. BMC bioinformatics 13, 1 (2012), 195. [17] Mohamed F Ghalwash, Vladan Radosavljevic, and Zoran Obradovic. 2013. Extraction of interpretable multivariate pa erns for early diagnostics. In Data Mining (ICDM), 2013 IEEE 13th International Conference on. IEEE, 201–210. [18] Johny Gha as, Pnina So er, and Mor Peleg. 2014. Improving business process decision making based on past experience. Decision Support Systems 59 (2014), 93–107. [19] Guoliang He, Yong Duan, Rong Peng, Xiaoyuan Jing, Tieyun Qian, and Lingling Wang. 2015. Early classi cation on multivariate time series. Neurocomputing 149 (2015), 777–787. [20] Barbara Kitchenham. 2004. Procedures for performing systematic reviews. Keele, UK, Keele University 33, 2004 (2004), 1–26. [21] Geetika T Lakshmanan, Songyun Duan, Paul T Keyser, Francisco Curbera, and Rania Khalaf. 2010. Predictive analytics for semi-structured case oriented business processes. In International Conference on Business Process Management. Springer, 640–651. [22] Anna Leontjeva, Ra aele Conforti, Chiara Di Francescomarino, Marlon Dumas, and Fabrizio Maria Maggi. 2015. Complex symbolic sequence encodings for predictive monitoring of business processes. In International Conference on Business Process Management. Springer, 297–313. [23] Yu-Feng Lin, Hsuan-Hsu Chen, Vincent S Tseng, and Jian Pei. 2015. Reliable early classi cation on multivariate time series with numerical and categorical a ributes. In Paci c-Asia Conference on Knowledge Discovery and Data Mining. Springer, 199–211. [24] Abderrahmane Maaradji, Marlon Dumas, Marcello La Rosa, and Alireza Ostovar. 2017. Detecting Sudden and Gradual Dri s in Business Processes from Execution Traces. IEEE Trans. Knowl. Data Eng. 29, 10 (2017), 2140–2154. [25] Fabrizio Maria Maggi, Chiara Di Francescomarino, Marlon Dumas, and Chiara Ghidini. 2014. Predictive monitoring of business processes. In International Conference on Advanced Information Systems Engineering. Springer, 457–472. [26] Andreas Metzger, Rod Franklin, and Yagil Engel. 2012. Predictive Monitoring of Heterogeneous Service-Oriented Business Networks: e Transport and Logistics Case. In 2012 Annual SRII Global Conference. IEEE Computer Society, 313–322. [27] Andreas Metzger, Philipp Leitner, Dragan Ivanovic, Eric Schmieders, Rod Franklin, Manuel Carro, Schahram Dustdar, and Klaus Pohl. 2015. Comparing and Combining Predictive Business Process Monitoring Techniques. IEEE Trans. Systems, Man, and Cybernetics: Systems 45, 2 (2015), 276–290. [28] Randal S Olson, William La Cava, Zairah Mustahsan, Akshay Varik, and Jason H Moore. 2017. Data-driven advice for applying machine learning to bioinformatics problems. arXiv preprint arXiv:1708.05070 (2017). [29] Alireza Ostovar, Abderrahmane Maaradji, Marcello La Rosa, and Arthur H. M. ter Hofstede. 2017. Characterizing Dri from Event Streams of Business Processes. In Proceedings of the International Conference on Advanced Information Systems Engineering (CAiSE). Springer, 210–228.
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:39
+
+[30] Alireza Ostovar, Abderrahmane Maaradji, Marcello La Rosa, Arthur H. M. ter Hofstede, and Boudewijn F. van Dongen.
+2016. Detecting Dri from Event Streams of Unpredictable Business Processes. In Proceedings of the International Conference on Conceptual Modeling (ER) (LNCS). Springer, 330–346. [31] F. Pedregosa, G. Varoquaux, A. Gramfort, V. Michel, B. irion, O. Grisel, M. Blondel, P. Pre enhofer, R. Weiss, V.
+Dubourg, J. Vanderplas, A. Passos, D. Cournapeau, M. Brucher, M. Perrot, and E. Duchesnay. 2011. Scikit-learn:
+Machine Learning in Python. Journal of Machine Learning Research 12 (2011), 2825–2830. [32] Amir Pnueli. 1977. e temporal logic of programs. In Foundations of Computer Science, 1977., 18th Annual Symposium
+on. IEEE, 46–57. [33] Andreas Rogge-Solti and Mathias Weske. 2013. Prediction of Remaining Service Execution Time Using Stochastic
+Petri Nets with Arbitrary Firing Delays. In International Conference on Service-Oriented Computing (ICSOC). Springer, 389–403.
+[34] Andrii Rozumnyi. 2017. A Dashboard-based Predictive Process Monitoring Engine. Master’s thesis. University of Tartu. [35] Felix Salfner, Maren Lenk, and Miroslaw Malek. 2010. A survey of online failure prediction methods. ACM Computing
+Surveys (CSUR) 42, 3 (2010), 10. [36] Bernd Schwegmann, Martin Matzner, and Christian Janiesch. 2013. A Method and Tool for Predictive Event-Driven
+Process Analytics.. In Wirtscha sinformatik. Citeseer, 46. [37] Bernd Schwegmann, Martin Matzner, and Christian Janiesch. 2013. preCEP: facilitating predictive event-driven process
+analytics. In International Conference on Design Science Research in Information Systems. Springer, 448–455. [38] Arik Senderovich, Chiara Di Francescomarino, Chiara Ghidini, Kerwin Jorbina, and Fabrizio Maria Maggi. 2017. Intra
+and inter-case features in predictive process monitoring: A tale of two dimensions. In International Conference on Business Process Management. Springer, 306–323. [39] Niek Tax, Ilya Verenich, Marcello La Rosa, and Marlon Dumas. 2017. Predictive Business Process Monitoring with
+LSTM Neural Networks. In International Conference on Advanced Information Systems Engineering (CAiSE). Springer, 477–492.
+[40] Irene Teinemaa, Marlon Dumas, Fabrizio Maria Maggi, and Chiara Di Francescomarino. 2016. Predictive Business
+Process Monitoring with Structured and Unstructured Data. In International Conference on Business Process Management. Springer, 401–417.
+[41] Wil MP van der Aalst. 2016. Process mining: data science in action. Springer. [42] W MP Van Der Aalst, Vladimir Rubin, H MW Verbeek, Boudewijn F van Dongen, Ekkart Kindler, and Christian W
+Gu¨nther. 2010. Process mining: a two-step approach to balance between under ing and over ing. So ware and Systems Modeling 9, 1 (2010), 87–111. [43] Sjoerd Van Der Spoel, Maurice Van Keulen, and Chintan Amrit. 2012. Process prediction in noisy data sets: a case
+study in a dutch hospital. In International Symposium on Data-Driven Process Discovery and Analysis. Springer, 60–83. [44] Boudewijn F van Dongen, Ronald A Crooy, and Wil MP van der Aalst. 2008. Cycle time prediction: When will this
+case nally be nished?. In OTM Confederated International Conferences” On the Move to Meaningful Internet Systems”. Springer, 319–336.
+[45] Ilya Verenich, Marlon Dumas, Marcello La Rosa, Fabrizio Maria Maggi, and Chiara Di Francescomarino. 2015. Complex
+symbolic sequence clustering and multiple classi ers for predictive process monitoring. In International Conference on Business Process Management. Springer, 218–229. [46] Zhengzheng Xing and Jian Pei. 2010. Exploring Disease Association from the NHANES Data: Data Mining, Pa ern
+Summarization, and Visual Analytics. IJDWM 6, 3 (2010), 11–27. h ps://doi.org/10.4018/jdwm.2010070102 [47] Zhengzheng Xing, Jian Pei, Guozhu Dong, and Philip S Yu. 2008. Mining sequence classi ers for early prediction. In
+Proceedings of the 2008 SIAM international conference on data mining. SIAM, 644–655.
+
+APPENDIX is Appendix reports the following:
+• e distributions of case lengths in di erent outcome classes (Figures 15-16); • e optimal number of clusters (Table 11) and the optimal number of neighbors for KNN
+approaches (Table 12) found for each classi er; • e distributions of bucket sizes for the di erent bucketing methods (Figures 17-18); • e overall AUC and F-score values for RF (Table 13), logit (Table 14), and SVM (Table 15); • e AUC scores across pre x lengths using XGBoost classi er and all of the compared
+methods (Figures 19-20);
+
+1:40
+
+I. Teinemaa et al.
+
+• e AUC scores across pre x lengths, including long traces only, using the XGBoost classi er (Figure 21);
+• Concept dri in the bpic2011 4 log. (Figure 22); • Concept dri in the sepsis 1 log. (Figure 23); • e execution times for RF (Tables 16-17), logit(Tables 18-19), and SVM(Tables 20-21); • e o ine (Figure 24) and online (Figure 25) execution times and the overall AUC scores
+(Figure 26) when ltering the static categorical a ribute domain, using the XGBoost classi-
+er.
+
+Fig. 15. Case length histograms for positive and negative classes
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:41
+
+Fig. 16. Case length histograms for positive and negative classes (continued)
+
+1:42
+
+I. Teinemaa et al.
+
+Table 11. Best number of clusters
+
+dataset
+
+RF
+
+XGBoost
+
+Logit
+
+SVM
+
+cluster last cluster agg cluster last cluster agg cluster last cluster agg cluster last cluster agg
+
+bpic2011 1
+
+10
+
+8
+
+10
+
+6
+
+24
+
+23
+
+15
+
+43
+
+bpic2011 2
+
+28
+
+4
+
+3
+
+6
+
+20
+
+13
+
+27
+
+24
+
+bpic2011 3
+
+30
+
+4
+
+28
+
+4
+
+33
+
+13
+
+32
+
+44
+
+bpic2011 4
+
+2
+
+21
+
+2
+
+2
+
+16
+
+2
+
+24
+
+36
+
+insurance 2
+
+8
+
+12
+
+2
+
+2
+
+4
+
+3
+
+30
+
+25
+
+insurance 1
+
+6
+
+18
+
+3
+
+2
+
+10
+
+47
+
+45
+
+3
+
+bpic2015 1
+
+39
+
+10
+
+37
+
+4
+
+21
+
+2
+
+13
+
+7
+
+bpic2015 2
+
+32
+
+6
+
+31
+
+5
+
+42
+
+7
+
+9
+
+13
+
+bpic2015 3
+
+44
+
+12
+
+36
+
+10
+
+41
+
+11
+
+11
+
+13
+
+bpic2015 4
+
+45
+
+3
+
+47
+
+5
+
+47
+
+40
+
+19
+
+8
+
+bpic2015 5
+
+43
+
+4
+
+49
+
+19
+
+32
+
+4
+
+8
+
+4
+
+production
+
+44
+
+21
+
+18
+
+2
+
+38
+
+44
+
+10
+
+7
+
+sepsis 1
+
+38
+
+14
+
+19
+
+6
+
+39
+
+41
+
+9
+
+29
+
+sepsis 2
+
+3
+
+8
+
+4
+
+2
+
+7
+
+3
+
+10
+
+21
+
+sepsis 3
+
+2
+
+7
+
+13
+
+7
+
+7
+
+23
+
+7
+
+3
+
+bpic2012 1
+
+22
+
+7
+
+3
+
+35
+
+3
+
+3
+
+8
+
+49
+
+bpic2012 2
+
+9
+
+9
+
+3
+
+4
+
+7
+
+9
+
+15
+
+3
+
+bpic2012 3
+
+10
+
+26
+
+3
+
+2
+
+13
+
+8
+
+22
+
+15
+
+bpic2017 1
+
+39
+
+30
+
+22
+
+43
+
+4
+
+34
+
+39
+
+19
+
+bpic2017 2
+
+11
+
+10
+
+20
+
+15
+
+31
+
+27
+
+40
+
+4
+
+bpic2017 3
+
+29
+
+30
+
+32
+
+34
+
+19
+
+47
+
+21
+
+35
+
+tra c
+
+42
+
+43
+
+29
+
+23
+
+42
+
+36
+
+9
+
+13
+
+hospital 1
+
+35
+
+2
+
+33
+
+48
+
+10
+
+8
+
+48
+
+32
+
+hospital 2
+
+19
+
+48
+
+33
+
+45
+
+11
+
+8
+
+34
+
+28
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:43
+
+Table 12. Best number of neighbors
+
+dataset
+
+RF
+
+XGBoost
+
+Logit
+
+SVM
+
+knn last knn agg knn last knn agg knn last knn agg knn last knn agg
+
+bpic2011 1
+
+47
+
+45
+
+50
+
+50
+
+46
+
+48
+
+49
+
+39
+
+bpic2011 2
+
+45
+
+47
+
+50
+
+46
+
+26
+
+21
+
+42
+
+40
+
+bpic2011 3
+
+50
+
+46
+
+50
+
+46
+
+45
+
+32
+
+44
+
+42
+
+bpic2011 4
+
+40
+
+41
+
+43
+
+46
+
+44
+
+50
+
+16
+
+32
+
+insurance 2 46
+
+47
+
+50
+
+45
+
+48
+
+49
+
+32
+
+44
+
+insurance 1 45
+
+49
+
+44
+
+50
+
+29
+
+36
+
+16
+
+12
+
+bpic2015 1
+
+31
+
+49
+
+50
+
+45
+
+32
+
+17
+
+12
+
+3
+
+bpic2015 2
+
+48
+
+50
+
+46
+
+46
+
+41
+
+12
+
+11
+
+2
+
+bpic2015 3
+
+29
+
+48
+
+46
+
+46
+
+40
+
+49
+
+2
+
+3
+
+bpic2015 4
+
+30
+
+43
+
+50
+
+36
+
+13
+
+9
+
+3
+
+38
+
+bpic2015 5
+
+30
+
+37
+
+46
+
+50
+
+27
+
+47
+
+2
+
+2
+
+production
+
+10
+
+19
+
+19
+
+16
+
+46
+
+14
+
+15
+
+21
+
+sepsis 1
+
+50
+
+49
+
+47
+
+32
+
+32
+
+26
+
+32
+
+43
+
+sepsis 2
+
+50
+
+41
+
+47
+
+49
+
+47
+
+49
+
+46
+
+39
+
+sepsis 3
+
+47
+
+48
+
+50
+
+50
+
+32
+
+50
+
+49
+
+29
+
+bpic2012 1
+
+2
+
+50
+
+9
+
+17
+
+6
+
+45
+
+37
+
+33
+
+bpic2012 2
+
+50
+
+50
+
+14
+
+50
+
+3
+
+42
+
+32
+
+39
+
+bpic2012 3
+
+50
+
+50
+
+19
+
+3
+
+9
+
+25
+
+22
+
+22
+
+bpic2017 1
+
+50
+
+50
+
+50
+
+50
+
+50
+
+50
+
+4
+
+50
+
+bpic2017 2
+
+50
+
+50
+
+50
+
+50
+
+50
+
+50
+
+50
+
+50
+
+bpic2017 3
+
+50
+
+50
+
+50
+
+50
+
+50
+
+50
+
+50
+
+50
+
+tra c
+
+50
+
+50
+
+14
+
+25
+
+10
+
+10
+
+31
+
+42
+
+hospital 1
+
+50
+
+50
+
+26
+
+22
+
+29
+
+50
+
+38
+
+3
+
+hospital 2
+
+50
+
+50
+
+50
+
+50
+
+36
+
+6
+
+31
+
+24
+
+1:44
+
+I. Teinemaa et al.
+
+Fig. 17. Bucket size distributions
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:45
+
+Fig. 18. Bucket size distributions (continued)
+
+1:46
+
+I. Teinemaa et al.
+
+Table 13. Overall AUC (F-score) for random forest
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2011 1
+0.87 (0.73) 0.94 (0.86) 0.92 (0.85) 0.87 (0.8) 0.88 (0.74) 0.92 (0.85) 0.9 (0.75) 0.91 (0.82) 0.93 (0.8) 0.9 (0.75) 0.94 (0.88)
+
+bpic2011 2
+0.92 (0.83) 0.98 (0.95) 0.96 (0.92) 0.94 (0.9) 0.92 (0.86) 0.96 (0.93) 0.91 (0.87) 0.96 (0.94) 0.96 (0.88) 0.94 (0.87) 0.97 (0.94)
+
+bpic2011 3
+0.94 (0.79) 0.98 (0.94) 0.92 (0.85) 0.9 (0.81) 0.94 (0.76) 0.97 (0.87) 0.98 (0.92) 0.98 (0.93) 0.97 (0.73) 0.97 (0.72) 0.98 (0.78)
+
+bpic2011 4
+0.9 (0.82) 0.89 (0.8) 0.79 (0.7) 0.78 (0.7) 0.88 (0.8) 0.87 (0.77) 0.88 (0.79) 0.89 (0.79) 0.85 (0.76) 0.88 (0.78) 0.88 (0.78)
+
+insurance 1
+0.88 (0.53) 0.91 (0.65) 0.85 (0.55) 0.87 (0.63) 0.88 (0.55) 0.9 (0.63) 0.89 (0.54) 0.9 (0.61) 0.88 (0.56) 0.87 (0.5) 0.9 (0.59)
+
+insurance 2
+0.83 (0.47) 0.82 (0.48) 0.77 (0.5) 0.79 (0.54) 0.84 (0.61) 0.85 (0.59) 0.82 (0.46) 0.82 (0.58) 0.79 (0.37) 0.84 (0.57) 0.83 (0.58)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2015 1
+0.83 (0.43) 0.88 (0.73) 0.8 (0.44) 0.78 (0.53) 0.75 (0.52) 0.79 (0.64) 0.75 (0.43) 0.85 (0.69) 0.82 (0.52) 0.75 (0.37) 0.82 (0.65)
+
+bpic2015 2
+0.84 (0.5) 0.91 (0.74) 0.87 (0.63) 0.85 (0.63) 0.84 (0.57) 0.87 (0.69) 0.86 (0.61) 0.89 (0.73) 0.85 (0.46) 0.84 (0.4) 0.87 (0.7)
+
+bpic2015 3
+0.76 (0.49) 0.91 (0.72) 0.87 (0.67) 0.87 (0.73) 0.84 (0.58) 0.89 (0.74) 0.85 (0.67) 0.91 (0.71) 0.89 (0.67) 0.79 (0.44) 0.9 (0.74)
+
+bpic2015 4
+0.83 (0.51) 0.86 (0.62) 0.88 (0.56) 0.87 (0.67) 0.85 (0.57) 0.87 (0.66) 0.87 (0.63) 0.87 (0.63) 0.85 (0.59) 0.85 (0.38) 0.87 (0.67)
+
+bpic2015 5
+0.84 (0.59) 0.88 (0.76) 0.85 (0.71) 0.85 (0.69) 0.86 (0.68) 0.88 (0.75) 0.89 (0.74) 0.88 (0.76) 0.86 (0.68) 0.84 (0.61) 0.88 (0.77)
+
+production
+0.65 (0.55) 0.63 (0.54) 0.62 (0.55) 0.66 (0.58) 0.62 (0.56) 0.68 (0.58) 0.6 (0.53) 0.74 (0.66) 0.76 (0.57) 0.72 (0.58) 0.69 (0.59)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+sepsis 1
+0.49 (0.01) 0.41 (0.0) 0.46 (0.05) 0.48 (0.04) 0.46 (0.0) 0.43 (0.0) 0.48 (0.01) 0.43 (0.0) 0.47 (0.0) 0.46 (0.01) 0.46 (0.02)
+
+sepsis 2
+0.78 (0.45) 0.79 (0.39) 0.77 (0.26) 0.74 (0.2) 0.79 (0.41) 0.79 (0.44) 0.8 (0.41) 0.8 (0.44) 0.75 (0.41) 0.8 (0.43) 0.76 (0.41)
+
+sepsis 3
+0.67 (0.3) 0.66 (0.34) 0.64 (0.16) 0.61 (0.17) 0.71 (0.26) 0.7 (0.3) 0.71 (0.35) 0.69 (0.3) 0.71 (0.19) 0.71 (0.21) 0.7 (0.26)
+
+bpic2012 1
+0.67 (0.63) 0.69 (0.64) 0.59 (0.59) 0.64 (0.59) 0.68 (0.63) 0.68 (0.64) 0.66 (0.61) 0.67 (0.64) 0.67 (0.61) 0.66 (0.62) 0.68 (0.64)
+
+bpic2012 2
+0.6 (0.11) 0.61 (0.17) 0.58 (0.11) 0.57 (0.14) 0.6 (0.16) 0.59 (0.17) 0.61 (0.09) 0.59 (0.16) 0.6 (0.22) 0.59 (0.14) 0.59 (0.16)
+
+bpic2012 3
+0.69 (0.42) 0.7 (0.42) 0.66 (0.41) 0.67 (0.42) 0.69 (0.4) 0.7 (0.42) 0.68 (0.39) 0.68 (0.41) 0.67 (0.39) 0.68 (0.4) 0.7 (0.41)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2017 1
+0.83 (0.7) 0.83 (0.71) 0.78 (0.65) 0.78 (0.65) 0.83 (0.7) 0.83 (0.72) 0.83 (0.71) 0.83 (0.71) 0.83 (0.72) 0.83 (0.7) 0.83 (0.71)
+
+bpic2017 2
+0.81 (0.47) 0.8 (0.48) 0.61 (0.09) 0.57 (0.13) 0.8 (0.46) 0.8 (0.47) 0.8 (0.46) 0.79 (0.46) 0.8 (0.46) 0.8 (0.46) 0.8 (0.47)
+
+bpic2017 3
+0.79 (0.72) 0.8 (0.73) 0.78 (0.67) 0.76 (0.66) 0.8 (0.72) 0.8 (0.73) 0.8 (0.72) 0.8 (0.73) 0.79 (0.73) 0.79 (0.72) 0.8 (0.73)
+
+tra c
+0.66 (0.67) 0.65 (0.66) 0.67 (0.7) 0.66 (0.7) 0.65 (0.66) 0.66 (0.66) 0.66 (0.66) 0.66 (0.66) 0.66 (0.66) 0.65 (0.66) 0.66 (0.66)
+
+hospital 1
+0.88 (0.66) 0.88 (0.65) 0.81 (0.51) 0.81 (0.44) 0.88 (0.65) 0.88 (0.64) 0.88 (0.65) 0.88 (0.65) 0.88 (0.64) 0.88 (0.64) 0.88 (0.63)
+
+hospital 2
+0.72 (0.11) 0.7 (0.11) 0.58 (0.05) 0.56 (0.04) 0.71 (0.12) 0.7 (0.07) 0.7 (0.12) 0.69 (0.07) 0.69 (0.1) 0.71 (0.11) 0.7 (0.09)
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:47
+
+Table 14. Overall AUC (F-score) for logistic regression
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2011 1
+0.9 (0.82) 0.92 (0.83) 0.91 (0.79) 0.82 (0.73) 0.91 (0.8) 0.91 (0.82) 0.91 (0.8) 0.94 (0.84) 0.91 (0.81) 0.9 (0.79) 0.92 (0.83)
+
+bpic2011 2
+0.9 (0.83) 0.94 (0.9) 0.94 (0.92) 0.86 (0.86) 0.89 (0.86) 0.94 (0.91) 0.9 (0.88) 0.95 (0.92) 0.92 (0.88) 0.89 (0.83) 0.95 (0.91)
+
+bpic2011 3
+0.92 (0.75) 0.96 (0.86) 0.92 (0.87) 0.87 (0.77) 0.91 (0.76) 0.96 (0.86) 0.95 (0.86) 0.97 (0.88) 0.94 (0.83) 0.95 (0.82) 0.96 (0.79)
+
+bpic2011 4
+0.88 (0.76) 0.87 (0.75) 0.81 (0.82) 0.75 (0.72) 0.87 (0.79) 0.85 (0.77) 0.89 (0.8) 0.87 (0.77) 0.8 (0.73) 0.86 (0.77) 0.86 (0.77)
+
+insurance 1
+0.84 (0.47) 0.79 (0.46) 0.77 (0.49) 0.79 (0.5) 0.82 (0.48) 0.82 (0.49) 0.82 (0.53) 0.82 (0.59) 0.82 (0.55) 0.83 (0.5) 0.85 (0.57)
+
+insurance 2
+0.83 (0.56) 0.77 (0.49) 0.65 (0.46) 0.7 (0.57) 0.8 (0.62) 0.75 (0.51) 0.77 (0.53) 0.76 (0.58) 0.67 (0.53) 0.74 (0.55) 0.75 (0.6)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2015 1
+0.8 (0.5) 0.81 (0.61) 0.76 (0.52) 0.75 (0.47) 0.75 (0.48) 0.79 (0.57) 0.46 (0.19) 0.86 (0.61) 0.84 (0.51) 0.73 (0.43) 0.85 (0.63)
+
+bpic2015 2
+0.87 (0.51) 0.9 (0.68) 0.84 (0.73) 0.81 (0.67) 0.83 (0.53) 0.88 (0.67) 0.81 (0.58) 0.91 (0.69) 0.87 (0.64) 0.81 (0.45) 0.89 (0.69)
+
+bpic2015 3
+0.79 (0.45) 0.89 (0.7) 0.85 (0.72) 0.84 (0.72) 0.81 (0.53) 0.87 (0.7) 0.84 (0.61) 0.88 (0.7) 0.86 (0.69) 0.79 (0.49) 0.89 (0.71)
+
+bpic2015 4
+0.86 (0.5) 0.87 (0.51) 0.85 (0.57) 0.81 (0.51) 0.87 (0.52) 0.89 (0.64) 0.85 (0.63) 0.86 (0.63) 0.89 (0.57) 0.82 (0.45) 0.9 (0.66)
+
+bpic2015 5
+0.81 (0.58) 0.86 (0.74) 0.81 (0.68) 0.82 (0.7) 0.82 (0.62) 0.84 (0.72) 0.85 (0.7) 0.85 (0.74) 0.83 (0.69) 0.83 (0.62) 0.86 (0.76)
+
+production
+0.68 (0.59) 0.67 (0.58) 0.71 (0.58) 0.57 (0.46) 0.65 (0.56) 0.58 (0.38) 0.66 (0.59) 0.71 (0.59) 0.71 (0.6) 0.68 (0.56) 0.67 (0.6)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+sepsis 1
+0.43 (0.0) 0.57 (0.09) 0.43 (0.12) 0.5 (0.13) 0.47 (0.01) 0.55 (0.13) 0.47 (0.05) 0.51 (0.11) 0.5 (0.12) 0.42 (0.11) 0.55 (0.12)
+
+sepsis 2
+0.88 (0.44) 0.86 (0.47) 0.76 (0.35) 0.76 (0.35) 0.9 (0.43) 0.9 (0.43) 0.86 (0.43) 0.87 (0.44) 0.88 (0.48) 0.88 (0.45) 0.87 (0.49)
+
+sepsis 3
+0.74 (0.34) 0.73 (0.37) 0.58 (0.27) 0.59 (0.27) 0.71 (0.34) 0.7 (0.38) 0.67 (0.32) 0.7 (0.35) 0.7 (0.84) 0.7 (0.86) 0.73 (0.87)
+
+bpic2012 1
+0.65 (0.57) 0.65 (0.53) 0.6 (0.49) 0.57 (0.47) 0.65 (0.56) 0.66 (0.58) 0.64 (0.55) 0.65 (0.55) 0.66 (0.59) 0.65 (0.56) 0.67 (0.58)
+
+bpic2012 2
+0.58 (0.09) 0.59 (0.13) 0.54 (0.17) 0.55 (0.17) 0.59 (0.09) 0.59 (0.13) 0.58 (0.1) 0.58 (0.13) 0.56 (0.16) 0.58 (0.09) 0.59 (0.13)
+
+bpic2012 3
+0.7 (0.32) 0.69 (0.3) 0.64 (0.52) 0.6 (0.45) 0.69 (0.34) 0.7 (0.36) 0.68 (0.33) 0.69 (0.34) 0.67 (0.39) 0.69 (0.34) 0.69 (0.34)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2017 1
+0.82 (0.67) 0.83 (0.67) 0.7 (0.59) 0.73 (0.61) 0.82 (0.67) 0.82 (0.68) 0.82 (0.67) 0.81 (0.67) 0.82 (0.68) 0.82 (0.67) 0.83 (0.69)
+
+bpic2017 2
+0.81 (0.46) 0.79 (0.23) 0.62 (0.3) 0.63 (0.28) 0.72 (0.3) 0.8 (0.45) 0.78 (0.41) 0.77 (0.39) 0.78 (0.41) 0.8 (0.45) 0.8 (0.41)
+
+bpic2017 3
+0.79 (0.73) 0.79 (0.74) 0.77 (0.7) 0.75 (0.67) 0.79 (0.73) 0.8 (0.74) 0.79 (0.74) 0.79 (0.73) 0.79 (0.73) 0.79 (0.74) 0.79 (0.74)
+
+tra c
+0.65 (0.64) 0.66 (0.65) 0.6 (0.65) 0.63 (0.63) 0.67 (0.64) 0.68 (0.64) 0.68 (0.64) 0.68 (0.65) 0.68 (0.64) 0.67 (0.64) 0.68 (0.64)
+
+hospital 1
+0.88 (0.58) 0.87 (0.6) 0.78 (0.45) 0.8 (0.48) 0.88 (0.64) 0.88 (0.63) 0.88 (0.63) 0.88 (0.62) 0.87 (0.57) 0.88 (0.59) 0.88 (0.55)
+
+hospital 2
+0.73 (0.05) 0.72 (0.04) 0.59 (0.07) 0.57 (0.02) 0.73 (0.09) 0.71 (0.09) 0.72 (0.08) 0.7 (0.09) 0.73 (0.1) 0.74 (0.08) 0.73 (0.07)
+
+1:48
+
+I. Teinemaa et al.
+
+Table 15. Overall AUC (F-score) for SVM
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2011 1
+0.89 (0.65) 0.87 (0.73) 0.92 (0.83) 0.88 (0.85) 0.88 (0.54) 0.91 (0.75) 0.9 (0.78) 0.92 (0.75) 0.91 (0.66) 0.87 (0.59) 0.92 (0.64)
+
+bpic2011 2
+0.9 (0.76) 0.95 (0.91) 0.95 (0.91) 0.94 (0.9) 0.89 (0.82) 0.95 (0.87) 0.89 (0.79) 0.94 (0.84) 0.92 (0.77) 0.9 (0.81) 0.94 (0.89)
+
+bpic2011 3
+0.92 (0.0) 0.96 (0.0) 0.93 (0.81) 0.92 (0.66) 0.86 (0.55) 0.94 (0.61) 0.94 (0.58) 0.93 (0.78) 0.93 (0.52) 0.93 (0.38) 0.95 (0.12)
+
+bpic2011 4
+0.86 (0.0) 0.87 (0.35) 0.76 (0.46) 0.72 (0.29) 0.8 (0.62) 0.82 (0.62) 0.88 (0.5) 0.86 (0.49) 0.82 (0.36) 0.84 (0.0) 0.86 (0.0)
+
+insurance 1
+0.78 (0.38) 0.81 (0.24) 0.74 (0.46) 0.77 (0.46) 0.79 (0.46) 0.83 (0.42) 0.68 (0.23) 0.74 (0.27) 0.83 (0.26) 0.8 (0.09) 0.85 (0.13)
+
+insurance 2
+0.82 (0.39) 0.78 (0.42) 0.63 (0.35) 0.7 (0.15) 0.77 (0.46) 0.73 (0.0) 0.68 (0.37) 0.76 (0.35) 0.65 (0.0) 0.74 (0.41) 0.77 (0.33)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2015 1
+0.78 (0.54) 0.82 (0.56) 0.72 (0.48) 0.7 (0.49) 0.68 (0.44) 0.63 (0.34) 0.78 (0.37) 0.79 (0.0) 0.77 (0.15) 0.67 (0.07) 0.81 (0.01)
+
+bpic2015 2
+0.8 (0.5) 0.88 (0.57) 0.76 (0.6) 0.78 (0.62) 0.76 (0.5) 0.85 (0.62) 0.8 (0.46) 0.84 (0.0) 0.83 (0.23) 0.69 (0.04) 0.86 (0.53)
+
+bpic2015 3
+0.82 (0.43) 0.88 (0.67) 0.8 (0.66) 0.81 (0.68) 0.75 (0.42) 0.85 (0.53) 0.82 (0.61) 0.88 (0.49) 0.85 (0.51) 0.75 (0.0) 0.88 (0.54)
+
+bpic2015 4
+0.86 (0.41) 0.85 (0.56) 0.76 (0.56) 0.82 (0.56) 0.8 (0.42) 0.86 (0.52) 0.85 (0.47) 0.88 (0.5) 0.86 (0.22) 0.75 (0.09) 0.86 (0.34)
+
+bpic2015 5
+0.81 (0.55) 0.85 (0.64) 0.78 (0.6) 0.78 (0.63) 0.8 (0.57) 0.85 (0.57) 0.85 (0.57) 0.83 (0.17) 0.83 (0.52) 0.82 (0.55) 0.86 (0.66)
+
+production
+0.71 (0.6) 0.66 (0.54) 0.6 (0.41) 0.63 (0.51) 0.67 (0.54) 0.63 (0.56) 0.74 (0.62) 0.74 (0.59) 0.72 (0.57) 0.67 (0.49) 0.66 (0.53)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+sepsis 1
+0.5 (0.0) 0.49 (0.0) 0.47 (0.09) 0.48 (0.0) 0.5 (0.0) 0.54 (0.0) 0.49 (0.0) 0.5 (0.0) 0.54 (0.0) 0.46 (0.0) 0.51 (0.01)
+
+sepsis 2
+0.78 (0.41) 0.82 (0.0) 0.7 (0.11) 0.71 (0.01) 0.75 (0.0) 0.81 (0.0) 0.81 (0.0) 0.79 (0.4) 0.84 (0.33) 0.8 (0.22) 0.81 (0.0)
+
+sepsis 3
+0.72 (0.26) 0.72 (0.0) 0.62 (0.0) 0.59 (0.0) 0.69 (0.05) 0.65 (0.27) 0.67 (0.0) 0.68 (0.0) 0.65 (0.0) 0.66 (0.18) 0.68 (0.01)
+
+bpic2012 1
+0.63 (0.52) 0.63 (0.38) 0.57 (0.5) 0.63 (0.56) 0.63 (0.42) 0.64 (0.45) 0.64 (0.52) 0.6 (0.28) 0.61 (0.39) 0.64 (0.46) 0.64 (0.31)
+
+bpic2012 2
+0.56 (0.09) 0.55 (0.0) 0.51 (0.06) 0.53 (0.06) 0.52 (0.09) 0.53 (0.09) 0.54 (0.08) 0.55 (0.12) 0.57 (0.06) 0.56 (0.04) 0.57 (0.02)
+
+bpic2012 3
+0.68 (0.18) 0.7 (0.2) 0.59 (0.3) 0.58 (0.28) 0.61 (0.13) 0.65 (0.27) 0.65 (0.3) 0.67 (0.25) 0.66 (0.05) 0.67 (0.23) 0.67 (0.0)
+
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2017 1
+0.75 (0.14) 0.79 (0.67) 0.55 (0.28) 0.63 (0.06) 0.57 (0.11) 0.79 (0.58) 0.59 (0.07) 0.64 (0.13) 0.68 (0.0) 0.76 (0.34) 0.6 (0.01)
+
+bpic2017 2
+0.59 (0.0) 0.71 (0.0) 0.54 (0.0) 0.57 (0.0) 0.52 (0.0) 0.57 (0.03) 0.56 (0.0) 0.73 (0.0) 0.73 (0.28) 0.77 (0.46) 0.73 (0.28)
+
+bpic2017 3
+0.71 (0.67) 0.64 (0.0) 0.68 (0.51) 0.71 (0.54) 0.62 (0.06) 0.55 (0.4) 0.77 (0.68) 0.73 (0.58) 0.68 (0.0) 0.74 (0.58) 0.73 (0.0)
+
+tra c
+0.64 (0.63) 0.67 (0.5) 0.62 (0.69) 0.63 (0.17) 0.65 (0.6) 0.66 (0.59) 0.66 (0.58) 0.73 (0.58) 0.59 (0.27) 0.65 (0.6) 0.65 (0.6)
+
+hospital 1
+0.85 (0.49) 0.73 (0.0) 0.78 (0.48) 0.61 (0.43) 0.84 (0.56) 0.84 (0.59) 0.82 (0.57) 0.82 (0.54) 0.82 (0.46) 0.85 (0.52) 0.84 (0.52)
+
+hospital 2
+0.51 (0.0) 0.78 (0.0) 0.5 (0.0) 0.5 (0.04) 0.57 (0.03) 0.57 (0.01) 0.61 (0.07) 0.59 (0.0) 0.59 (0.0) 0.54 (0.02) 0.66 (0.09)
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:49
+
+Fig. 19. AUC across prefix lengths using XGBoost, all methods
+
+1:50
+
+I. Teinemaa et al.
+
+Fig. 20. AUC across prefix lengths using XGBoost, all methods (continued)
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:51
+
+Fig. 21. AUC across prefix lengths using XGBoost, long traces only
+
+(a) A ribute = max month. Significant di erences in means between train 0–test 0 (Z = 6.077, p < .001) and train 1–test 1 (Z = 7.972, p < .001).
+
+(b) A ribute = month. The di erence is significant between train 1–test 1 (Z = 8.754, p < .001), but not between train 0–test 0 (Z = .028, p = .978).
+
+Fig. 22. Concept dri in the bpic2011 4 log. The distributions of the variables are di erent across the two classes in the train and the test set. The dri becomes more evident in the max month feature used by the aggregation encoding, while it is not so severe in the original month feature used by the last state encoding. Statistical significance of the di erences is assessed using Wilcoxon signed-rank test.
+
+1:52
+
+I. Teinemaa et al.
+
+(a) A ribute = hour. Significant di erence between train 1– test 1 (Z = 3.651, p < .001), but not between train 0–test 0 (Z = 1.373, p = .17).
+
+(b) A ribute = CRP. Signifi-
+cant di erences between train 0– test 0 (Z = 3.61, p < .001) and train 1–test 1 (Z = 2.492, p = .013).
+
+(c) A ribute = LacticAcid. Signifi-
+cant di erences in train 0–test 0 (Z = 3.064, p = .002) and train 1– test 1 (Z = 7.337, p < .001).
+
+Fig. 23. Concept dri in data a ributes in sepsis 1 log. The distributions of the variables are di erent across the two classes in the train and the test set. Statistical significance of the di erences is assessed using Wilcoxon signed-rank test.
+
+Fig. 24. O line times across di erent filtering proportions of static categorical a ribute levels (XGBoost)
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:53
+
+Table 16. Execution times for random forest
+
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2011 1
+
+o ine total (s) online avg (ms)
+
+42.88 ± 0.78 51.92 ± 0.85 6.24 ± 0.24 6.14 ± 0.12 112.57 ± 0.39 265.71 ± 0.58 35.88 ± 0.23 211.72 ± 0.86 410.74 ± 5.03 98.34 ± 0.22 173.76 ± 0.29
+
+76 ± 108 76 ± 109 168 ± 251 176 ± 264 58 ± 80 69 ± 95 73 ± 122 76 ± 124 126 ± 79 66 ± 98 70 ± 101
+
+bpic2011 4
+
+o ine total (s) online avg (ms)
+
+50.65 ± 0.21 135.39 ± 7.21 11.42 ± 2.19
+9.3 ± 0.2 144.21 ± 4.36 227.05 ± 4.78 428.27 ± 8.7 125.97 ± 0.29 1121.44 ± 25.31 196.68 ± 0.02 306.88 ± 0.64
+
+68 ± 106 68 ± 108 151 ± 236 152 ± 237 54 ± 83 65 ± 100 75 ± 121 54 ± 87 126 ± 71 57 ± 93 61 ± 95
+
+bpic2015 3
+
+o ine total (s) online avg (ms)
+
+138.37 ± 2.95 95.39 ± 0.2 19.94 ± 0.64 19.15 ± 0.68 147.65 ± 0.1 192.76 ± 0.73 121.76 ± 0.41 73.09 ± 0.4 1531.4 ± 15.22 100.27 ± 0.28 172.12 ± 4.21
+
+26 ± 42 27 ± 43 113 ± 226 124 ± 239 35 ± 59 39 ± 62 43 ± 73 31 ± 49 71 ± 17 13 ± 18 16 ± 19
+
+production
+
+o ine total (s) online avg (ms)
+
+2.99 ± 0.06 8.5 ± 0.05 0.89 ± 0.05 1.04 ± 0.01 17.34 ± 0.07 17.2 ± 0.21 18.89 ± 0.26 15.18 ± 0.13 24.93 ± 0.11 18.32 ± 0.89 26.86 ± 0.08
+
+43 ± 37 47 ± 40 307 ± 338 338 ± 333 41 ± 34 47 ± 40 45 ± 43 49 ± 47 70 ± 27 41 ± 36 57 ± 48
+
+bpic2011 2
+
+o ine total (s) online avg (ms)
+
+38.81 ± 0.27 369.75 ± 2.56 9.75 ± 0.44 10.2 ± 0.35 145.86 ± 0.49 226.93 ± 0.82 73.3 ± 0.18 439.57 ± 0.68 465.87 ± 10.13 129.95 ± 0.5 189.64 ± 0.57
+
+67 ± 106 68 ± 107 143 ± 228 151 ± 240 53 ± 82 64 ± 100 56 ± 105 73 ± 122 127 ± 71 57 ± 93 61 ± 95
+
+bpic2015 1
+
+o ine total (s) online avg (ms)
+
+22.29 ± 0.54 102.42 ± 0.65 8.35 ± 0.48 9.33 ± 0.13 107.37 ± 0.18 135.72 ± 0.47 40.05 ± 0.58 52.37 ± 0.83 504.84 ± 0.61 70.06 ± 0.24 97.72 ± 0.08
+
+26 ± 40 26 ± 41 126 ± 226 138 ± 240 31 ± 54 34 ± 57 43 ± 69 30 ± 46 62 ± 12 14 ± 19 17 ± 21
+
+bpic2015 4
+
+o ine total (s) online avg (ms)
+
+20.86 ± 0.6 70.51 ± 0.32 7.66 ± 0.02 7.77 ± 0.35 89.11 ± 0.16 93.86 ± 0.31 41.47 ± 0.19 31.47 ± 0.27 176.56 ± 0.22 62.28 ± 0.02 94.56 ± 0.16
+
+24 ± 36 25 ± 38 120 ± 228 127 ± 237 31 ± 51 34 ± 54 37 ± 72 35 ± 55 51 ± 10 12 ± 17 15 ± 18
+
+insurance 1
+
+o ine total (s) online avg (ms)
+
+12.51 ± 0.09 17.82 ± 0.12 0.61 ± 0.03 0.65 ± 0.04 14.36 ± 0.04 16.88 ± 0.12 10.9 ± 0.1 24.89 ± 0.09 27.69 ± 0.22 15.16 ± 0.0 16.36 ± 0.03
+
+55 ± 44 57 ± 47 204 ± 206 223 ± 228 48 ± 35 57 ± 44 50 ± 50 50 ± 49 107 ± 10 51 ± 37 48 ± 35
+
+bpic2011 3
+
+o ine total (s) online avg (ms)
+
+34.12 ± 0.17 57.62 ± 1.04 4.15 ± 0.09 4.22 ± 0.22 81.7 ± 0.19 153.58 ± 0.14 42.61 ± 0.12 58.2 ± 0.1 331.3 ± 12.36 61.51 ± 0.07 122.13 ± 0.15
+
+78 ± 107 79 ± 109 169 ± 257 190 ± 288 60 ± 79 72 ± 95 64 ± 114 80 ± 122 121 ± 75 69 ± 97 73 ± 100
+
+bpic2015 2
+
+o ine total (s) online avg (ms)
+
+60.39 ± 0.53 86.86 ± 0.26 11.01 ± 0.16 11.24 ± 0.54 100.87 ± 0.27 132.69 ± 0.32 55.96 ± 2.26 73.58 ± 2.67 1137.08 ± 2.07 75.49 ± 0.13 159.75 ± 0.25
+
+24 ± 38 24 ± 40 116 ± 225 115 ± 225 33 ± 55 37 ± 58 40 ± 66 32 ± 52 60 ± 14 12 ± 16 15 ± 18
+
+bpic2015 5
+
+o ine total (s) online avg (ms)
+
+37.74 ± 0.9 105.67 ± 0.64 15.2 ± 0.33 18.78 ± 0.24 114.35 ± 0.4 157.16 ± 6.82 72.07 ± 0.35 64.21 ± 0.58 366.0 ± 2.63 99.77 ± 0.71 156.44 ± 3.28
+
+22 ± 35 23 ± 36 115 ± 221 122 ± 231 29 ± 48 32 ± 52 38 ± 66 31 ± 49 60 ± 13 12 ± 17 14 ± 18
+
+insurance 2
+
+o ine total (s) online avg (ms)
+
+9.65 ± 0.09 11.85 ± 0.08 0.89 ± 0.04 0.94 ± 0.04 16.63 ± 0.01 15.36 ± 0.18 19.69 ± 0.06 31.68 ± 0.1 28.91 ± 0.4 22.93 ± 0.1 24.44 ± 0.38
+
+47 ± 42 48 ± 45 217 ± 173 224 ± 178 40 ± 34 49 ± 43 48 ± 44 51 ± 48 103 ± 11 43 ± 37 40 ± 33
+
+1:54
+
+I. Teinemaa et al.
+
+Table 17. Execution times for random forest (continued)
+
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+sepsis 1
+
+o ine total (s) online avg (ms)
+
+87.17 ± 2.69 43.23 ± 0.31 2.78 ± 0.06 2.79 ± 0.06 71.76 ± 0.18 140.28 ± 0.2 41.22 ± 0.15 77.48 ± 0.11 165.12 ± 0.03 78.81 ± 0.18 141.0 ± 0.06
+
+38 ± 43 39 ± 45 242 ± 271 255 ± 282 41 ± 46 42 ± 47 36 ± 44 38 ± 45 51 ± 39 39 ± 44 37 ± 41
+
+bpic2012 1
+
+o ine total (s) online avg (ms)
+
+258.83 ± 4.05 395.73 ± 2.98 29.02 ± 4.34 29.96 ± 0.59 139.79 ± 1.06 697.14 ± 6.11 147.92 ± 5.76 535.28 ± 10.75 7198.38 ± 70.16 277.58 ± 0.87 1326.15 ± 4.76
+
+13 ± 20 14 ± 21 107 ± 213 506 ± 592 14 ± 19 15 ± 21 15 ± 23 16 ± 25 43 ± 10 11 ± 13 11 ± 14
+
+bpic2017 1
+
+o ine total (s) online avg (ms)
+
+1289.72 ± 25.31 2880.68 ± 56.53 143.14 ± 2.81 136.12 ± 2.67 1239.01 ± 24.32 12366.43 ± 242.69 2325.38 ± 45.64 1535.54 ± 30.14 25283.44 ± 496.19 2270.56 ± 29.0 5933.72 ± 36.32
+tra
+
+26 ± 32 31 ± 38 1757 ± 1700 1784 ± 1715 25 ± 30 31 ± 34 24 ± 31 26 ± 34 88 ± 12 25 ± 28 27 ± 32
+c
+
+o ine total (s) online avg (ms)
+
+2553.51 ± 175.77 2253.99 ± 12.52 424.08 ± 56.11 439.44 ± 59.76 1222.57 ± 25.28 1362.58 ± 48.94 1129.09 ± 44.03 1261.5 ± 3.47 2051.23 ± 27.11 1365.6 ± 8.31 1601.71 ± 11.23
+
+86 ± 48 94 ± 53 543 ± 392 560 ± 404 94 ± 53 97 ± 54 90 ± 52 96 ± 55 116 ± 26 91 ± 50 99 ± 55
+
+sepsis 2
+
+o ine total (s) online avg (ms)
+
+10.85 ± 0.19 14.38 ± 0.14 0.99 ± 0.01 1.04 ± 0.05 23.6 ± 0.06 19.23 ± 0.03 25.36 ± 0.21 81.31 ± 0.18 114.1 ± 0.09 44.0 ± 0.02 57.12 ± 0.03
+
+46 ± 45 49 ± 48 305 ± 301 307 ± 305 50 ± 50 51 ± 51 49 ± 48 50 ± 50 58 ± 42 48 ± 46 46 ± 44
+
+bpic2012 2
+
+o ine total (s) online avg (ms)
+
+113.69 ± 1.3 358.35 ± 1.11 30.21 ± 0.59 30.54 ± 0.6 215.16 ± 0.66 547.46 ± 4.22 125.69 ± 0.15 196.31 ± 2.84 8059.82 ± 147.53 253.66 ± 0.28 548.0 ± 1.36
+
+13 ± 20 13 ± 21 501 ± 593 509 ± 599 14 ± 19 15 ± 20 16 ± 24 16 ± 24 41 ± 9 10 ± 12 11 ± 14
+
+bpic2017 2
+
+o ine total (s) online avg (ms)
+
+1625.87 ± 31.91 4371.05 ± 85.78 138.09 ± 2.71
+132.3 ± 2.6 1247.27 ± 24.48 5671.91 ± 111.31 1018.82 ± 19.99 3979.78 ± 78.1 22481.59 ± 441.2 789.43 ± 15.49 5003.87 ± 98.2
+
+30 ± 36 27 ± 33 1792 ± 1727 1642 ± 1582 29 ± 35 33 ± 39 25 ± 29 27 ± 32 91 ± 12 22 ± 24 25 ± 28
+
+hospital 1
+
+o ine total (s) online avg (ms)
+
+5508.58 ± 108.11 11667.12 ± 228.97
+123.42 ± 2.42 115.82 ± 2.27 1329.31 ± 26.09 959.94 ± 18.84 2402.26 ± 47.14 5956.26 ± 116.89 3566.4 ± 69.99 1950.52 ± 38.28 17359.15 ± 340.67
+
+401 ± 263 470 ± 309 463 ± 362 497 ± 387 371 ± 298 414 ± 270 341 ± 305 465 ± 305 890 ± 90 402 ± 281 431 ± 251
+
+sepsis 3
+
+o ine total (s) online avg (ms)
+
+8.81 ± 0.03 46.89 ± 0.22 1.9 ± 0.05 1.89 ± 0.04 22.51 ± 0.33 123.09 ± 0.17 36.94 ± 0.26 47.18 ± 0.08 137.86 ± 0.18 51.21 ± 0.25 73.75 ± 0.01
+
+40 ± 44 43 ± 46 261 ± 279 272 ± 288 43 ± 46 45 ± 48 41 ± 45 43 ± 46 52 ± 39 41 ± 44 39 ± 42
+
+bpic2012 3
+
+o ine total (s) online avg (ms)
+
+221.25 ± 0.69 389.96 ± 7.22 27.96 ± 0.55 29.9 ± 0.59 129.01 ± 0.82 394.35 ± 6.53 175.72 ± 2.12 276.72 ± 3.67 4076.35 ± 70.84 265.56 ± 0.7 833.38 ± 3.9
+
+13 ± 20 14 ± 21 491 ± 577 513 ± 605 14 ± 19 15 ± 21 15 ± 22 15 ± 23 43 ± 10 10 ± 12 12 ± 15
+
+bpic2017 3
+
+o ine total (s) online avg (ms)
+
+3172.95 ± 62.27 8649.74 ± 169.75
+117.39 ± 2.3 130.03 ± 2.55 795.83 ± 15.62 13165.58 ± 258.37 1367.58 ± 26.84 1728.18 ± 33.92 19949.41 ± 391.51 4245.86 ± 60.81 10723.16 ± 41.97
+
+26 ± 31 28 ± 34 1532 ± 1475 1679 ± 1612 25 ± 30 27 ± 31 23 ± 28 25 ± 31 86 ± 14 26 ± 30 23 ± 27
+
+hospital 2
+
+o ine total (s) online avg (ms)
+
+2974.02 ± 58.37 131453.83 ± 2579.78
+368.05 ± 7.22 362.69 ± 7.12 1491.67 ± 29.27 1663.75 ± 32.65 1794.1 ± 35.21 1267.46 ± 24.87 6309.37 ± 123.82 2085.55 ± 16.28 7652.09 ± 2.19
+
+456 ± 300 411 ± 271 435 ± 401 453 ± 419 309 ± 255 370 ± 236 332 ± 324 393 ± 295 930 ± 174 337 ± 235 374 ± 219
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:55
+
+Table 18. Execution times for logistic regression
+
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2011 1
+
+o ine total (s) online avg (ms)
+
+8.14 ± 0.29 11.85 ± 0.39 5.69 ± 0.03 5.93 ± 0.14 8.64 ± 0.1 11.49 ± 0.05 19.61 ± 0.1 19.1 ± 0.7 28.51 ± 0.71 7.52 ± 0.13 9.28 ± 0.11
+
+68 ± 97 69 ± 99 29 ± 42 32 ± 46 51 ± 70 66 ± 91 56 ± 102 53 ± 76 122 ± 71 58 ± 87 61 ± 88
+
+bpic2011 4
+
+o ine total (s) online avg (ms)
+
+11.13 ± 0.71 20.21 ± 2.74 8.55 ± 0.43 8.56 ± 0.36 11.71 ± 0.08 15.1 ± 0.04 25.99 ± 0.08 26.49 ± 0.23 41.41 ± 0.35 10.81 ± 0.11 14.14 ± 0.08
+
+62 ± 97 62 ± 98 26 ± 40 26 ± 41 47 ± 72 55 ± 85 54 ± 106 68 ± 112 118 ± 60 51 ± 82 54 ± 84
+
+bpic2015 3
+
+o ine total (s) online avg (ms)
+
+38.41 ± 0.18 29.69 ± 0.72 19.6 ± 0.62 18.5 ± 0.67 14.56 ± 0.3 18.28 ± 0.07 60.56 ± 1.47 44.96 ± 0.59 65.17 ± 0.35 12.02 ± 0.08 17.16 ± 0.1
+
+21 ± 33 21 ± 34 26 ± 42 31 ± 49 30 ± 50 33 ± 53 36 ± 63 26 ± 41 64 ± 19 7±8 8±8
+
+production
+
+o ine total (s) online avg (ms)
+
+0.89 ± 0.01 1.11 ± 0.13 0.87 ± 0.03 0.93 ± 0.05 1.47 ± 0.12 1.68 ± 0.06 5.16 ± 0.08 5.72 ± 0.05 3.03 ± 0.08 1.15 ± 0.01 1.67 ± 0.0
+
+25 ± 21 28 ± 25 31 ± 28 31 ± 31 23 ± 19 30 ± 26 28 ± 29 33 ± 34 51 ± 10 23 ± 19 34 ± 28
+
+bpic2011 2
+
+o ine total (s) online avg (ms)
+
+11.09 ± 0.4 16.89 ± 0.17 9.86 ± 0.22 9.69 ± 0.05 11.97 ± 0.15 15.76 ± 0.59 27.12 ± 0.79 27.15 ± 0.2 44.66 ± 2.52 10.34 ± 0.12 13.22 ± 0.14
+
+61 ± 96 62 ± 98 23 ± 37 26 ± 42 47 ± 73 57 ± 88 53 ± 100 58 ± 109 124 ± 65 51 ± 83 54 ± 83
+
+bpic2015 1
+
+o ine total (s) online avg (ms)
+
+7.97 ± 0.29 16.57 ± 0.41 8.98 ± 0.07 8.16 ± 0.27 8.52 ± 0.2 9.8 ± 0.36 24.07 ± 0.07 19.51 ± 0.27 27.99 ± 0.6 7.09 ± 0.06 7.53 ± 0.03
+
+20 ± 30 22 ± 34 23 ± 37 24 ± 39 26 ± 45 29 ± 48 22 ± 35 33 ± 52 56 ± 12 7±9 8±9
+
+bpic2015 4
+
+o ine total (s) online avg (ms)
+
+6.57 ± 0.09 9.17 ± 0.24 7.6 ± 0.34 7.76 ± 0.36 7.17 ± 0.08 8.37 ± 0.09 27.27 ± 0.18 26.35 ± 0.24 25.3 ± 0.3 6.37 ± 0.07 6.65 ± 0.04
+
+18 ± 27 18 ± 29 21 ± 35 23 ± 38 26 ± 42 29 ± 45 34 ± 61 33 ± 60 43 ± 8 6±7 7±7
+
+insurance 1
+
+o ine total (s) online avg (ms)
+
+1.41 ± 0.01 1.04 ± 0.05 0.62 ± 0.03 0.63 ± 0.01 1.29 ± 0.04 1.54 ± 0.03 4.96 ± 0.08 5.83 ± 0.11 2.89 ± 0.02 1.26 ± 0.0 1.29 ± 0.01
+
+37 ± 30 39 ± 33 20 ± 18 24 ± 21 31 ± 22 43 ± 32 32 ± 31 27 ± 28 89 ± 5 33 ± 23 32 ± 22
+
+bpic2011 3
+
+o ine total (s) online avg (ms)
+
+5.55 ± 0.13 6.58 ± 0.05 4.12 ± 0.12 4.28 ± 0.13 6.57 ± 0.01 7.77 ± 0.01 16.11 ± 0.07 13.86 ± 0.21 18.37 ± 0.5 5.32 ± 0.07 7.34 ± 0.08
+
+70 ± 96 71 ± 97 29 ± 41 29 ± 43 52 ± 68 61 ± 80 55 ± 102 65 ± 107 106 ± 62 60 ± 85 64 ± 86
+
+bpic2015 2
+
+o ine total (s) online avg (ms)
+
+7.04 ± 0.05 48.14 ± 0.66 10.59 ± 0.04 11.9 ± 0.11 9.65 ± 0.2 11.07 ± 0.08 37.74 ± 0.67 27.18 ± 0.34 38.47 ± 0.45 7.67 ± 0.28 9.77 ± 0.07
+
+18 ± 29 20 ± 32 24 ± 39 26 ± 45 27 ± 46 31 ± 49 36 ± 61 27 ± 45 54 ± 15 6±6 7±7
+
+bpic2015 5
+
+o ine total (s) online avg (ms)
+
+18.67 ± 0.14 24.9 ± 0.24 14.0 ± 0.14 14.56 ± 0.54 12.4 ± 0.09 14.39 ± 0.3 38.51 ± 0.45 48.48 ± 0.84 46.49 ± 0.74 11.19 ± 0.02 12.4 ± 0.13
+
+17 ± 26 17 ± 27 20 ± 33 26 ± 42 23 ± 39 26 ± 42 18 ± 31 25 ± 40 53 ± 13 6±7 7±7
+
+insurance 2
+
+o ine total (s) online avg (ms)
+
+2.88 ± 0.01 2.68 ± 0.09 0.92 ± 0.01 0.89 ± 0.01 2.43 ± 0.01 2.03 ± 0.02 5.34 ± 0.13 8.5 ± 0.11 3.86 ± 0.03 2.33 ± 0.01 1.75 ± 0.01
+
+32 ± 29 34 ± 32 24 ± 16 27 ± 18 27 ± 21 37 ± 32 34 ± 31 36 ± 34 90 ± 4 28 ± 22 27 ± 21
+
+1:56
+
+I. Teinemaa et al.
+
+Table 19. Execution times for logistic regression (continued)
+
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+sepsis 1
+
+o ine total (s) online avg (ms)
+
+3.21 ± 0.15 21.44 ± 0.28 2.82 ± 0.06 2.88 ± 0.11 5.74 ± 0.17 22.54 ± 0.11 9.51 ± 0.11 11.73 ± 0.04 16.74 ± 0.07 4.8 ± 0.07 8.01 ± 0.07
+
+27 ± 31 29 ± 33 28 ± 32 31 ± 34 29 ± 33 32 ± 36 26 ± 32 27 ± 33 39 ± 26 27 ± 30 28 ± 32
+
+bpic2012 1
+
+o ine total (s) online avg (ms)
+
+30.51 ± 0.38 31.1 ± 0.27 30.24 ± 0.38 29.06 ± 0.46 24.21 ± 0.29 29.84 ± 0.39 38.2 ± 0.11 108.75 ± 1.51 67.45 ± 2.49 26.0 ± 0.87 38.74 ± 0.91
+
+7 ± 10 8 ± 12 55 ± 62 350 ± 374 8 ± 10 10 ± 12 10 ± 15 10 ± 17 36 ± 12 4±3 5±5
+
+bpic2017 1
+
+o ine total (s) online avg (ms)
+
+88.86 ± 1.74 213.25 ± 4.18 137.49 ± 2.7 127.0 ± 2.49 92.96 ± 1.82 472.57 ± 9.27 154.87 ± 3.04 368.51 ± 7.23 539.24 ± 10.58 95.98 ± 0.95 281.04 ± 0.84
+tra
+
+19 ± 23 21 ± 26 1575 ± 1484 1474 ± 1387 19 ± 20 20 ± 22 21 ± 25 19 ± 24 72 ± 9 15 ± 16 15 ± 17
+c
+
+o ine total (s) online avg (ms)
+
+95.22 ± 0.54 273.55 ± 1.81 384.89 ± 5.26 361.35 ± 8.72 68.11 ± 0.53 151.29 ± 4.43 93.99 ± 6.84 111.74 ± 2.5 331.76 ± 1.14 80.76 ± 0.95 186.94 ± 2.77
+
+62 ± 34 66 ± 37 75 ± 42 81 ± 51 66 ± 37 75 ± 42 66 ± 39 68 ± 39 89 ± 11 62 ± 34 63 ± 35
+
+sepsis 2
+
+o ine total (s) online avg (ms)
+
+1.31 ± 0.03 1.48 ± 0.03 0.98 ± 0.04 1.05 ± 0.06 1.88 ± 0.03 2.1 ± 0.02 5.52 ± 0.18 4.98 ± 0.09 3.14 ± 0.02 2.1 ± 0.07 2.27 ± 0.05
+
+33 ± 33 35 ± 35 35 ± 35 40 ± 39 36 ± 36 39 ± 39 35 ± 34 38 ± 38 45 ± 28 33 ± 32 35 ± 34
+
+bpic2012 2
+
+o ine total (s) online avg (ms)
+
+29.15 ± 0.79 60.4 ± 3.11 28.85 ± 0.08 28.32 ± 0.08 24.41 ± 0.1 28.8 ± 1.11 37.28 ± 0.57 64.86 ± 2.16 65.61 ± 1.1 25.84 ± 0.39 42.84 ± 0.41
+
+7 ± 10 8 ± 12 27 ± 30 310 ± 333 8 ± 10 9 ± 11 9 ± 13 9 ± 14 34 ± 11 4±3 5±5
+
+bpic2017 2
+
+o ine total (s) online avg (ms)
+
+155.13 ± 3.04 143.2 ± 2.81 129.35 ± 2.54 129.12 ± 2.53 74.44 ± 1.46 244.76 ± 4.8 172.13 ± 3.38 431.13 ± 8.46 512.71 ± 10.06 112.1 ± 5.26 551.86 ± 26.98
+
+19 ± 23 21 ± 27 1518 ± 1426 1524 ± 1432 18 ± 24 22 ± 24 15 ± 18 17 ± 21 72 ± 9 15 ± 16 17 ± 20
+
+hospital 1
+
+o ine total (s) online avg (ms)
+
+171.88 ± 3.37 361.41 ± 7.09 108.0 ± 0.13 110.14 ± 1.45 274.97 ± 5.4 274.89 ± 5.39 225.33 ± 4.42 259.91 ± 5.1 263.88 ± 5.18 122.85 ± 1.04 166.22 ± 5.34
+
+381 ± 250 405 ± 267 43 ± 24 78 ± 54 349 ± 287 368 ± 230 330 ± 284 386 ± 264 964 ± 112 363 ± 262 394 ± 232
+
+sepsis 3
+
+o ine total (s) online avg (ms)
+
+2.3 ± 0.04 2.54 ± 0.04 1.97 ± 0.05 1.85 ± 0.06 3.04 ± 0.02 3.18 ± 0.02 6.52 ± 0.15 7.58 ± 0.03 6.1 ± 0.02 3.25 ± 0.03 3.64 ± 0.06
+
+29 ± 31 31 ± 33 31 ± 33 34 ± 36 31 ± 34 35 ± 37 31 ± 34 30 ± 34 40 ± 26 28 ± 30 30 ± 32
+
+bpic2012 3
+
+o ine total (s) online avg (ms)
+
+30.31 ± 1.76 74.28 ± 0.31 27.84 ± 0.83 31.05 ± 2.0 23.68 ± 0.37 30.25 ± 0.17 39.4 ± 0.72 79.46 ± 6.91 62.86 ± 1.03 23.42 ± 0.3 47.5 ± 0.28
+
+7 ± 10 8 ± 12 74 ± 82 192 ± 208 8 ± 10 9 ± 12 9 ± 13 9 ± 14 36 ± 12 4±3 5±5
+
+bpic2017 3
+
+o ine total (s) online avg (ms)
+
+107.82 ± 2.12 209.74 ± 4.12 135.54 ± 2.66 121.37 ± 2.38 84.76 ± 1.66 114.88 ± 2.25 104.51 ± 2.05 163.87 ± 3.22 340.34 ± 6.68 75.28 ± 0.25 325.93 ± 0.41
+
+18 ± 21 19 ± 23 1567 ± 1473 1413 ± 1326 17 ± 20 19 ± 22 16 ± 19 16 ± 20 72 ± 9 14 ± 15 16 ± 17
+
+hospital 2
+
+o ine total (s) online avg (ms)
+
+105.77 ± 2.08 269.08 ± 5.28 361.86 ± 7.1 352.76 ± 6.92 144.61 ± 2.84 308.15 ± 6.05 124.98 ± 2.45 681.42 ± 13.37 229.74 ± 4.51 112.29 ± 0.47 173.75 ± 0.52
+
+395 ± 259 397 ± 262 88 ± 64 94 ± 65 334 ± 282 402 ± 249 280 ± 244 369 ± 246 848 ± 100 313 ± 223 353 ± 204
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:57
+
+Table 20. Execution times for SVM
+
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+bpic2011 1
+
+o ine total (s) online avg (ms)
+
+503.86 ± 1.75 40.4 ± 0.35 6.0 ± 0.22 5.91 ± 0.26 12.44 ± 0.07 16.44 ± 0.08 35.72 ± 0.22 30.12 ± 0.1 39.94 ± 0.49 16.31 ± 0.17 17.82 ± 0.08
+
+70 ± 100 69 ± 100 29 ± 42 29 ± 42 52 ± 72 61 ± 84 62 ± 110 57 ± 99 123 ± 72 60 ± 90 62 ± 89
+
+bpic2011 4
+
+o ine total (s) online avg (ms)
+
+549.47 ± 23.94 130.1 ± 15.04 8.93 ± 0.43 8.84 ± 0.41 18.98 ± 0.03 25.72 ± 0.83 46.62 ± 0.44 43.22 ± 0.12 60.85 ± 0.68 21.82 ± 0.04 22.69 ± 0.19
+
+65 ± 102 63 ± 99 23 ± 35 26 ± 40 48 ± 74 58 ± 89 51 ± 103 49 ± 92 119 ± 60 52 ± 85 54 ± 85
+
+bpic2015 3
+
+o ine total (s) online avg (ms)
+
+363.33 ± 16.46 178.69 ± 12.55 18.82 ± 0.62
+19.6 ± 0.81 15.56 ± 0.21 19.63 ± 0.09 51.08 ± 0.33 52.3 ± 1.32 77.94 ± 0.32 16.14 ± 0.1 22.12 ± 0.07
+
+21 ± 32 21 ± 34 21 ± 37 26 ± 45 30 ± 50 34 ± 54 25 ± 39 25 ± 40 61 ± 18 7±8 9±9
+
+production
+
+o ine total (s) online avg (ms)
+
+1.46 ± 0.05 1.48 ± 0.05 0.88 ± 0.05 0.93 ± 0.05 1.32 ± 0.06 1.67 ± 0.1 4.84 ± 0.14 5.04 ± 0.13 3.5 ± 0.01 1.17 ± 0.01 1.56 ± 0.18
+
+26 ± 22 28 ± 24 26 ± 25 33 ± 31 22 ± 19 30 ± 26 31 ± 29 37 ± 34 61 ± 12 23 ± 19 31 ± 26
+
+bpic2011 2
+
+o ine total (s) online avg (ms)
+
+457.58 ± 4.1 381.13 ± 0.35 9.79 ± 0.44 9.98 ± 0.28 19.77 ± 0.13 21.67 ± 0.04 44.74 ± 0.14 46.53 ± 0.29 64.98 ± 3.13 23.17 ± 0.1 24.89 ± 0.04
+
+64 ± 100 63 ± 100 27 ± 42 28 ± 44 49 ± 75 58 ± 90 45 ± 75 56 ± 106 125 ± 65 52 ± 84 54 ± 84
+
+bpic2015 1
+
+o ine total (s) online avg (ms)
+
+86.12 ± 0.31 68.34 ± 6.06 8.32 ± 0.43 8.4 ± 0.33 8.87 ± 0.11 10.33 ± 0.21 22.02 ± 0.1 25.47 ± 0.13 34.55 ± 0.4 7.45 ± 0.05 9.16 ± 0.12
+
+21 ± 33 22 ± 34 23 ± 37 21 ± 38 26 ± 45 28 ± 47 22 ± 34 25 ± 39 52 ± 12 7±9 9 ± 10
+
+bpic2015 4
+
+o ine total (s) online avg (ms)
+
+45.01 ± 0.31 28.26 ± 0.59 7.6 ± 0.05 7.07 ± 0.11 7.3 ± 0.05 9.29 ± 0.07 20.86 ± 0.1 19.61 ± 0.3 27.1 ± 0.09 6.4 ± 0.12 9.14 ± 0.03
+
+17 ± 27 18 ± 28 20 ± 35 23 ± 38 26 ± 43 29 ± 46 21 ± 33 24 ± 37 42 ± 8 6±7 10 ± 10
+
+insurance 1
+
+o ine total (s) online avg (ms)
+
+4.42 ± 0.05 3.63 ± 0.05 0.63 ± 0.02 0.64 ± 0.01 1.64 ± 0.03 1.78 ± 0.03 5.48 ± 0.09 5.37 ± 0.1 2.85 ± 0.03 1.8 ± 0.0 1.55 ± 0.23
+
+38 ± 30 39 ± 33 19 ± 17 22 ± 44 31 ± 22 43 ± 33 24 ± 25 39 ± 37 89 ± 4 33 ± 23 32 ± 23
+
+bpic2011 3
+
+o ine total (s) online avg (ms)
+
+173.03 ± 1.95 156.46 ± 0.44 4.26 ± 0.23 4.25 ± 0.25 9.52 ± 0.04 10.44 ± 0.08 18.37 ± 0.28 21.49 ± 0.11 25.33 ± 0.46 11.99 ± 0.04 11.54 ± 0.1
+
+73 ± 99 73 ± 100 29 ± 41 31 ± 44 53 ± 70 63 ± 83 48 ± 76 50 ± 74 107 ± 62 62 ± 87 65 ± 88
+
+bpic2015 2
+
+o ine total (s) online avg (ms)
+
+111.39 ± 0.15 88.97 ± 1.6 11.31 ± 0.37 11.4 ± 0.34 9.74 ± 0.07 11.49 ± 0.15 29.91 ± 0.11 33.13 ± 0.22 41.09 ± 0.26 9.34 ± 0.1 10.71 ± 0.04
+
+20 ± 32 21 ± 33 23 ± 39 18 ± 28 28 ± 46 31 ± 48 25 ± 41 25 ± 40 52 ± 14 6±6 8±7
+
+bpic2015 5
+
+o ine total (s) online avg (ms)
+
+567.21 ± 11.07 144.11 ± 1.39 14.34 ± 0.32 14.37 ± 0.04 13.02 ± 0.16 16.39 ± 0.11 43.79 ± 0.08 140.02 ± 1.08 66.81 ± 1.85 13.36 ± 0.18 22.26 ± 0.07
+
+16 ± 25 17 ± 27 19 ± 32 19 ± 34 23 ± 39 27 ± 43 21 ± 35 25 ± 41 50 ± 12 6±7 10 ± 10
+
+insurance 2
+
+o ine total (s) online avg (ms)
+
+8.06 ± 0.05 7.16 ± 0.09 0.9 ± 0.02 1.02 ± 0.07 2.37 ± 0.01 3.01 ± 0.02 6.56 ± 0.07 6.83 ± 0.03 5.98 ± 0.04 2.45 ± 0.01 2.12 ± 0.02
+
+33 ± 30 34 ± 32 22 ± 15 27 ± 18 27 ± 21 37 ± 32 27 ± 26 30 ± 26 89 ± 4 28 ± 22 26 ± 21
+
+1:58
+
+I. Teinemaa et al.
+
+Table 21. Execution times for SVM (continued)
+
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+method
+single laststate single agg knn laststate knn agg state laststate state agg cluster laststate cluster agg pre x index pre x laststate pre x agg
+
+sepsis 1
+
+o ine total (s) online avg (ms)
+
+62.48 ± 0.54 15.52 ± 0.22 3.14 ± 0.07 2.72 ± 0.12 5.14 ± 0.09 9.5 ± 0.16 10.03 ± 0.09 10.37 ± 0.09 10.45 ± 0.03 6.63 ± 0.02 6.61 ± 0.09
+
+28 ± 32 29 ± 33 29 ± 33 30 ± 34 29 ± 33 33 ± 37 26 ± 32 28 ± 34 36 ± 24 28 ± 31 30 ± 33
+
+bpic2012 1
+
+o ine total (s) online avg (ms)
+
+12067.81 ± 399.76 3143.14 ± 24.75
+28.92 ± 0.47 33.21 ± 1.1 108.84 ± 0.29 168.48 ± 1.15 414.04 ± 3.83 186.63 ± 2.21 538.77 ± 6.5 77.87 ± 0.94 100.43 ± 0.25
+
+10 ± 14 10 ± 16 279 ± 299 258 ± 277 8 ± 10 10 ± 12 9 ± 14 8±9 37 ± 12 4±3 5±5
+
+bpic2017 1
+
+o ine total (s) online avg (ms)
+
+86469.6 ± 1696.97 89619.4 ± 1736.87
+117.67 ± 2.31 122.36 ± 2.4 18343.13 ± 359.98 10257.06 ± 201.29 8744.81 ± 171.62 74691.13 ± 1465.81 17933.49 ± 351.94 16596.88 ± 1364.46 21941.34 ± 37.13
+
+38 ± 46 40 ± 47 118 ± 108 1408 ± 1332 23 ± 26 25 ± 28 17 ± 22 22 ± 27 76 ± 9 16 ± 17 16 ± 18
+
+tra c
+
+o ine total (s) online avg (ms)
+
+52218.27 ± 1024.78 58867.16 ± 1155.27
+394.55 ± 7.74 482.25 ± 9.46 31579.01 ± 1040.68 71510.15 ± 1403.39 7466.95 ± 149.95 97876.03 ± 1920.82 28902.06 ± 145.18 12316.56 ± 14.1 24735.14 ± 425.56
+
+103 ± 57 114 ± 62 69 ± 40 96 ± 54 78 ± 48 87 ± 53 72 ± 46 45 ± 40 125 ± 20 72 ± 43 75 ± 45
+
+sepsis 2
+
+o ine total (s) online avg (ms)
+
+6.46 ± 0.02 5.81 ± 0.06 1.06 ± 0.01 1.02 ± 0.02 2.08 ± 0.02 2.61 ± 0.03 6.02 ± 0.11 6.84 ± 0.03 3.16 ± 0.01 2.49 ± 0.03 2.85 ± 0.04
+bpic2012 2
+
+34 ± 34 36 ± 36 38 ± 37 37 ± 37 35 ± 36 40 ± 40 34 ± 34 33 ± 35 41 ± 26 34 ± 33 36 ± 35
+
+o ine total (s) online avg (ms)
+
+14557.12 ± 780.58 1336.26 ± 5.35 31.47 ± 0.55 29.0 ± 0.93 156.77 ± 2.77 88.35 ± 1.29 139.3 ± 0.17 2409.21 ± 27.71 420.91 ± 13.0 211.0 ± 9.02 288.14 ± 4.56
+
+8 ± 11 9 ± 14 254 ± 274 297 ± 319 8 ± 10 10 ± 12 8 ± 13 11 ± 18 34 ± 11 4±3 5±5
+
+bpic2017 2
+
+o ine total (s) online avg (ms)
+
+91457.8 ± 1923.76 23877.21 ± 468.59
+133.43 ± 2.62 118.44 ± 2.32 1905.91 ± 37.4 58203.39 ± 1142.24 7006.73 ± 137.51 8903.74 ± 174.74 39670.6 ± 778.54 3553.0 ± 3.84 5395.36 ± 587.31
+
+42 ± 56 30 ± 38 1515 ± 1424 1412 ± 1329 20 ± 24 23 ± 26 17 ± 21 23 ± 28 87 ± 10 14 ± 15 16 ± 18
+
+hospital 1
+
+o ine total (s) online avg (ms)
+
+163070.85 ± 3200.27 65398.88 ± 1283.45
+109.75 ± 1.32 102.69 ± 2.02 33549.22 ± 658.4 31458.64 ± 617.38 23090.77 ± 453.16 46246.86 ± 907.59 53322.05 ± 1046.45 39203.83 ± 1030.35 52526.59 ± 857.39
+
+487 ± 319 436 ± 281 81 ± 55 42 ± 23 320 ± 268 359 ± 222 313 ± 292 324 ± 239 1093 ± 132 360 ± 255 393 ± 234
+
+sepsis 3
+
+o ine total (s) online avg (ms)
+
+12.88 ± 0.09 14.88 ± 0.08 1.91 ± 0.06 1.82 ± 0.03 4.23 ± 0.02 5.08 ± 0.02 7.7 ± 0.07 7.95 ± 0.06 6.67 ± 0.05 4.78 ± 0.04 4.96 ± 0.02
+bpic2012 3
+
+30 ± 32 31 ± 34 31 ± 33 33 ± 35 31 ± 34 35 ± 38 29 ± 32 31 ± 34 38 ± 25 30 ± 32 31 ± 34
+
+o ine total (s) online avg (ms)
+
+2746.74 ± 133.03 3940.96 ± 508.12
+30.7 ± 2.47 31.11 ± 0.58 128.66 ± 0.22 191.19 ± 3.22 181.63 ± 2.76 273.16 ± 6.91 344.04 ± 8.18 100.44 ± 2.24 66.23 ± 0.75
+
+9 ± 13 10 ± 15 174 ± 188 171 ± 189 8 ± 10 10 ± 13 8 ± 12 10 ± 15 34 ± 11 5±4 5±4
+
+bpic2017 3
+
+o ine total (s) online avg (ms)
+
+64770.83 ± 1271.13 68407.03 ± 1323.42
+119.49 ± 2.35 139.45 ± 2.74 37822.2 ± 742.26 10121.8 ± 198.64 3026.05 ± 59.39 5264.25 ± 103.31 24417.21 ± 479.19 7667.05 ± 53.16 4509.12 ± 372.24
+
+32 ± 39 35 ± 42 1375 ± 1292 1587 ± 1497 17 ± 23 24 ± 26 18 ± 22 18 ± 21 89 ± 11 15 ± 16 18 ± 20
+
+hospital 2
+
+o ine total (s) online avg (ms)
+
+100195.84 ± 1966.34 291765.77 ± 5725.9
+312.82 ± 6.14 321.04 ± 6.3 110178.73 ± 2162.26 18274.1 ± 358.63 19699.97 ± 386.61 22553.25 ± 442.61 82296.52 ± 1615.07 76378.26 ± 118.46 57426.99 ± 22.74
+
+482 ± 311 545 ± 353 62 ± 49 85 ± 68 365 ± 307 385 ± 236 285 ± 255 325 ± 242 1013 ± 214 344 ± 244 364 ± 215
+
+Outcome-Oriented Predictive Process Monitoring: Review and Benchmark
+
+1:59
+
+Fig. 25. Online times across di erent filtering proportions of static categorical a ribute levels (XGBoost) Fig. 26. AUC across di erent filtering proportions of static categorical a ribute levels (XGBoost)
+

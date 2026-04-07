@@ -1,0 +1,1088 @@
+PERL: Parameter Efficient Reinforcement Learning from Human Feedback
+
+arXiv:2403.10704v1 [cs.LG] 15 Mar 2024
+
+Hakim Sidahmed∗† Samrat Phatale∗† Alex Hutcheson‡ Zhuonan Lin‡ Zhang Chen‡
+
+Zac Yu‡ Jarvis Jin‡ Roman Komarytsia‡ Christiane Ahlheim‡ Yonghao Zhu‡
+
+Simral Chaudhary† Bowen Li‡ Saravanan Ganesh† Bill Byrne† Jessica Hoffmann†
+
+Hassan Mansoor†
+
+Wei Li†
+
+Abhinav Rastogi†
+
+Lucas Dixon†
+
+† Google Research, ‡ Google {hsidahmed, samratph, ldixon}@google.com
+
+Abstract
+Reinforcement Learning from Human Feedback (RLHF) has proven to be a strong method to align Pretrained Large Language Models (LLMs) with human preferences. But training models with RLHF is computationally expensive, and an overall complex process. In this work, we study RLHF where the underlying models are trained using the parameter efficient method of Low-Rank Adaptation (LoRA) introduced by Hu et al. [2021]. We investigate the setup of “Parameter Efficient Reinforcement Learning” (PERL), in which we perform reward model training and reinforcement learning using LoRA. We compare PERL to conventional finetuning (full-tuning) across various configurations for 7 benchmarks, including 2 novel datasets, of reward modeling and reinforcement learning. We find that PERL performs on par with the conventional RLHF setting, while training faster, and with less memory. This enables the high performance of RLHF, while reducing the computational burden that limits its adoption as an alignment technique for Large Language Models. We also release 2 novel thumbs up/down preference datasets: ‘Taskmaster Coffee’, and ‘Taskmaster Ticketing’ to promote research around RLHF.
+1 Introduction
+Pretrained Large Language Models (LLMs), such as GPT-4 [OpenAI et al., 2023], and Gemini [Team et al., 2023, Reid et al., 2024] have shown impressive performance in a variety of tasks. Aligning these models with human preferences is key to ensuring high quality behavior [Bommasani et al., 2022]: it improves instruction following [Ouyang et al., 2022], and helps fine-tune models for behaviors which lack a direct mathematical expression of a loss function, such as safety properties [Bai et al., 2022a,b], or characteristics of summarization [Stiennon et al., 2020].
+Reinforcement Learning from Human Feedback (RLHF) is one of the most popular methods to achieve this alignment. It involves fitting a reward model (RM) on human preference data, and then uses this RM to tune the parameters of the LLM using Reinforcement Learning (RL). We
+∗Equal Contribution
+
+Figure 1: PERL reward model fitting trains a small percentage of the number of parameters the conventional approach does.
+provide more details about the RLHF method in Appendix A.1. While RLHF has been shown to be an effective method for alignment [Stiennon et al., 2020, Bai et al., 2022b], the complexity and computational cost of its process has hindered its adoption: the RL loop, for example, requires at least twice the memory of standard fine-tuning, as it needs multiple instances of LLMs, such as a reward model and an anchor model (for KL regularization) to train properly. Another challenge to the wider adoption of RLHF lies in the difficulty to collect enough high quality training data to create an effective reward model. In this work, we investigate how Parameter Efficient Fine-Tuning (PEFT) approaches [Houlsby et al., 2019] can make RLHF more efficient and accessible. We compare the performance of conventional RLHF, for which all the parameters of the reward model and the policy are fine-tuned, to Parameter Efficient Reinforcement Learning, referred to as PERL, which uses a PEFT method (Low-Rank Adaptation [Hu et al., 2021]) to fine-tune the reward model and an RL Policy. Our contributions in this paper are as follows:
+• Through extensive experiments, we evaluate the effects of LoRA on two dimensions of the training of the RM and RL policy: model size, and number of LoRA trainable parameters.
+• We compare PERL to conventional RLHF on 7 datasets, and show that PERL achieves results on par with the conventional setup which is commonly used, while being more memory efficient, and faster to train.
+• We release two new preference datasets (thumbs up/down), the Taskmaster Coffee, and Ticketing datasets, which we hope will be useful when evaluating alignment methods.
+2 PERL: Parameter Efficient Reinforcement Learning from Human Feedback
+We describe how PERL makes the RLHF process more efficient. For an overview on RLHF, please refer to Appendix A.1. There are 2 model training processes as part of the RLHF process: reward model training, and reinforcement learning. We construct the PERL reward models as language models with LoRA adapters. We attach a LoRA adapter to each attention projection matrix, and only train these adapters, while keeping the language model backbone frozen. We depict this process in Figure 1.
+2
+
+Figure 2: PERL vs. Conventional Reinforcement Learning Loops
+The trained LoRA adapters are saved, and combined with the projection matrices when running inference with the reward model. This one-time addition operation is performed before running the RL loop, and the resulting reward model is equivalent to a non-LoRA one. The PERL reinforcement learning loop similarly trains language models with LoRA adapters as policy models. We attach a LoRA adapter to each attention projection matrix, and only train the LoRA adapters, while keeping the language model backbone frozen. The policy is trained with the policy gradient calculated on the reward score, and a KL regularization with the anchor policy. We depict this process in Figure 2. The bulk of the memory required to train a reward model or a reinforcement learning loop is due to modern optimizers, like Adam [Kingma and Ba, 2017], or Adafactor [Shazeer and Stern, 2018], which need to track multiple factors for every trainable parameter. The reduction in the number of trainable parameters that PERL operates leads to a significant reduction in memory requirement for training. It also leads to faster training speed, because fewer parameters need to be updated at each training step.
+3 Datasets and Tasks
+We describe the datasets and tasks we used to train reward models and perform reinforcement learning. The datasets consist of feedback data of either preference pairs, or classification labels used to train reward models. The preference or classification labels are collected for candidate responses sampled from diverse set of policies. As it is helpful for reward models to observe as broad a domain as possible during training. In the reinforcement learning loop, we use inputs from the datasets as prompts to the LLMs to sample episodes, and make policy updates based on the reward calculated for the sampled episodes.
+3
+
+3.1 Text Summarization
+Text summarization is one of the tasks that has been the most extensively studied using RLHF. Starting from a large text, the goal is to produce a smaller, yet faithful summary. We explore it with two different datasets: Reddit TL;DR [Völske et al., 2017], and BOLT (Broad Operational Language Translation) English SMS/Chat [Chen et al., 2018].
+3.1.1 Reddit TL;DR
+We experiment with Reddit post summarization, where a Reddit post is provided, and the model produces a summary of it. We base our experiments on the TL;DR dataset [Völske et al., 2017], which contains both Reddit posts, and a human preference dataset. We filtered this dataset following the work of Stiennon et al. [2020].
+More details about this dataset can be found in Appendix A.2.1.
+3.1.2 BOLT Message Summarization
+We explore the task of summarizing sequences of messages. Such a model could be used, for instance, to show a short and accurate summary to a user, enabling them to understand the context of a conversation without reading every message in it. We experiment with the BOLT English SMS/Chat dataset [Chen et al., 2018]. This dataset was generated by paying participants to upload their conversations from SMS and chat applications, and also by randomly matching participants for conversations on a chat platform.
+More details about this dataset can be found in Appendix A.3.1
+3.2 Generating Harmless Responses
+We explore the task of preference modeling on harmless responses by using Anthropic’s Helpfulness and Harmlessness (Red Teaming) dataset [Bai et al., 2022a]. This dataset consists of a pair of model generated responses for helpfulness examples seeking informational user queries, and harmlessness examples with users eliciting harmful responses from the model. We use the harmlessness part of the dataset to conduct our experiments. The pairwise harmlessness preference dataset labels the least harmful response generated by the model to a user elicited context.
+More details about this dataset can be found in Appendix A.4.1.
+3.3 Generating Helpful Responses
+The Stanford Human Preferences Dataset (SHP) [Ethayarajh et al., 2022] is derived from Reddit questions/instructions, and top comments. It consists of 385,563 Reddit questions/instructions, and top-level comments for the corresponding posts. The data is split into a training set (90%), a validation set (5%), and a test set (5%). The posts are sampled from 18 domains, such as anthropology, legal advice etc.
+The SHP dataset, unlike the ELI5 one [Fan et al., 2019], makes use of timestamp information to infer that a comment is preferred to another one only if it has received more votes, and has not been visible for longer (to avoid the introduction of a bias favoring older posts).
+The SHP dataset differs from the Anthropic-HH dataset in that it focuses on helpfulness only (as opposed to both helpfulness and harmlessness for Anthropic-HH). The data in SHP is also human written, whereas Anthropic-HH is made of machine written responses.
+Detailed information on the domains used, and how they compose the mix of examples can be found in Table 18 of Appendix A.5.1.
+3.4 UI Automation
+We experiment on the task of controlling a device using a UI automation dataset collected from human demonstrations. This dataset, which will be released as part of concurrent work, is composed of around 3,000 training, and 800 test episodes. Each episode is a sequence of observation and action
+4
+
+pairs. An observation is derived from the Android View Hierarchy, plus additional information, such as the active app, or the history of previously performed actions. An action is one of a dozen possible actions (such as clicking on a UI element, scrolling, etc.). This UI demonstration dataset only contains ground truth trajectories. We augment it to include negative samples so as to train a classifier that we use as a reward model, by replacing the ground truth action with a different, random one.
+3.4.1 Training Data Preparation
+We split the 8,000 sample dataset into a training set of 7,000 random examples, and a test set of 1,000 samples. These samples are generated from a randomly chosen subset of the dataset. Out of the 8,000 examples, we randomly select half of them and replace the correct action by a randomly wrong one. We call the examples leading to the right action "Positive", and the ones with a wrong action "Negative".
+Split details on the dataset are given in Table 1.
+
+Table 1: Dataset split for the UI automation task.
+
+Split
+
+Total Positive Negative
+
+Training 8,000 4,007 3,993
+
+Evaluation 1,000 490
+
+510
+
+More information on how this dataset was generated can be found in Appendix A.6.1.
+3.5 Generating Neutral Point of View Responses
+We train a model to generate answers to controversial topics with a neutral point of view. We built a dataset consisting of 300 triplets of (question, answer, rating) spanning 93 topics. Humans trained on this task generated both questions and answers, which where then scored between 0 and 5 by high-quality annotators based on both style and neutrality. Among those 300 examples, 136 are deemed adequate answers (i.e. score >= 4). The rest of the answers’ scores spans the whole range between 0 and 4, which helps with training a classifier that we use as a reward model. The dataset was split into train, test and validation.
+More information about this dataset is given in Appendix A.7.1.
+3.6 Taskmaster Datasets
+The Taskmaster datasets were created by paying crowdsourced (Mechanical Turk) workers to produce conversational ordering interactions using a custom-built, text-based dialogue creation tool. This meant either writing turns for both speakers, i.e. the customer and the agent, or filling in specific turns for partially completed conversations. Each conversation was annotated with function calls interleaved within the dialogue turns, signalling when to interact with external sources in order to perform tasks in the real world. Example tasks that were performed include looking up menu items or movies, adding items to an order, booking tickets, etc. The calls are API-agnostic, so they can easily be converted to any format needed when deployed. The training datasets were used to fine-tune a LaMDA model [Thoppilan et al., 2022] which was served along with an ‘API adapter’ that mapped each function call to a real API.
+The trained LaMDA model was deployed to another set of crowdsourced workers who were paid to interact with it, and label its responses (conversation turns, or API calls) with thumbs up/down. We collected 3,000 (dialogue, reward) pairs in this manner, where the reward is a thumbs up/down.
+More details on the data collection methodology, as well as examples and UI screenshots for creating these datasets are given in Appendix A.8.1.
+5
+
+3.6.1 Taskmaster Coffee
+The Taskmaster Coffee dataset consists of 6,500 multi-turn conversations, consisting of 20,000 training examples (conversation turns or API calls), and 3,000 reward examples. The reward datasets contains 2,775 examples labeled with thumbs up, and 453 with thumbs down. We have publicly released this dataset and the instructions used to create it at https://github.com/google-resea rch-datasets/Taskmaster/tree/master/TM-4-2024.
+3.6.2 Taskmaster Ticketing
+The Taskmaster Ticketing dataset contains 30,000 multi-turn conversations, consisting of 240,000 training examples and 3,000 reward examples. The reward datasets contains 1,146 examples labeled with thumbs up, and 2,210 with thumbs down. This dataset and related materials are publicly released at https://github.com/google-research-datasets/Taskmaster/tree/master/TM-3-2 020.
+4 Reward Model Training
+We experiment on the datasets mentioned in Section 3, varying the configurations of model size, and LoRA adapter rank (which controls the number of trainable parameter).
+
+PERL
+
+Full-Tuning
+
+80
+
+79
+
+Pairwise Accuracy
+
+78
+
+77
+
+76 0
+
+5
+
+10
+
+15
+
+LoRA Rank
+
+Figure 3: PERL pairwise accuracy for different LoRA ranks (Reddit TL;DR)
+
+We evaluate the performance of the preference based reward models using pairwise accuracy as a metric, measuring the proportion of preferred responses ranked higher by the model among pairs of candidate responses. We evaluate the classification style reward models using the accuracy as a metric, indicating whether the reward model score is close to the label of 0 or 1. We compare High Bandwidth Memory (HBM) usage as estimated by Jax JIT at the time of training [Bradbury et al., 2018].
+Our experiments across datasets show that we can LoRA train reward models to match the performance of fully tuned ones with less than 0.1% of the parameters being tuned. We also observe that LoRA generally becomes more effective at matching full-tuning as we increase the LLM size. Across all our datasets, the reward models can be tuned with approximately 50% of the memory needed for full-tuning. The training converges in a similar number of steps for LoRA and full tuning, and the LoRA models are roughly 50% faster to train. The HBM usage and training speedup vary a little with each dataset as they depends on sequence lengths of the examples, which is different for all datasets.
+We report detailed metrics for each dataset below.
+
+4.1 Summarization - Reddit TL;DR
+We train reward models using preference pairs of summaries on the dataset described in Section 3.1.1. We report the hyperparameters we used in Appendix A.2.2.
+
+6
+
+Table 2: Effect of the LoRA rank on accuracy, percentage of trainable parameters, peak HBM, and training speed (Reddit TL;DR dataset)
+
+PaLM 2 S
+
+Percentage of trainable Peak Training
+
+Training Setting Accuracy
+
+parameters
+
+HBM Speed
+
+Full Tuning LoRA Rank 1 LoRA Rank 4 LoRA Rank 8 LoRA Rank 16
+
+78.7% 77.2% 79.7% 77.3% 77.0%
+
+100% < 0.01% 0.02% 0.05% 0.09%
+
+100% 50% 50% 50% 50%
+
+1× 1.7× 1.7× 1.7× 1.7×
+
+Table 3: Effect of model size on performance of LoRA fine-tuning compared to full-tuning reported with pairwise accuracy (Reddit TL;DR)
+
+Model Size Full Tuning LoRA Rank 4
+
+PaLM 2 XXS PaLM 2 XS PaLM 2 S
+
+75.4% 78.1% 78.7%
+
+73.2% 76.8% 79.7%
+
+4.1.1 LoRA Adapter Rank
+We observe that LoRA fine-tuning can model reward just as well as full-tuning with adapters of rank at least 4, training as little as ∼ 0.02% of the model’s total parameters. The estimated High Bandwidth Memory (HBM) needed to train a LoRA rank 4 model is just 50% of that needed to train a fully tuned one. We also observe that the pairwise accuracy doesn’t change significantly with the LoRA rank. We list our results in Table 2.
+4.1.2 Model Size
+In this section we experiment on how the size of the backbone LLM model affects the pairwise accuracy of the reward model learned. We find that the performance of the reward model increases with the model size for both full-tuning, and LoRA fine-tuning. We also find that LoRA fine-tuning benefits more from model size increases than full-tuning: for lower model sizes, LoRA fine-tuning falls short of full-tuning, but for the largest size, the pairwise accuracy of LoRA tuning is on par with that of full-tuning. We report our results in Table 3.
+4.2 Harmless Dialogue Generation
+We train reward models in different settings using preference pairs of responses as mentioned in section 3.2. We evaluate the performance of the trained reward models using pairwise accuracy, which measures the proportion of preferred responses ranked higher by this model among pairs of candidate responses. We report the hyperparameters used in Appendix A.4.2.
+4.2.1 LoRA Adapter Rank
+The performance of LoRA trained reward models is on par to that of fully trained ones on the Anthropic Harmlessness preference dataset with all the low ranks we experimented with. We obtain our best results with a LoRA rank 8 model, training less than 0.05% of the model parameters, with half peak HBM memory, and a 60% computational speed up. We report our results in the Table 4.
+7
+
+Table 4: Effect of the LoRA rank on accuracy, percentage of trainable parameters, peak HBM, and training speed (Anthropic-Harmlessness dataset)
+
+PaLM 2 S
+
+Percentage of trainable Peak Training
+
+Training Setting Accuracy
+
+parameters
+
+HBM Speed
+
+Full Tuning LoRA Rank 1 LoRA Rank 4 LoRA Rank 8 LoRA Rank 16
+
+76.56% 75.98% 78.71% 79.1% 75.0%
+
+100% 0.005% 0.02% 0.05% 0.09%
+
+100% 43.1% 43.1% 43.1% 43.1%
+
+1× 1.6× 1.6× 1.6× 1.6×
+
+Table 5: Effect of model size on performance of Full finetuning and LoRA finetuning (AnthropicHarmlessness dataset)
+
+Model Size Full Tuning LoRA Rank 8
+
+PaLM 2 XXS PaLM 2 XS PaLM 2 S
+
+73.44% 76.95% 76.56%
+
+72.5% 76.76% 79.1%
+
+4.2.2 Model Size
+The pairwise accuracies of both the LoRA tuned and fully tuned models benefit from higher model sizes, with LoRA model accuracies increasing more. We report our results in Table 5.
+4.3 Helpful Dialogue Generation
+We train LoRA and fully tuned reward models on the preference dataset introduced in Section 3.3. We report pairwise accuracies. Details on the hyperparameters used are given in Appendix A.5.2.
+4.3.1 LoRA Adapter Rank
+Varying the LoRA rank on the SHP datasets also yields comparable results as with full tuning. LoRA trained models have a similar memory and compute time advantage as with the datasets seen so far. Our best results are obtained with a LoRA rank of 1 on PaLM XS, training just ∼ 0.005% of the parameters, saving 50% on the peak HBM usage, and training 60% faster. We list our results in the Table 6.
+4.3.2 Model Size
+We compare the accuracy of fully tuned and LoRA tuned Reward Models on PaLM 2 XXS, and XS. We report the results with the best LoRA rank out of the set {1, 4, 8, 16}. Both LoRA and fully tuned models benefit slightly from the model size increases, and they have similar pairwise accuracies.
+
+Table 6: Effect of the LoRA rank on performance, percentage of trainable parameters, peak HBM, and training speed (SHP dataset)
+
+PaLM 2 XS
+
+Percentage of
+
+Peak Training
+
+Training Setting Accuracy trainable parameters HBM Speed
+
+Full Tuning LoRA Rank 1 LoRA Rank 4 LoRA Rank 8 LoRA Rank 16
+
+82.0% 82.6% 82.2% 81.6% 81.3%
+
+100% 0.005% 0.02% 0.04% 0.08%
+
+100% 50% 50% 50% 50%
+
+1× 1.6× 1.6× 1.6× 1.6×
+
+8
+
+We report our results in Table 7.
+
+Table 7: Effect of model size on performance (SHP dataset). We select the best LoRA rank from {1, 4, 8, 16}.
+
+PaLM 2 Model Size
+
+Full Tuning Accuracy
+
+LoRA Accuracy Rank
+
+XXS XS
+
+81.6%
+
+80.1%
+
+8
+
+82.0%
+
+82.6%
+
+1
+
+4.4 UI Automation
+We train a reward model to score UI automation actions on the dataset described in Section 3.4. UI automation data has two types of instructions: low-level instruction, e.g. "Click on the search button", and high-level instructions, e.g. "Search for ‘machine learning’". It also has two different split schemes:
+• Unseen App, for which the test split uses apps not in the train split • Unseen Task, for which the test split has tasks not in the train split
+We report classification accuracy numbers in Table 10. We report the hyperparameters used in Appendix A.6.2.
+4.4.1 LoRA Adapter Rank
+We train LoRA and fully tuned reward models on the PaLM 2 S model. We evaluate these models using a classification accuracy. As shown in Table 8, the LoRA reward models, while training less than 0.1% of the total number of parameters, achieve similar accuracy than the fully tuned one. Furthermore, the LoRA models train almost twice as fast, and have a 40% lower peak HBM usage.
+
+Table 8: Effect of the LoRA rank on accuracy, percentage of trainable parameters, peak HBM usage, and training speed (UI automation).
+
+PaLM 2 S
+
+Percentage of trainable Peak Training
+
+Training Setting Accuracy
+
+parameters
+
+HBM Speed
+
+Full Tuning LoRA Rank 1 LoRA Rank 4 LoRA Rank 8 LoRA Rank 16
+
+93.12% 90.82% 91.80% 92.00% 92.19%
+
+100% <0.01% 0.02% 0.05% 0.09%
+
+100% 56% 56% 56% 56%
+
+1× 1.9× 1.9× 1.9× 1.9×
+
+4.4.2 Model Size
+The same trend of accuracy with model size is observed in the UI automation task, and both fully tuned, and LoRA tuned models seem to benefit from larger architectures. They achieve similar accuracies, as seen in Table 9.
+4.4.3 Reward Model as UI Automation Evaluator
+The evaluation of the reward models show that the UI automation agent model outputs can be evaluated with high accuracy using such a model. We compare this reward model as an evaluator to a heuristic previously used, based on the distance between the position of the click of the action, and a ground truth. The reward model outperforms the heuristic model by a large margin, as shown in Table 10.
+9
+
+Table 9: Effect of model size on accuracy (UI automation). We select the best LoRA rank from {1, 4, 8,16} for each model size.
+
+PaLM 2 Model Size
+
+Full Tuning Accuracy
+
+LoRA Accuracy Rank
+
+XXS XS S
+
+84.42%
+
+87.5% 16
+
+88.59% 89.65% 4
+
+93.12% 92.19% 16
+
+Table 10: Accuracy of a trained RM (PaLM 2 S rank 16), and heuristic matching function as action evaluators (UI automation).
+
+Task Type
+
+Low-level Instruction Heuristic Matching RM Evaluator
+
+High-level Instruction Heuristic Matching RM Evaluator
+
+Unseen App
+
+76.71%
+
+95.77%
+
+54.41%
+
+90.60%
+
+Unseen Task
+
+77.71%
+
+95.89%
+
+56.02%
+
+91.61%
+
+4.5 Neutral Point of View (NPOV) Responses
+We trained a reward model on data with 5-point scale discrete scores (increments of 0.5) to judge the neutrality of statements on sensitive topics, and evaluated it with a pairwise evaluation set of 437 examples. The pairwise accuracy (PA) is computed based on whether the preferred side (by label) has a higher score. During the evaluation, pairwise examples for which at least one example was used during RM training are excluded. More details on the dataset used are available in Appendix A.7.1.
+4.5.1 LoRA Adapter Rank
+We study the effect of LoRA rank on the accuracy of our NPOV reward model. We find that the LoRA trained models have similar accuracy as the fully trained ones, while using 50% of the peak HBM, and training 40% faster. Detailed results are given in Table 11.
+4.5.2 Model Size
+We compare the performance of fully tuned reward models to that of LoRA trained ones on different model sizes: PaLM XXS, XS, and S. We report the results with the best LoRA rank out of the set {1, 4, 8, 16} for each model size (8 for XXS and XS, and 1 for S) in Table 12. The LoRA trained models have similar accuracies as the fully trained ones. Both LoRA models and fully trained ones benefit from bigger model sizes, with LoRA accuracies increasing more as the architecture gets bigger.
+
+Table 11: Effect of the LoRA rank on accuracy, percentage of trainable parameters, peak HBM, and training speed (NPOV dataset)
+
+PaLM 2 S
+
+Percentage of
+
+Peak Training
+
+Training Setting PA trainable parameters HBM Speed
+
+Full Tuning LoRA Rank 1 LoRA Rank 4 LoRA Rank 8 LoRA Rank 16
+
+85.15% 88.45% 86.80% 86.24% 86.14%
+
+100% <0.01% 0.02% 0.05% 0.09%
+
+100% 50% 50% 50% 50%
+
+1× 1.4× 1.4× 1.4× 1.4×
+
+10
+
+Table 12: Effect of model size on performance (NPOV dataset) with HP sweep over LoRA rank and
+
+only the best result (by PA) shown. Note that for LoRA, we pick the best LoRA rank from {1, 4, 8,
+
+16}.
+
+PaLM 2 Full Tuning
+
+LoRA
+
+Model Size Accuracy Accuracy Rank
+
+XXS XS S
+
+84.49% 86.14% 8 87.46% 88.14% 8 85.15% 88.45% 1
+
+Table 13: Effect of the LoRA rank on accuracy, percentage of trainable parameters, peak HBM usage, and training speed (Taskmaster Coffee Dataset).
+
+PaLM 2 S
+
+Percentage of trainable Peak Training
+
+Training Setting Accuracy
+
+parameters
+
+HBM Speed
+
+Full Tuning LoRA Rank 1 LoRA Rank 4 LoRA Rank 8 LoRA Rank 16
+
+96.16% 93.93% 95.53% 96.81% 96.16%
+
+100% 0.005% 0.02% 0.04% 0.08%
+
+100% 67% 67% 67% 67%
+
+1× 1.5× 1.5× 1.5× 1.5×
+
+4.6 Taskmaster Coffee Dataset
+We train classification reward models on the Taskmaster Coffee dataset.
+4.6.1 LoRA Adapter Rank
+To investigate the impact of different LoRA ranks on the learning efficiency of the reward model, we conducted experiments using the PaLM 2 XS model. LoRA trained reward models achieve similar accuracies as the fully tuned ones, while reducing the HBM usage by 30%, and training 50% faster. Detailed results are presented in Table 13.
+4.6.2 Model Size
+As shown in Table 14 , the larger PaLM 2 XS model achieves higher accuracies than the smaller model PaLM 2 XXS. This observation stands for both the LoRA and fully tuned versions.
+5 Reinforcement Learning
+We train reinforcement learning policies on the summarization datasets described in Section 3.1, varying the model size, and LoRA adapter rank (which controls the number of trainable parameters). We conduct these experiments using the "REINFORCE for Language Models" algorithm used by Lee et al. [2023a], tuning a LLM policy using reinforcement learning and a standard reward model per dataset trained in Section 4. We evaluate the performance of the learned policy by the max cumulative reward it can achieve as judged by the reward model. We compare peak High Bandwidth Memory (HBM) usage as estimated
+
+Table 14: Effect of model size on performance (Taskmaster Coffee dataset). We select the best LoRA rank from the set {1, 4, 8,16}.
+
+PaLM 2 Model Size
+
+Full Tuning Accuracy
+
+LoRA Accuracy Rank
+
+XXS XS
+
+94.3% 96.2%
+
+94.3% 16
+
+96.8%
+
+8
+
+11
+
+PERL
+
+Full Tuning
+
+2.3
+
+2.2
+
+Max Reward
+
+2.1
+
+2.0
+
+1.9
+
+1.8
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10
+
+12
+
+14
+
+16
+
+18
+
+LoRA Rank
+Figure 4: PERL’s maximum cumulative reward increases with the LoRA rank (Reddit TL;DR). At rank 16, the policy performance comes close to that of the full-tuning.
+
+by Jax JIT at the time of training [Bradbury et al., 2018]. We also compare the speed of training by measuring the time each step takes end-to-end, i.e. episode sampling, reward scoring, calculating KL regularization, and performing the learning step.
+Our experiments across datasets show that we can LoRA train policies with reinforcement learning that come very close to the performance of fully tuned ones with less than 0.1% of the parameters being tuned. We also observe that LoRA generally becomes more effective at matching full-tuning as we increase the LLM size. For both datasets we have experimented with, the policies can be tuned with approximately 76% of the memory needed for full-tuning. The training converges in a similar number of steps for LoRA and full tuning, and the LoRA models are roughly 13% faster to train.
+5.1 Reddit TL;DR Summarization
+We perform reinforcement learning with input prompts from the Reddit dataset introduced in Section 3.1.1, and episodes sampled from them. We use a fully tuned Palm 2 S reward model trained in Section 4.1. We report the maximum cumulative reward score as judged by this reward model as an evaluation of the policy. We report our hyperparameter selection process for all experiments in Appendix A.2.2.
+5.1.1 LoRA Rank
+We study the effect of LoRA rank on effectiveness of learning reinforcement learned policy on the Reddit rataset by LoRA training an RL policy with varying ranks. We observe a monotonic increase in cumulative reward with increasing LoRA ranks. We observe that a policy trained with LoRA Rank 16 comes the closest to performance of a fully tuned policy in terms of the reward score. We achieve this performance by training only ∼ 0.09% of the policy model’s total parameters. The LoRA rank 16 policy RL tuning peaks at ∼ 77% of the HBM needed for the RL tuning of the fully tuned policy. We also observed a 13% speed-up in the training time of the LoRA policy, as compared that of the fully tuned one.
+We list our results in Table 15.
+5.1.2 Model Size
+We vary the size of the policy model to see how it affects the maximum reward achieved by the policy learned. We find that the maximum reward increases with the model size for both full RL tuning, and LoRA RL tuning. Larger models perform better across full RL tuning and LoRA RL tuning. We report these results in Table 16.
+5.2 BOLT Message Summarization
+We perform reinforcement learning with input prompts from the BOLT message summarization dataset introduced in Section 3.1.2, and episodes sampled from them. We use a fully tuned PaLM
+12
+
+Table 15: Effect of LoRA Rank on performance, percentage of trainable parameters, peak HBM usage, and training speed for RL (Reddit TL;DR dataset).
+
+Policy Model Setting for PaLM 2 S
+
+Percentage of trainable
+
+Max Reward
+
+parameters
+
+Peak HBM
+
+Training Speed
+
+Full Tuning
+
+2.27
+
+LoRA Rank 1
+
+2.09
+
+LoRA Rank 4
+
+2.05
+
+LoRA Rank 8
+
+2.14
+
+LoRA Rank 16
+
+2.18
+
+100% 0.005% 0.02% 0.05% 0.09%
+
+100% 76% 76% 76% 77%
+
+1× 1.13× 1.13× 1.13× 1.13×
+
+Table 16: Effect of model size on performance of LoRA RL tuning and full RL tuning (Reddit TL;DR). We report the maximum cumulative reward achieved.
+
+Model Size Full RL Tuning LoRA Rank 16 RL
+
+PaLM 2 XXS
+
+0.80
+
+0.52
+
+PaLM 2 XS
+
+2.22
+
+2.08
+
+PaLM 2 S
+
+2.27
+
+2.18
+
+2 XS reward model trained in Section 4.1. We finetune PaLM 2 XXS policies. We detail the hyperparameter selection process for all the experiments in Appendix A.3.2. We evaluate the trained policies using two metrics, in addition to the maximum cumulative reward score, to see whether our results generalize beyond the cumulative reward score:
+• Summary Quality: the output of a model trained to predict the probability that a human rater will answer "Yes" for all 6 questions defined in SEAHORSE [Clark et al., 2023]: comprehensibility, non repetition, grammar, attribution, main ideas, and conciseness.
+• Natural Language Inference (NLI): the output of a model trained to predict entailment. Higher numbers are better. Low values likely indicate substantial hallucinations.
+5.2.1 LoRA Rank
+As we vary the LoRA rank of the policy model, we observe that we can match the summary quality and the grounding of the fully tuned RL policy with a policy of LoRA rank 8. We achieve this result by training ∼ 0.05% of the model’s total parameters. We list our results in Table 17.
+
+Table 17: Effect of LoRA Rank on performance, percentage of trainable parameters, and peak HBM needed for RL (BOLT message summarization dataset).
+
+Policy
+
+Model Setting
+
+Percentage of trainable
+
+For PaLM 2 XXS Summary Quality NLI
+
+parameters
+
+Full Tuning LoRA Rank 8 LoRA Rank 16 LoRA Rank 32 LoRA Rank 64
+
+0.372 0.411 0.390 0.384 0.398
+
+0.876 0.921 0.904 0.898 0.913
+
+100% 0.05% 0.09% 0.19% 0.37%
+
+13
+
+6 Related Work
+6.1 Pretrained Large Models
+Pretrained Large Models (PLMs - [Brown et al., 2020, Smith et al., 2022, Thoppilan et al., 2022, Workshop et al., 2022, Hoffmann et al., 2022, Chowdhery et al., 2022, Touvron et al., 2023, Anil et al., 2023, OpenAI et al., 2023, Jiang et al., 2023]) have shown strong performance in a variety of tasks. They have been used in many different applications, such as summarization [Stiennon et al., 2020], instruction following [Ouyang et al., 2022, Lai et al., 2023], conversational recommender systems [Friedman et al., 2023], question answering [Nakano et al., 2022], personalized dialogue generation [Jandaghi et al., 2023], text annotation tasks [Gilardi et al., 2023], audio generation [Borsos et al., 2023], robotics tasks [Driess et al., 2023], vision tasks [Chen et al., 2023], and more [Ziegler et al., 2020]. Pretrained [Radford et al., 2018, Ramachandran et al., 2016], and instruction-tuned [Wei et al., 2021] large models, while demonstrating impressive performance on a multitude of tasks, still exhibit many limitations, such as returning non-factual outputs, or not following human instructions correctly.
+6.2 Aligning Pretrained Large Models with Human/AI Preferences
+Aligning Pretrained Large Models with human preferences has become an important area of research to overcome some of their limitations [Christiano et al., 2017, Leike et al., 2018, Wang et al., 2023, Ji et al., 2023], and is also a paradigm commonly used to steer the behavior of PLMs towards human desiderata. This alignment is generally achieved by collecting a large dataset of contexts, pairwise generations for these contexts, and related preferences. Overfitting the reward function can be an important issue when approximating it [Azar et al., 2023], and methods like early stopping, or reducing the number of trainable parameters like we do in this work can help mitigate this issue, and train better policies.
+While most alignment techniques have so far been used on natural language tasks, some recent work has started to apply them on other modalities as well [Lee et al., 2023b, Sun et al., 2023].
+The size and quality of the human preference data can often be a bottleneck to this alignment process. For that reason, different approaches leveraging AI feedback [Bai et al., 2022b, Lee et al., 2023a] have been developed, such as Generator-Critic architectures [Jandaghi et al., 2023, Yuan et al., 2024].
+Different techniques have been developed to align PLMs with human/AI preferences, including Reward rAnked Fine-Tuning (RAFT) [Dong et al., 2023], RRHF [Yuan et al., 2023], Reinforcement Learning from Human Feedback (RLHF) [Christiano et al., 2017, Ouyang et al., 2022, Azar et al., 2023], Direct Preference Optimization (DPO) [Rafailov et al., 2023, Azar et al., 2023], Sequence Likelihood Calibration with Human Feedback (SLIC-HF) [Zhao et al., 2023], Pairwise Cringe Optimization [Xu et al., 2023a], and Self-Rewarding Language Models [Yuan et al., 2024].
+Among these methods, RL{H/AI}F is one of the most popular. As we show here, by combining RL{H/AI}F with parameter-efficient methods like LoRA, the compute and memory efficiencies of the model tuning can be improved substantially.
+6.3 Reinforcement Learning from Human/AI Feedback (RL{H/AI}F)
+Reinforcement Learning has been shown to be a useful technique to align agents with human preferences [Dewey, 2011, Hadfield-Menell et al., 2016, Everitt and Hutter, 2018]. Reinforcement Learning from Human Feedback (RLHF) works by first fitting a reward model on the preferred outputs. This reward model is then used to train a policy using a reinforcement learning algorithm, typically Proximal Policy Optimization Algorithms (PPO) [Schulman et al., 2017].
+Labeling examples to train a reward model can be costly [Casper et al., 2023], and many of the existing works had to use tens of thousands of comparison examples to obtain good reward models to train the RL loop from [Stiennon et al., 2020, Menick et al., 2022]. To alleviate this labour intensive process, some work has been replacing human feedback by AI feedback, leading to RLAIF approaches [Bai et al., 2022b, Kim et al., 2023, Lee et al., 2023a]). [Lee et al., 2023a] show that RLHF and RLAIF can have comparable performance.
+14
+
+6.4 Parameter Efficient Fine-Tuning and Low-Rank Adaptation
+Parameter Efficient Fine-Tuning (PEFT) methods [Houlsby et al., 2019, Ding et al., 2022, Xu et al., 2023b] reduce the number of trainable parameters of a Pretrained Large Model, while maintaining comparable performance to full fine-tuning. These methods are useful to adapt a PLM to downstream tasks: full fine-tuning on these tasks necessitates large amounts of labeled data to avoid overfitting, and significant compute resources. PEFT methods leverage the knowledge already acquired by a PLM, and can adapt a small number of parameters on a relatively small dataset. Hugging Face’s PEFT library is an example implementation of PEFT methods [HuggingFace, 2023a].
+Low-Rank Adaptation (LoRA) [Hu et al., 2021] is an example PEFT method, and the one that we used in our experiments. It factorizes the weight update into two trainable, low rank matrices (down-projection, and up-projection). During training, only these low rank matrices are being updated. Depending on the rank of the decomposition, we end up training only a small fraction of the total number of parameters of the original model. Similarly to the original LoRA paper, we apply the low rank projections to the attention layers, but we note that other layers can be used. LoRA offers the advantages that it doesn’t increase the inference time (unlike adapters [Houlsby et al., 2019], for example, which deepen the model), nor does it reduce the context window (unlike prompt-tuning [Lester et al., 2021], for which some tokens must be used for the tunable prompts). Hydra-RLHF [Santacroce et al., 2023] achieves memory savings in RLHF by sharing a backbone, similarly to our work. They do not, however, compare Hydra-RLHF to fully tuned RLHF. QLoRA [Dettmers et al., 2023] combines quantization, and diverse optimizations with LoRA to achieve memory efficient fine-tuning. These optimizations can be incorporated into our method to lead to further memory gains.
+6.5 Infrastructure
+The Transformer Reinforcement Learning (TRL) library [von Werra et al., 2020] is the closest implementation of Parameter Efficient Reinforcement Learning that we are aware of. Their MultiAdapter RL (MARL) approach uses a shared base model for the entire RLHF pipeline [HuggingFace, 2024]. This feature, however, is experimental and has not been tested yet. Besides, and to the best of our knowledge, the TRL library has only been used in combination with their Parameter Efficient Fine-Tuning (PEFT) library on [HuggingFace, 2023a,b] in the single GPU setting, and it only supports transformer models for text. In contrast, our implementation is parallelized, and generalizes to modalities other than text.
+We implemented our work in Python using the PAX library [Paxml, 2022]. Our input and evaluation pipeline relies on the SeqIO library [Roberts et al., 2022]. We used an internally designed RL training loop infrastructure.
+7 Conclusion and Future Work
+We have presented PERL, a Parameter Efficient Reinforcement Learning technique that can train a Reward Model and RL tune a Language Model Policy with LoRA. Through extensive experiments on various datasets, we have shown that this method achieves comparable results to conventional RLHF, for which all the model parameters are tuned, while reducing memory usage by approx 50%, and speeding up the training by up to 90% for the Reward Model training, and more modest memory savings of 20%, and speed-up of 10% in the RL loop.
+As we demonstrate the success of the PERL method, there are still some questions that are underexplored in our study. We are planning to investigate the following avenues as part of our future work:
+• PERL matches the performance on in-domain held out test sets, but the exploration of broader generalization would be interesting. There is room to explore ensemble models like Mixture-of-LoRA adapters [Zhu et al., 2023] for the RLHF process at a minimal computational cost that will introduce the robustness needed in training to facilitate crossdomain generalization.
+• Reward models are one of the most critical pieces of the RLHF process, but they are prone to the “reward hacking” behavior. Recent works like Ramé et al. [2024] show that weight-
+15
+
+averaging models mitigate reward hacking. It would be interesting to explore this with PERL, as it can provide similar benefits by weight-averaging multiple adapters at a much lower computational cost.
+Ethical Considerations
+To create the Taskmaster Coffee dataset, crowdsourced (Mechanical Turk) workers were paid to create task-based conversational dialogues of about 6-8 turns, each taking roughly three minutes or less to complete. At the time of collection, the project drew from a pool of more than 1,000 U.S.based workers who had shown proficiency in previous dialogue writing tasks. None are personally identifiable, as is standard on the MTurk platform.
+Reproducibility
+Three of the datasets we experimented with are publicly available:
+• The Anthropic-HH dataset [Anthropic, 2022, Bai et al., 2022a] • The Reddit TL;DR dataset, processed following the work done by Stiennon et al. [2020]
+[OpenAI, 2022] • The Stanford Human Preferences dataset [Stanford, 2022, Ethayarajh et al., 2022]
+We release the Tasksmaster Coffee and Ticketing datasets as part of this work. Details on the collection of these datasets are given in Appendix A.8.1. We experimented on a dataset of Neutral Point of View answers to sensitive topics that we have collected. Details on how it was collected, as well as example samples, are given in Appendix A.7.1. The UI automation dataset we used will be released as part of concurrent work, and is described in more details in Appendix A.6.1. An instruction-tuned version of the PaLM 2 S model used in this work is available on GCP’s Vertex AI platform. The same methodology could be adapted to run experiments on publicly available large language models.
+Acknowledgements
+We thank the individuals who designed and built the RL training infrastructure used in this paper: Léonard Hussenot, Johan Ferret, Robert Dadashi, Geoffrey Cideron, Alexis Jacq, Sabela Ramos, Piotr Stanczyk, Sertan Girgin, Danila Sinopalnikov, Amélie Héliou, Nikola Momchev, and Olivier Bachem. Léonard Hussenot was instrumental in helping us build our first parameter efficient RL training pipelines. We thank Ahmad Beirami for useful conversations that led to the idea of using PERL as an efficient ensembling method as future work, and Yun Zhu for useful discussions about some of the datasets used. Finally, the authors would like to thank Alex Castro-Ros, Kevin Robinson, and Kathy Meier-Hellstern for their careful reviews and many suggestions to improve our initial manuscript.
+References
+Dario Amodei, Chris Olah, Jacob Steinhardt, Paul Christiano, John Schulman, and Dan Mané. Concrete problems in ai safety. arXiv preprint arXiv:1606.06565, 2016.
+Rohan Anil, Andrew M. Dai, Orhan Firat, Melvin Johnson, Dmitry Lepikhin, Alexandre Passos, Siamak Shakeri, Emanuel Taropa, Paige Bailey, Zhifeng Chen, Eric Chu, Jonathan H. Clark, Laurent El Shafey, Yanping Huang, Kathy Meier-Hellstern, Gaurav Mishra, Erica Moreira, Mark Omernick, Kevin Robinson, Sebastian Ruder, Yi Tay, Kefan Xiao, Yuanzhong Xu, Yujing Zhang, Gustavo Hernandez Abrego, Junwhan Ahn, Jacob Austin, Paul Barham, Jan Botha, James Bradbury,
+16
+
+Siddhartha Brahma, Kevin Brooks, Michele Catasta, Yong Cheng, Colin Cherry, Christopher A. Choquette-Choo, Aakanksha Chowdhery, Clément Crepy, Shachi Dave, Mostafa Dehghani, Sunipa Dev, Jacob Devlin, Mark Díaz, Nan Du, Ethan Dyer, Vlad Feinberg, Fangxiaoyu Feng, Vlad Fienber, Markus Freitag, Xavier Garcia, Sebastian Gehrmann, Lucas Gonzalez, Guy Gur-Ari, Steven Hand, Hadi Hashemi, Le Hou, Joshua Howland, Andrea Hu, Jeffrey Hui, Jeremy Hurwitz, Michael Isard, Abe Ittycheriah, Matthew Jagielski, Wenhao Jia, Kathleen Kenealy, Maxim Krikun, Sneha Kudugunta, Chang Lan, Katherine Lee, Benjamin Lee, Eric Li, Music Li, Wei Li, YaGuang Li, Jian Li, Hyeontaek Lim, Hanzhao Lin, Zhongtao Liu, Frederick Liu, Marcello Maggioni, Aroma Mahendru, Joshua Maynez, Vedant Misra, Maysam Moussalem, Zachary Nado, John Nham, Eric Ni, Andrew Nystrom, Alicia Parrish, Marie Pellat, Martin Polacek, Alex Polozov, Reiner Pope, Siyuan Qiao, Emily Reif, Bryan Richter, Parker Riley, Alex Castro Ros, Aurko Roy, Brennan Saeta, Rajkumar Samuel, Renee Shelby, Ambrose Slone, Daniel Smilkov, David R. So, Daniel Sohn, Simon Tokumine, Dasha Valter, Vijay Vasudevan, Kiran Vodrahalli, Xuezhi Wang, Pidong Wang, Zirui Wang, Tao Wang, John Wieting, Yuhuai Wu, Kelvin Xu, Yunhan Xu, Linting Xue, Pengcheng Yin, Jiahui Yu, Qiao Zhang, Steven Zheng, Ce Zheng, Weikang Zhou, Denny Zhou, Slav Petrov, and Yonghui Wu. Palm 2 technical report, 2023.
+Anthropic. The Anthropic-HH Dataset, 2022. https://huggingface.co/datasets/Anthropi c/hh-rlhf [Accessed: 2024-01-03].
+Mohammad Gheshlaghi Azar, Mark Rowland, Bilal Piot, Daniel Guo, Daniele Calandriello, Michal Valko, and Rémi Munos. A general theoretical paradigm to understand learning from human preferences, 2023.
+Yuntao Bai, Andy Jones, Kamal Ndousse, Amanda Askell, Anna Chen, Nova DasSarma, Dawn Drain, Stanislav Fort, Deep Ganguli, Tom Henighan, Nicholas Joseph, Saurav Kadavath, Jackson Kernion, Tom Conerly, Sheer El-Showk, Nelson Elhage, Zac Hatfield-Dodds, Danny Hernandez, Tristan Hume, Scott Johnston, Shauna Kravec, Liane Lovitt, Neel Nanda, Catherine Olsson, Dario Amodei, Tom Brown, Jack Clark, Sam McCandlish, Chris Olah, Ben Mann, and Jared Kaplan. Training a helpful and harmless assistant with reinforcement learning from human feedback, 2022a.
+Yuntao Bai, Saurav Kadavath, Sandipan Kundu, Amanda Askell, Jackson Kernion, Andy Jones, Anna Chen, Anna Goldie, Azalia Mirhoseini, Cameron McKinnon, et al. Constitutional ai: Harmlessness from ai feedback. arXiv preprint arXiv:2212.08073, 2022b.
+Rishi Bommasani, Drew A. Hudson, Ehsan Adeli, Russ Altman, Simran Arora, Sydney von Arx, Michael S. Bernstein, Jeannette Bohg, Antoine Bosselut, Emma Brunskill, Erik Brynjolfsson, Shyamal Buch, Dallas Card, Rodrigo Castellon, Niladri Chatterji, Annie Chen, Kathleen Creel, Jared Quincy Davis, Dora Demszky, Chris Donahue, Moussa Doumbouya, Esin Durmus, Stefano Ermon, John Etchemendy, Kawin Ethayarajh, Li Fei-Fei, Chelsea Finn, Trevor Gale, Lauren Gillespie, Karan Goel, Noah Goodman, Shelby Grossman, Neel Guha, Tatsunori Hashimoto, Peter Henderson, John Hewitt, Daniel E. Ho, Jenny Hong, Kyle Hsu, Jing Huang, Thomas Icard, Saahil Jain, Dan Jurafsky, Pratyusha Kalluri, Siddharth Karamcheti, Geoff Keeling, Fereshte Khani, Omar Khattab, Pang Wei Koh, Mark Krass, Ranjay Krishna, Rohith Kuditipudi, Ananya Kumar, Faisal Ladhak, Mina Lee, Tony Lee, Jure Leskovec, Isabelle Levent, Xiang Lisa Li, Xuechen Li, Tengyu Ma, Ali Malik, Christopher D. Manning, Suvir Mirchandani, Eric Mitchell, Zanele Munyikwa, Suraj Nair, Avanika Narayan, Deepak Narayanan, Ben Newman, Allen Nie, Juan Carlos Niebles, Hamed Nilforoshan, Julian Nyarko, Giray Ogut, Laurel Orr, Isabel Papadimitriou, Joon Sung Park, Chris Piech, Eva Portelance, Christopher Potts, Aditi Raghunathan, Rob Reich, Hongyu Ren, Frieda Rong, Yusuf Roohani, Camilo Ruiz, Jack Ryan, Christopher Ré, Dorsa Sadigh, Shiori Sagawa, Keshav Santhanam, Andy Shih, Krishnan Srinivasan, Alex Tamkin, Rohan Taori, Armin W. Thomas, Florian Tramèr, Rose E. Wang, William Wang, Bohan Wu, Jiajun Wu, Yuhuai Wu, Sang Michael Xie, Michihiro Yasunaga, Jiaxuan You, Matei Zaharia, Michael Zhang, Tianyi Zhang, Xikun Zhang, Yuhui Zhang, Lucia Zheng, Kaitlyn Zhou, and Percy Liang. On the opportunities and risks of foundation models, 2022.
+Zalán Borsos, Raphaël Marinier, Damien Vincent, Eugene Kharitonov, Olivier Pietquin, Matt Sharifi, Dominik Roblek, Olivier Teboul, David Grangier, Marco Tagliasacchi, and Neil Zeghidour. Audiolm: a language modeling approach to audio generation, 2023.
+17
+
+James Bradbury, Roy Frostig, Peter Hawkins, Matthew James Johnson, Chris Leary, Dougal Maclaurin, George Necula, Adam Paszke, Jake VanderPlas, Skye Wanderman-Milne, et al. Jax: composable transformations of python+ numpy programs, 2018.
+Ralph Allan Bradley and Milton E. Terry. Rank analysis of incomplete block designs: I. the method of paired comparisons. Biometrika, 39:324, 1952. URL https://api.semanticscholar.or g/CorpusID:125209808.
+Tom Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared D Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, et al. Language models are few-shot learners. Advances in neural information processing systems, 33:1877–1901, 2020.
+Bill Byrne, Karthik Krishnamoorthi, Saravanan Ganesh, and Mihir Kale. Tickettalk: Toward human-level performance with end-to-end, transaction-based dialog systems. In Chengqing Zong, Fei Xia, Wenjie Li, and Roberto Navigli, editors, Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers), pages 671–680, Online, aug 2021. Association for Computational Linguistics. doi: 10.18653/v1/2021.acl-long.55. URL https: //aclanthology.org/2021.acl-long.55.
+Stephen Casper, Xander Davies, Claudia Shi, Thomas Krendl Gilbert, Jérémy Scheurer, Javier Rando, Rachel Freedman, Tomasz Korbak, David Lindner, Pedro Freire, Tony Wang, Samuel Marks, Charbel-Raphaël Segerie, Micah Carroll, Andi Peng, Phillip Christoffersen, Mehul Damani, Stewart Slocum, Usman Anwar, Anand Siththaranjan, Max Nadeau, Eric J. Michaud, Jacob Pfau, Dmitrii Krasheninnikov, Xin Chen, Lauro Langosco, Peter Hase, Erdem Bıyık, Anca Dragan, David Krueger, Dorsa Sadigh, and Dylan Hadfield-Menell. Open problems and fundamental limitations of reinforcement learning from human feedback, 2023.
+Song Chen et al. Bolt english sms/chat ldc2018t19. Web Download, 2018. Philadelphia: Linguistic Data Consortium.
+Xi Chen, Xiao Wang, Lucas Beyer, Alexander Kolesnikov, Jialin Wu, Paul Voigtlaender, Basil Mustafa, Sebastian Goodman, Ibrahim Alabdulmohsin, Piotr Padlewski, Daniel Salz, Xi Xiong, Daniel Vlasic, Filip Pavetic, Keran Rong, Tianli Yu, Daniel Keysers, Xiaohua Zhai, and Radu Soricut. Pali-3 vision language models: Smaller, faster, stronger, 2023.
+Aakanksha Chowdhery, Sharan Narang, Jacob Devlin, Maarten Bosma, Gaurav Mishra, Adam Roberts, Paul Barham, Hyung Won Chung, Charles Sutton, Sebastian Gehrmann, Parker Schuh, Kensen Shi, Sasha Tsvyashchenko, Joshua Maynez, Abhishek Rao, Parker Barnes, Yi Tay, Noam Shazeer, Vinodkumar Prabhakaran, Emily Reif, Nan Du, Ben Hutchinson, Reiner Pope, James Bradbury, Jacob Austin, Michael Isard, Guy Gur-Ari, Pengcheng Yin, Toju Duke, Anselm Levskaya, Sanjay Ghemawat, Sunipa Dev, Henryk Michalewski, Xavier Garcia, Vedant Misra, Kevin Robinson, Liam Fedus, Denny Zhou, Daphne Ippolito, David Luan, Hyeontaek Lim, Barret Zoph, Alexander Spiridonov, Ryan Sepassi, David Dohan, Shivani Agrawal, Mark Omernick, Andrew M. Dai, Thanumalayan Sankaranarayana Pillai, Marie Pellat, Aitor Lewkowycz, Erica Moreira, Rewon Child, Oleksandr Polozov, Katherine Lee, Zongwei Zhou, Xuezhi Wang, Brennan Saeta, Mark Diaz, Orhan Firat, Michele Catasta, Jason Wei, Kathy Meier-Hellstern, Douglas Eck, Jeff Dean, Slav Petrov, and Noah Fiedel. Palm: Scaling language modeling with pathways, 2022.
+Paul F Christiano, Jan Leike, Tom Brown, Miljan Martic, Shane Legg, and Dario Amodei. Deep reinforcement learning from human preferences. Advances in neural information processing systems, 30, 2017.
+Elizabeth Clark, Shruti Rijhwani, Sebastian Gehrmann, Joshua Maynez, Roee Aharoni, Vitaly Nikolaev, Thibault Sellam, Aditya Siddhant, Dipanjan Das, and Ankur P. Parikh. Seahorse: A multilingual, multifaceted dataset for summarization evaluation, 2023.
+Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, and Luke Zettlemoyer. Qlora: Efficient finetuning of quantized llms, 2023.
+Daniel Dewey. Learning what to value. In International conference on artificial general intelligence, pages 309–314. Springer, 2011.
+18
+
+Ning Ding, Yujia Qin, Guang Yang, Fuchao Wei, Zonghan Yang, Yusheng Su, Shengding Hu, Yulin Chen, Chi-Min Chan, Weize Chen, Jing Yi, Weilin Zhao, Xiaozhi Wang, Zhiyuan Liu, Hai-Tao Zheng, Jianfei Chen, Yang Liu, Jie Tang, Juanzi Li, and Maosong Sun. Delta tuning: A comprehensive study of parameter efficient methods for pre-trained language models, 2022.
+Hanze Dong, Wei Xiong, Deepanshu Goyal, Yihan Zhang, Winnie Chow, Rui Pan, Shizhe Diao, Jipeng Zhang, Kashun Shum, and Tong Zhang. Raft: Reward ranked finetuning for generative foundation model alignment, 2023.
+Danny Driess, Fei Xia, Mehdi S. M. Sajjadi, Corey Lynch, Aakanksha Chowdhery, Brian Ichter, Ayzaan Wahid, Jonathan Tompson, Quan Vuong, Tianhe Yu, Wenlong Huang, Yevgen Chebotar, Pierre Sermanet, Daniel Duckworth, Sergey Levine, Vincent Vanhoucke, Karol Hausman, Marc Toussaint, Klaus Greff, Andy Zeng, Igor Mordatch, and Pete Florence. Palm-e: An embodied multimodal language model, 2023.
+Kawin Ethayarajh, Yejin Choi, and Swabha Swayamdipta. Understanding dataset difficulty with V-usable information. In Kamalika Chaudhuri, Stefanie Jegelka, Le Song, Csaba Szepesvari, Gang Niu, and Sivan Sabato, editors, Proceedings of the 39th International Conference on Machine Learning, volume 162 of Proceedings of Machine Learning Research, pages 5988–6008. PMLR, 17–23 Jul 2022. URL https://proceedings.mlr.press/v162/ethayarajh22a.html.
+Tom Everitt and Marcus Hutter. Avoiding wireheading with value reinforcement learning. In Artificial General Intelligence: 9th International Conference, AGI 2016, New York, NY, USA, July 16-19, 2016, Proceedings 9, pages 12–22. Springer, 2016.
+Tom Everitt and Marcus Hutter. The alignment problem for bayesian history-based reinforcement learners. Under submission, 2018.
+Angela Fan, Yacine Jernite, Ethan Perez, David Grangier, Jason Weston, and Michael Auli. Eli5: Long form question answering, 2019.
+Roy Fox, Ari Pakman, and Naftali Tishby. Taming the noise in reinforcement learning via soft updates. arXiv preprint arXiv:1512.08562, 2015.
+Luke Friedman, Sameer Ahuja, David Allen, Terry Tan, Hakim Sidahmed, Changbo Long, Jun Xie, Gabriel Schubiner, Ajay Patel, Harsh Lara, et al. Leveraging large language models in conversational recommender systems. arXiv preprint arXiv:2305.07961, 2023.
+Matthieu Geist, Bruno Scherrer, and Olivier Pietquin. A theory of regularized markov decision processes. In International Conference on Machine Learning, pages 2160–2169. PMLR, 2019.
+Fabrizio Gilardi, Meysam Alizadeh, and Maël Kubli. Chatgpt outperforms crowd workers for textannotation tasks. Proceedings of the National Academy of Sciences, 120(30), July 2023. ISSN 1091-6490. doi: 10.1073/pnas.2305016120. URL http://dx.doi.org/10.1073/pnas.2305 016120.
+Dylan Hadfield-Menell, Anca Dragan, Pieter Abbeel, and Stuart Russell. Cooperative inverse reinforcement learning, 2016.
+Jordan Hoffmann, Sebastian Borgeaud, Arthur Mensch, Elena Buchatskaya, Trevor Cai, Eliza Rutherford, Diego de Las Casas, Lisa Anne Hendricks, Johannes Welbl, Aidan Clark, Tom Hennigan, Eric Noland, Katie Millican, George van den Driessche, Bogdan Damoc, Aurelia Guy, Simon Osindero, Karen Simonyan, Erich Elsen, Jack W. Rae, Oriol Vinyals, and Laurent Sifre. Training compute-optimal large language models, 2022.
+Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski, Bruna Morrone, Quentin de Laroussilhe, Andrea Gesmundo, Mona Attariyan, and Sylvain Gelly. Parameter-efficient transfer learning for nlp, 2019.
+Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. Lora: Low-rank adaptation of large language models, 2021.
+HuggingFace. Fine-tuning 20B LLMs with RLHF on a 24GB consumer GPU, 2023a. https: //huggingface.co/blog/trl-peft [Accessed: 2024-01-03].
+19
+
+HuggingFace. StackLLaMA: A hands-on guide to train LLaMA with RLHF, 2023b. https: //huggingface.co/blog/stackllama [Accessed: 2024-01-03].
+HuggingFace. Multi-Adapter RL (MARL), 2024. https://huggingface.co/docs/trl/en/mul ti_adapter_rl [Accessed: 2024-02-27].
+Pegah Jandaghi, XiangHai Sheng, Xinyi Bai, Jay Pujara, and Hakim Sidahmed. Faithful personabased conversational dataset generation with large language models, 2023.
+Jiaming Ji, Tianyi Qiu, Boyuan Chen, Borong Zhang, Hantao Lou, Kaile Wang, Yawen Duan, Zhonghao He, Jiayi Zhou, Zhaowei Zhang, et al. Ai alignment: A comprehensive survey. arXiv preprint arXiv:2310.19852, 2023.
+Albert Q. Jiang, Alexandre Sablayrolles, Arthur Mensch, Chris Bamford, Devendra Singh Chaplot, Diego de las Casas, Florian Bressand, Gianna Lengyel, Guillaume Lample, Lucile Saulnier, Lélio Renard Lavaud, Marie-Anne Lachaux, Pierre Stock, Teven Le Scao, Thibaut Lavril, Thomas Wang, Timothée Lacroix, and William El Sayed. Mistral 7b, 2023.
+Sungdong Kim, Sanghwan Bae, Jamin Shin, Soyoung Kang, Donghyun Kwak, Kang Min Yoo, and Minjoon Seo. Aligning large language models through synthetic feedback. arXiv preprint arXiv:2305.13735, 2023.
+Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic optimization, 2017.
+Viet Dac Lai, Chien Van Nguyen, Nghia Trung Ngo, Thuat Nguyen, Franck Dernoncourt, Ryan A. Rossi, and Thien Huu Nguyen. Okapi: Instruction-tuned large language models in multiple languages with reinforcement learning from human feedback, 2023.
+Harrison Lee, Samrat Phatale, Hassan Mansoor, Kellie Lu, Thomas Mesnard, Colton Bishop, Victor Carbune, and Abhinav Rastogi. Rlaif: Scaling reinforcement learning from human feedback with ai feedback. arXiv preprint arXiv:2309.00267, 2023a.
+Kimin Lee, Hao Liu, Moonkyung Ryu, Olivia Watkins, Yuqing Du, Craig Boutilier, Pieter Abbeel, Mohammad Ghavamzadeh, and Shixiang Shane Gu. Aligning text-to-image models using human feedback. arXiv preprint arXiv:2302.12192, 2023b.
+Jan Leike, David Krueger, Tom Everitt, Miljan Martic, Vishal Maini, and Shane Legg. Scalable agent alignment via reward modeling: a research direction. arXiv preprint arXiv:1811.07871, 2018.
+Brian Lester, Rami Al-Rfou, and Noah Constant. The power of scale for parameter-efficient prompt tuning, 2021.
+Wei Li. Learning UI navigation through demonstrations composed of macro actions, October 2021.
+Wei Li, Fu-Lin Hsu, Will Bishop, Folawiyo Campbell-Ajala, Oriana Riva, and Max Lin. Uinav: A maker of ui automation agents, 2023.
+Jacob Menick, Maja Trebacz, Vladimir Mikulik, John Aslanides, Francis Song, Martin Chadwick, Mia Glaese, Susannah Young, Lucy Campbell-Gillingham, Geoffrey Irving, and Nat McAleese. Teaching language models to support answers with verified quotes, 2022.
+Reiichiro Nakano, Jacob Hilton, Suchir Balaji, Jeff Wu, Long Ouyang, Christina Kim, Christopher Hesse, Shantanu Jain, Vineet Kosaraju, William Saunders, Xu Jiang, Karl Cobbe, Tyna Eloundou, Gretchen Krueger, Kevin Button, Matthew Knight, Benjamin Chess, and John Schulman. Webgpt: Browser-assisted question-answering with human feedback, 2022.
+OpenAI. Learning to Summarize from Human Feedback Dataset, 2022. https://huggingface. co/datasets/openai/summarize_from_feedback [Accessed: 2024-01-03].
+OpenAI, :, Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, Red Avila, Igor Babuschkin, Suchir Balaji, Valerie Balcom, Paul Baltescu, Haiming Bao, Mo Bavarian, Jeff Belgum, Irwan Bello, Jake Berdine, Gabriel Bernadett-Shapiro, Christopher Berner, Lenny Bogdonoff, Oleg Boiko, Madelaine Boyd, Anna-Luisa Brakman, Greg Brockman, Tim
+20
+
+Brooks, Miles Brundage, Kevin Button, Trevor Cai, Rosie Campbell, Andrew Cann, Brittany Carey, Chelsea Carlson, Rory Carmichael, Brooke Chan, Che Chang, Fotis Chantzis, Derek Chen, Sully Chen, Ruby Chen, Jason Chen, Mark Chen, Ben Chess, Chester Cho, Casey Chu, Hyung Won Chung, Dave Cummings, Jeremiah Currier, Yunxing Dai, Cory Decareaux, Thomas Degry, Noah Deutsch, Damien Deville, Arka Dhar, David Dohan, Steve Dowling, Sheila Dunning, Adrien Ecoffet, Atty Eleti, Tyna Eloundou, David Farhi, Liam Fedus, Niko Felix, Simón Posada Fishman, Juston Forte, Isabella Fulford, Leo Gao, Elie Georges, Christian Gibson, Vik Goel, Tarun Gogineni, Gabriel Goh, Rapha Gontijo-Lopes, Jonathan Gordon, Morgan Grafstein, Scott Gray, Ryan Greene, Joshua Gross, Shixiang Shane Gu, Yufei Guo, Chris Hallacy, Jesse Han, Jeff Harris, Yuchen He, Mike Heaton, Johannes Heidecke, Chris Hesse, Alan Hickey, Wade Hickey, Peter Hoeschele, Brandon Houghton, Kenny Hsu, Shengli Hu, Xin Hu, Joost Huizinga, Shantanu Jain, Shawn Jain, Joanne Jang, Angela Jiang, Roger Jiang, Haozhun Jin, Denny Jin, Shino Jomoto, Billie Jonn, Heewoo Jun, Tomer Kaftan, Łukasz Kaiser, Ali Kamali, Ingmar Kanitscheider, Nitish Shirish Keskar, Tabarak Khan, Logan Kilpatrick, Jong Wook Kim, Christina Kim, Yongjik Kim, Hendrik Kirchner, Jamie Kiros, Matt Knight, Daniel Kokotajlo, Łukasz Kondraciuk, Andrew Kondrich, Aris Konstantinidis, Kyle Kosic, Gretchen Krueger, Vishal Kuo, Michael Lampe, Ikai Lan, Teddy Lee, Jan Leike, Jade Leung, Daniel Levy, Chak Ming Li, Rachel Lim, Molly Lin, Stephanie Lin, Mateusz Litwin, Theresa Lopez, Ryan Lowe, Patricia Lue, Anna Makanju, Kim Malfacini, Sam Manning, Todor Markov, Yaniv Markovski, Bianca Martin, Katie Mayer, Andrew Mayne, Bob McGrew, Scott Mayer McKinney, Christine McLeavey, Paul McMillan, Jake McNeil, David Medina, Aalok Mehta, Jacob Menick, Luke Metz, Andrey Mishchenko, Pamela Mishkin, Vinnie Monaco, Evan Morikawa, Daniel Mossing, Tong Mu, Mira Murati, Oleg Murk, David Mély, Ashvin Nair, Reiichiro Nakano, Rajeev Nayak, Arvind Neelakantan, Richard Ngo, Hyeonwoo Noh, Long Ouyang, Cullen O’Keefe, Jakub Pachocki, Alex Paino, Joe Palermo, Ashley Pantuliano, Giambattista Parascandolo, Joel Parish, Emy Parparita, Alex Passos, Mikhail Pavlov, Andrew Peng, Adam Perelman, Filipe de Avila Belbute Peres, Michael Petrov, Henrique Ponde de Oliveira Pinto, Michael, Pokorny, Michelle Pokrass, Vitchyr Pong, Tolly Powell, Alethea Power, Boris Power, Elizabeth Proehl, Raul Puri, Alec Radford, Jack Rae, Aditya Ramesh, Cameron Raymond, Francis Real, Kendra Rimbach, Carl Ross, Bob Rotsted, Henri Roussez, Nick Ryder, Mario Saltarelli, Ted Sanders, Shibani Santurkar, Girish Sastry, Heather Schmidt, David Schnurr, John Schulman, Daniel Selsam, Kyla Sheppard, Toki Sherbakov, Jessica Shieh, Sarah Shoker, Pranav Shyam, Szymon Sidor, Eric Sigler, Maddie Simens, Jordan Sitkin, Katarina Slama, Ian Sohl, Benjamin Sokolowsky, Yang Song, Natalie Staudacher, Felipe Petroski Such, Natalie Summers, Ilya Sutskever, Jie Tang, Nikolas Tezak, Madeleine Thompson, Phil Tillet, Amin Tootoonchian, Elizabeth Tseng, Preston Tuggle, Nick Turley, Jerry Tworek, Juan Felipe Cerón Uribe, Andrea Vallone, Arun Vijayvergiya, Chelsea Voss, Carroll Wainwright, Justin Jay Wang, Alvin Wang, Ben Wang, Jonathan Ward, Jason Wei, CJ Weinmann, Akila Welihinda, Peter Welinder, Jiayi Weng, Lilian Weng, Matt Wiethoff, Dave Willner, Clemens Winter, Samuel Wolrich, Hannah Wong, Lauren Workman, Sherwin Wu, Jeff Wu, Michael Wu, Kai Xiao, Tao Xu, Sarah Yoo, Kevin Yu, Qiming Yuan, Wojciech Zaremba, Rowan Zellers, Chong Zhang, Marvin Zhang, Shengjia Zhao, Tianhao Zheng, Juntang Zhuang, William Zhuk, and Barret Zoph. Gpt-4 technical report, 2023.
+Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. Training language models to follow instructions with human feedback. Advances in Neural Information Processing Systems, 35: 27730–27744, 2022.
+Paxml. Paxml: a Jax-based machine learning framework for training large scale models, 2022. https://github.com/google/paxml [Accessed: 2024-01-03].
+Alec Radford, Karthik Narasimhan, Tim Salimans, Ilya Sutskever, et al. Improving language understanding by generative pre-training, 2018.
+Rafael Rafailov, Archit Sharma, Eric Mitchell, Stefano Ermon, Christopher D Manning, and Chelsea Finn. Direct preference optimization: Your language model is secretly a reward model. arXiv preprint arXiv:2305.18290, 2023.
+Prajit Ramachandran, Peter J Liu, and Quoc V Le. Unsupervised pretraining for sequence to sequence learning. arXiv preprint arXiv:1611.02683, 2016.
+Alexandre Ramé, Nino Vieillard, Léonard Hussenot, Robert Dadashi, Geoffrey Cideron, Olivier Bachem, and Johan Ferret. Warm: On the benefits of weight averaged reward models, 2024.
+21
+
+Machel Reid, Nikolay Savinov, Denis Teplyashin, Dmitry Lepikhin, Timothy Lillicrap, Jean-baptiste Alayrac, Radu Soricut, Angeliki Lazaridou, Orhan Firat, Julian Schrittwieser, et al. Gemini 1.5: Unlocking multimodal understanding across millions of tokens of context. arXiv preprint arXiv:2403.05530, 2024.
+Adam Roberts, Hyung Won Chung, Anselm Levskaya, Gaurav Mishra, James Bradbury, Daniel Andor, Sharan Narang, Brian Lester, Colin Gaffney, Afroz Mohiuddin, Curtis Hawthorne, Aitor Lewkowycz, Alex Salcianu, Marc van Zee, Jacob Austin, Sebastian Goodman, Livio Baldini Soares, Haitang Hu, Sasha Tsvyashchenko, Aakanksha Chowdhery, Jasmijn Bastings, Jannis Bulian, Xavier Garcia, Jianmo Ni, Andrew Chen, Kathleen Kenealy, Jonathan H. Clark, Stephan Lee, Dan Garrette, James Lee-Thorp, Colin Raffel, Noam Shazeer, Marvin Ritter, Maarten Bosma, Alexandre Passos, Jeremy Maitin-Shepard, Noah Fiedel, Mark Omernick, Brennan Saeta, Ryan Sepassi, Alexander Spiridonov, Joshua Newlan, and Andrea Gesmundo. Scaling up models and data with t5x and seqio, 2022.
+Michael Santacroce, Yadong Lu, Han Yu, Yuanzhi Li, and Yelong Shen. Efficient rlhf: Reducing the memory usage of ppo, 2023.
+John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms, 2017.
+Noam Shazeer and Mitchell Stern. Adafactor: Adaptive learning rates with sublinear memory cost, 2018.
+Shaden Smith, Mostofa Patwary, Brandon Norick, Patrick LeGresley, Samyam Rajbhandari, Jared Casper, Zhun Liu, Shrimai Prabhumoye, George Zerveas, Vijay Korthikanti, et al. Using deepspeed and megatron to train megatron-turing nlg 530b, a large-scale generative language model. arXiv preprint arXiv:2201.11990, 2022.
+Stanford. Stanford Human Preferences Dataset, 2022. https://huggingface.co/datasets/st anfordnlp/SHP [Accessed: 2024-01-03].
+Nisan Stiennon, Long Ouyang, Jeffrey Wu, Daniel Ziegler, Ryan Lowe, Chelsea Voss, Alec Radford, Dario Amodei, and Paul F Christiano. Learning to summarize with human feedback. Advances in Neural Information Processing Systems, 33:3008–3021, 2020.
+Zhiqing Sun, Sheng Shen, Shengcao Cao, Haotian Liu, Chunyuan Li, Yikang Shen, Chuang Gan, Liang-Yan Gui, Yu-Xiong Wang, Yiming Yang, et al. Aligning large multimodal models with factually augmented rlhf. arXiv preprint arXiv:2309.14525, 2023.
+Gemini Team, Rohan Anil, Sebastian Borgeaud, Yonghui Wu, Jean-Baptiste Alayrac, Jiahui Yu, Radu Soricut, Johan Schalkwyk, Andrew M. Dai, Anja Hauth, Katie Millican, David Silver, Slav Petrov, Melvin Johnson, Ioannis Antonoglou, Julian Schrittwieser, Amelia Glaese, Jilin Chen, Emily Pitler, Timothy Lillicrap, Angeliki Lazaridou, Orhan Firat, James Molloy, Michael Isard, Paul R. Barham, Tom Hennigan, Benjamin Lee, Fabio Viola, Malcolm Reynolds, Yuanzhong Xu, Ryan Doherty, Eli Collins, Clemens Meyer, Eliza Rutherford, Erica Moreira, Kareem Ayoub, Megha Goel, George Tucker, Enrique Piqueras, Maxim Krikun, Iain Barr, Nikolay Savinov, Ivo Danihelka, Becca Roelofs, Anaïs White, Anders Andreassen, Tamara von Glehn, Lakshman Yagati, Mehran Kazemi, Lucas Gonzalez, Misha Khalman, Jakub Sygnowski, Alexandre Frechette, Charlotte Smith, Laura Culp, Lev Proleev, Yi Luan, Xi Chen, James Lottes, Nathan Schucher, Federico Lebron, Alban Rrustemi, Natalie Clay, Phil Crone, Tomas Kocisky, Jeffrey Zhao, Bartek Perz, Dian Yu, Heidi Howard, Adam Bloniarz, Jack W. Rae, Han Lu, Laurent Sifre, Marcello Maggioni, Fred Alcober, Dan Garrette, Megan Barnes, Shantanu Thakoor, Jacob Austin, Gabriel Barth-Maron, William Wong, Rishabh Joshi, Rahma Chaabouni, Deeni Fatiha, Arun Ahuja, Ruibo Liu, Yunxuan Li, Sarah Cogan, Jeremy Chen, Chao Jia, Chenjie Gu, Qiao Zhang, Jordan Grimstad, Ale Jakse Hartman, Martin Chadwick, Gaurav Singh Tomar, Xavier Garcia, Evan Senter, Emanuel Taropa, Thanumalayan Sankaranarayana Pillai, Jacob Devlin, Michael Laskin, Diego de Las Casas, Dasha Valter, Connie Tao, Lorenzo Blanco, Adrià Puigdomènech Badia, David Reitter, Mianna Chen, Jenny Brennan, Clara Rivera, Sergey Brin, Shariq Iqbal, Gabriela Surita, Jane Labanowski, Abhi Rao, Stephanie Winkler, Emilio Parisotto, Yiming Gu, Kate Olszewska, Yujing Zhang, Ravi Addanki, Antoine Miech, Annie Louis, Laurent El Shafey, Denis Teplyashin, Geoff Brown, Elliot Catt, Nithya Attaluri, Jan Balaguer, Jackie Xiang, Pidong Wang, Zoe Ashwood,
+22
+
+Anton Briukhov, Albert Webson, Sanjay Ganapathy, Smit Sanghavi, Ajay Kannan, Ming-Wei Chang, Axel Stjerngren, Josip Djolonga, Yuting Sun, Ankur Bapna, Matthew Aitchison, Pedram Pejman, Henryk Michalewski, Tianhe Yu, Cindy Wang, Juliette Love, Junwhan Ahn, Dawn Bloxwich, Kehang Han, Peter Humphreys, Thibault Sellam, James Bradbury, Varun Godbole, Sina Samangooei, Bogdan Damoc, Alex Kaskasoli, Sébastien M. R. Arnold, Vijay Vasudevan, Shubham Agrawal, Jason Riesa, Dmitry Lepikhin, Richard Tanburn, Srivatsan Srinivasan, Hyeontaek Lim, Sarah Hodkinson, Pranav Shyam, Johan Ferret, Steven Hand, Ankush Garg, Tom Le Paine, Jian Li, Yujia Li, Minh Giang, Alexander Neitz, Zaheer Abbas, Sarah York, Machel Reid, Elizabeth Cole, Aakanksha Chowdhery, Dipanjan Das, Dominika Rogozin´ska, Vitaly Nikolaev, Pablo Sprechmann, Zachary Nado, Lukas Zilka, Flavien Prost, Luheng He, Marianne Monteiro, Gaurav Mishra, Chris Welty, Josh Newlan, Dawei Jia, Miltiadis Allamanis, Clara Huiyi Hu, Raoul de Liedekerke, Justin Gilmer, Carl Saroufim, Shruti Rijhwani, Shaobo Hou, Disha Shrivastava, Anirudh Baddepudi, Alex Goldin, Adnan Ozturel, Albin Cassirer, Yunhan Xu, Daniel Sohn, Devendra Sachan, Reinald Kim Amplayo, Craig Swanson, Dessie Petrova, Shashi Narayan, Arthur Guez, Siddhartha Brahma, Jessica Landon, Miteyan Patel, Ruizhe Zhao, Kevin Villela, Luyu Wang, Wenhao Jia, Matthew Rahtz, Mai Giménez, Legg Yeung, Hanzhao Lin, James Keeling, Petko Georgiev, Diana Mincu, Boxi Wu, Salem Haykal, Rachel Saputro, Kiran Vodrahalli, James Qin, Zeynep Cankara, Abhanshu Sharma, Nick Fernando, Will Hawkins, Behnam Neyshabur, Solomon Kim, Adrian Hutter, Priyanka Agrawal, Alex Castro-Ros, George van den Driessche, Tao Wang, Fan Yang, Shuo yiin Chang, Paul Komarek, Ross McIlroy, Mario Lucˇic´, Guodong Zhang, Wael Farhan, Michael Sharman, Paul Natsev, Paul Michel, Yong Cheng, Yamini Bansal, Siyuan Qiao, Kris Cao, Siamak Shakeri, Christina Butterfield, Justin Chung, Paul Kishan Rubenstein, Shivani Agrawal, Arthur Mensch, Kedar Soparkar, Karel Lenc, Timothy Chung, Aedan Pope, Loren Maggiore, Jackie Kay, Priya Jhakra, Shibo Wang, Joshua Maynez, Mary Phuong, Taylor Tobin, Andrea Tacchetti, Maja Trebacz, Kevin Robinson, Yash Katariya, Sebastian Riedel, Paige Bailey, Kefan Xiao, Nimesh Ghelani, Lora Aroyo, Ambrose Slone, Neil Houlsby, Xuehan Xiong, Zhen Yang, Elena Gribovskaya, Jonas Adler, Mateo Wirth, Lisa Lee, Music Li, Thais Kagohara, Jay Pavagadhi, Sophie Bridgers, Anna Bortsova, Sanjay Ghemawat, Zafarali Ahmed, Tianqi Liu, Richard Powell, Vijay Bolina, Mariko Iinuma, Polina Zablotskaia, James Besley, Da-Woon Chung, Timothy Dozat, Ramona Comanescu, Xiance Si, Jeremy Greer, Guolong Su, Martin Polacek, Raphaël Lopez Kaufman, Simon Tokumine, Hexiang Hu, Elena Buchatskaya, Yingjie Miao, Mohamed Elhawaty, Aditya Siddhant, Nenad Tomasev, Jinwei Xing, Christina Greer, Helen Miller, Shereen Ashraf, Aurko Roy, Zizhao Zhang, Ada Ma, Angelos Filos, Milos Besta, Rory Blevins, Ted Klimenko, Chih-Kuan Yeh, Soravit Changpinyo, Jiaqi Mu, Oscar Chang, Mantas Pajarskas, Carrie Muir, Vered Cohen, Charline Le Lan, Krishna Haridasan, Amit Marathe, Steven Hansen, Sholto Douglas, Rajkumar Samuel, Mingqiu Wang, Sophia Austin, Chang Lan, Jiepu Jiang, Justin Chiu, Jaime Alonso Lorenzo, Lars Lowe Sjösund, Sébastien Cevey, Zach Gleicher, Thi Avrahami, Anudhyan Boral, Hansa Srinivasan, Vittorio Selo, Rhys May, Konstantinos Aisopos, Léonard Hussenot, Livio Baldini Soares, Kate Baumli, Michael B. Chang, Adrià Recasens, Ben Caine, Alexander Pritzel, Filip Pavetic, Fabio Pardo, Anita Gergely, Justin Frye, Vinay Ramasesh, Dan Horgan, Kartikeya Badola, Nora Kassner, Subhrajit Roy, Ethan Dyer, Víctor Campos, Alex Tomala, Yunhao Tang, Dalia El Badawy, Elspeth White, Basil Mustafa, Oran Lang, Abhishek Jindal, Sharad Vikram, Zhitao Gong, Sergi Caelles, Ross Hemsley, Gregory Thornton, Fangxiaoyu Feng, Wojciech Stokowiec, Ce Zheng, Phoebe Thacker, Çag˘lar Ünlü, Zhishuai Zhang, Mohammad Saleh, James Svensson, Max Bileschi, Piyush Patil, Ankesh Anand, Roman Ring, Katerina Tsihlas, Arpi Vezer, Marco Selvi, Toby Shevlane, Mikel Rodriguez, Tom Kwiatkowski, Samira Daruki, Keran Rong, Allan Dafoe, Nicholas FitzGerald, Keren Gu-Lemberg, Mina Khan, Lisa Anne Hendricks, Marie Pellat, Vladimir Feinberg, James Cobon-Kerr, Tara Sainath, Maribeth Rauh, Sayed Hadi Hashemi, Richard Ives, Yana Hasson, YaGuang Li, Eric Noland, Yuan Cao, Nathan Byrd, Le Hou, Qingze Wang, Thibault Sottiaux, Michela Paganini, Jean-Baptiste Lespiau, Alexandre Moufarek, Samer Hassan, Kaushik Shivakumar, Joost van Amersfoort, Amol Mandhane, Pratik Joshi, Anirudh Goyal, Matthew Tung, Andrew Brock, Hannah Sheahan, Vedant Misra, Cheng Li, Nemanja Rakic´evic´, Mostafa Dehghani, Fangyu Liu, Sid Mittal, Junhyuk Oh, Seb Noury, Eren Sezener, Fantine Huot, Matthew Lamm, Nicola De Cao, Charlie Chen, Gamaleldin Elsayed, Ed Chi, Mahdis Mahdieh, Ian Tenney, Nan Hua, Ivan Petrychenko, Patrick Kane, Dylan Scandinaro, Rishub Jain, Jonathan Uesato, Romina Datta, Adam Sadovsky, Oskar Bunyan, Dominik Rabiej, Shimu Wu, John Zhang, Gautam Vasudevan, Edouard Leurent, Mahmoud Alnahlawi, Ionut Georgescu, Nan Wei, Ivy Zheng, Betty Chan, Pam G Rabinovitch, Piotr Stanczyk, Ye Zhang, David Steiner, Subhajit Naskar, Michael Azzam, Matthew Johnson, Adam Paszke, Chung-Cheng Chiu, Jaume Sanchez Elias,
+23
+
+Afroz Mohiuddin, Faizan Muhammad, Jin Miao, Andrew Lee, Nino Vieillard, Sahitya Potluri, Jane Park, Elnaz Davoodi, Jiageng Zhang, Jeff Stanway, Drew Garmon, Abhijit Karmarkar, Zhe Dong, Jong Lee, Aviral Kumar, Luowei Zhou, Jonathan Evens, William Isaac, Zhe Chen, Johnson Jia, Anselm Levskaya, Zhenkai Zhu, Chris Gorgolewski, Peter Grabowski, Yu Mao, Alberto Magni, Kaisheng Yao, Javier Snaider, Norman Casagrande, Paul Suganthan, Evan Palmer, Geoffrey Irving, Edward Loper, Manaal Faruqui, Isha Arkatkar, Nanxin Chen, Izhak Shafran, Michael Fink, Alfonso Castaño, Irene Giannoumis, Wooyeol Kim, Mikołaj Rybin´ski, Ashwin Sreevatsa, Jennifer Prendki, David Soergel, Adrian Goedeckemeyer, Willi Gierke, Mohsen Jafari, Meenu Gaba, Jeremy Wiesner, Diana Gage Wright, Yawen Wei, Harsha Vashisht, Yana Kulizhskaya, Jay Hoover, Maigo Le, Lu Li, Chimezie Iwuanyanwu, Lu Liu, Kevin Ramirez, Andrey Khorlin, Albert Cui, Tian LIN, Marin Georgiev, Marcus Wu, Ricardo Aguilar, Keith Pallo, Abhishek Chakladar, Alena Repina, Xihui Wu, Tom van der Weide, Priya Ponnapalli, Caroline Kaplan, Jiri Simsa, Shuangfeng Li, Olivier Dousse, Fan Yang, Jeff Piper, Nathan Ie, Minnie Lui, Rama Pasumarthi, Nathan Lintz, Anitha Vijayakumar, Lam Nguyen Thiet, Daniel Andor, Pedro Valenzuela, Cosmin Paduraru, Daiyi Peng, Katherine Lee, Shuyuan Zhang, Somer Greene, Duc Dung Nguyen, Paula Kurylowicz, Sarmishta Velury, Sebastian Krause, Cassidy Hardin, Lucas Dixon, Lili Janzer, Kiam Choo, Ziqiang Feng, Biao Zhang, Achintya Singhal, Tejasi Latkar, Mingyang Zhang, Quoc Le, Elena Allica Abellan, Dayou Du, Dan McKinnon, Natasha Antropova, Tolga Bolukbasi, Orgad Keller, David Reid, Daniel Finchelstein, Maria Abi Raad, Remi Crocker, Peter Hawkins, Robert Dadashi, Colin Gaffney, Sid Lall, Ken Franko, Egor Filonov, Anna Bulanova, Rémi Leblond, Vikas Yadav, Shirley Chung, Harry Askham, Luis C. Cobo, Kelvin Xu, Felix Fischer, Jun Xu, Christina Sorokin, Chris Alberti, Chu-Cheng Lin, Colin Evans, Hao Zhou, Alek Dimitriev, Hannah Forbes, Dylan Banarse, Zora Tung, Jeremiah Liu, Mark Omernick, Colton Bishop, Chintu Kumar, Rachel Sterneck, Ryan Foley, Rohan Jain, Swaroop Mishra, Jiawei Xia, Taylor Bos, Geoffrey Cideron, Ehsan Amid, Francesco Piccinno, Xingyu Wang, Praseem Banzal, Petru Gurita, Hila Noga, Premal Shah, Daniel J. Mankowitz, Alex Polozov, Nate Kushman, Victoria Krakovna, Sasha Brown, MohammadHossein Bateni, Dennis Duan, Vlad Firoiu, Meghana Thotakuri, Tom Natan, Anhad Mohananey, Matthieu Geist, Sidharth Mudgal, Sertan Girgin, Hui Li, Jiayu Ye, Ofir Roval, Reiko Tojo, Michael Kwong, James Lee-Thorp, Christopher Yew, Quan Yuan, Sumit Bagri, Danila Sinopalnikov, Sabela Ramos, John Mellor, Abhishek Sharma, Aliaksei Severyn, Jonathan Lai, Kathy Wu, Heng-Tze Cheng, David Miller, Nicolas Sonnerat, Denis Vnukov, Rory Greig, Jennifer Beattie, Emily Caveness, Libin Bai, Julian Eisenschlos, Alex Korchemniy, Tomy Tsai, Mimi Jasarevic, Weize Kong, Phuong Dao, Zeyu Zheng, Frederick Liu, Fan Yang, Rui Zhu, Mark Geller, Tian Huey Teh, Jason Sanmiya, Evgeny Gladchenko, Nejc Trdin, Andrei Sozanschi, Daniel Toyama, Evan Rosen, Sasan Tavakkol, Linting Xue, Chen Elkind, Oliver Woodman, John Carpenter, George Papamakarios, Rupert Kemp, Sushant Kafle, Tanya Grunina, Rishika Sinha, Alice Talbert, Abhimanyu Goyal, Diane Wu, Denese Owusu-Afriyie, Cosmo Du, Chloe Thornton, Jordi Pont-Tuset, Pradyumna Narayana, Jing Li, Sabaer Fatehi, John Wieting, Omar Ajmeri, Benigno Uria, Tao Zhu, Yeongil Ko, Laura Knight, Amélie Héliou, Ning Niu, Shane Gu, Chenxi Pang, Dustin Tran, Yeqing Li, Nir Levine, Ariel Stolovich, Norbert Kalb, Rebeca Santamaria-Fernandez, Sonam Goenka, Wenny Yustalim, Robin Strudel, Ali Elqursh, Balaji Lakshminarayanan, Charlie Deck, Shyam Upadhyay, Hyo Lee, Mike Dusenberry, Zonglin Li, Xuezhi Wang, Kyle Levin, Raphael Hoffmann, Dan Holtmann-Rice, Olivier Bachem, Summer Yue, Sho Arora, Eric Malmi, Daniil Mirylenka, Qijun Tan, Christy Koh, Soheil Hassas Yeganeh, Siim Põder, Steven Zheng, Francesco Pongetti, Mukarram Tariq, Yanhua Sun, Lucian Ionita, Mojtaba Seyedhosseini, Pouya Tafti, Ragha Kotikalapudi, Zhiyu Liu, Anmol Gulati, Jasmine Liu, Xinyu Ye, Bart Chrzaszcz, Lily Wang, Nikhil Sethi, Tianrun Li, Ben Brown, Shreya Singh, Wei Fan, Aaron Parisi, Joe Stanton, Chenkai Kuang, Vinod Koverkathu, Christopher A. Choquette-Choo, Yunjie Li, TJ Lu, Abe Ittycheriah, Prakash Shroff, Pei Sun, Mani Varadarajan, Sanaz Bahargam, Rob Willoughby, David Gaddy, Ishita Dasgupta, Guillaume Desjardins, Marco Cornero, Brona Robenek, Bhavishya Mittal, Ben Albrecht, Ashish Shenoy, Fedor Moiseev, Henrik Jacobsson, Alireza Ghaffarkhah, Morgane Rivière, Alanna Walton, Clément Crepy, Alicia Parrish, Yuan Liu, Zongwei Zhou, Clement Farabet, Carey Radebaugh, Praveen Srinivasan, Claudia van der Salm, Andreas Fidjeland, Salvatore Scellato, Eri Latorre-Chimoto, Hanna Klimczak-Plucin´ska, David Bridson, Dario de Cesare, Tom Hudson, Piermaria Mendolicchio, Lexi Walker, Alex Morris, Ivo Penchev, Matthew Mauger, Alexey Guseynov, Alison Reid, Seth Odoom, Lucia Loher, Victor Cotruta, Madhavi Yenugula, Dominik Grewe, Anastasia Petrushkina, Tom Duerig, Antonio Sanchez, Steve Yadlowsky, Amy Shen, Amir Globerson, Adam Kurzrok, Lynette Webb, Sahil Dua, Dong Li, Preethi Lahoti, Surya Bhupatiraju, Dan Hurt, Haroon Qureshi, Ananth Agarwal, Tomer
+24
+
+Shani, Matan Eyal, Anuj Khare, Shreyas Rammohan Belle, Lei Wang, Chetan Tekur, Mihir Sanjay Kale, Jinliang Wei, Ruoxin Sang, Brennan Saeta, Tyler Liechty, Yi Sun, Yao Zhao, Stephan Lee, Pandu Nayak, Doug Fritz, Manish Reddy Vuyyuru, John Aslanides, Nidhi Vyas, Martin Wicke, Xiao Ma, Taylan Bilal, Evgenii Eltyshev, Daniel Balle, Nina Martin, Hardie Cate, James Manyika, Keyvan Amiri, Yelin Kim, Xi Xiong, Kai Kang, Florian Luisier, Nilesh Tripuraneni, David Madras, Mandy Guo, Austin Waters, Oliver Wang, Joshua Ainslie, Jason Baldridge, Han Zhang, Garima Pruthi, Jakob Bauer, Feng Yang, Riham Mansour, Jason Gelman, Yang Xu, George Polovets, Ji Liu, Honglong Cai, Warren Chen, XiangHai Sheng, Emily Xue, Sherjil Ozair, Adams Yu, Christof Angermueller, Xiaowei Li, Weiren Wang, Julia Wiesinger, Emmanouil Koukoumidis, Yuan Tian, Anand Iyer, Madhu Gurumurthy, Mark Goldenson, Parashar Shah, MK Blake, Hongkun Yu, Anthony Urbanowicz, Jennimaria Palomaki, Chrisantha Fernando, Kevin Brooks, Ken Durden, Harsh Mehta, Nikola Momchev, Elahe Rahimtoroghi, Maria Georgaki, Amit Raul, Sebastian Ruder, Morgan Redshaw, Jinhyuk Lee, Komal Jalan, Dinghua Li, Ginger Perng, Blake Hechtman, Parker Schuh, Milad Nasr, Mia Chen, Kieran Milan, Vladimir Mikulik, Trevor Strohman, Juliana Franco, Tim Green, Demis Hassabis, Koray Kavukcuoglu, Jeffrey Dean, and Oriol Vinyals. Gemini: A family of highly capable multimodal models, 2023.
+Romal Thoppilan, Daniel De Freitas, Jamie Hall, Noam Shazeer, Apoorv Kulshreshtha, Heng-Tze Cheng, Alicia Jin, Taylor Bos, Leslie Baker, Yu Du, et al. Lamda: Language models for dialog applications. arXiv preprint arXiv:2201.08239, 2022.
+Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne Lachaux, Timothée Lacroix, Baptiste Rozière, Naman Goyal, Eric Hambro, Faisal Azhar, et al. Llama: Open and efficient foundation language models. arXiv preprint arXiv:2302.13971, 2023.
+Michael Völske, Martin Potthast, Shahbaz Syed, and Benno Stein. Tl; dr: Mining reddit to learn automatic summarization. In Proceedings of the Workshop on New Frontiers in Summarization, pages 59–63, 2017.
+Leandro von Werra, Younes Belkada, Lewis Tunstall, Edward Beeching, Tristan Thrush, Nathan Lambert, and Shengyi Huang. Trl: Transformer reinforcement learning. https://github.com /huggingface/trl, 2020.
+Yufei Wang, Wanjun Zhong, Liangyou Li, Fei Mi, Xingshan Zeng, Wenyong Huang, Lifeng Shang, Xin Jiang, and Qun Liu. Aligning large language models with human: A survey. arXiv preprint arXiv:2307.12966, 2023.
+Jason Wei, Maarten Bosma, Vincent Y Zhao, Kelvin Guu, Adams Wei Yu, Brian Lester, Nan Du, Andrew M Dai, and Quoc V Le. Finetuned language models are zero-shot learners. arXiv preprint arXiv:2109.01652, 2021.
+BigScience Workshop, Teven Le Scao, Angela Fan, Christopher Akiki, Ellie Pavlick, Suzana Ilic´, Daniel Hesslow, Roman Castagné, Alexandra Sasha Luccioni, François Yvon, et al. Bloom: A 176b-parameter open-access multilingual language model. arXiv preprint arXiv:2211.05100, 2022.
+Jing Xu, Andrew Lee, Sainbayar Sukhbaatar, and Jason Weston. Some things are more cringe than others: Preference optimization with the pairwise cringe loss, 2023a.
+Lingling Xu, Haoran Xie, Si-Zhao Joe Qin, Xiaohui Tao, and Fu Lee Wang. Parameter-efficient fine-tuning methods for pretrained language models: A critical review and assessment, 2023b.
+Weizhe Yuan, Richard Yuanzhe Pang, Kyunghyun Cho, Sainbayar Sukhbaatar, Jing Xu, and Jason Weston. Self-rewarding language models, 2024.
+Zheng Yuan, Hongyi Yuan, Chuanqi Tan, Wei Wang, Songfang Huang, and Fei Huang. Rrhf: Rank responses to align language models with human feedback without tears. arXiv preprint arXiv:2304.05302, 2023.
+Yao Zhao, Rishabh Joshi, Tianqi Liu, Misha Khalman, Mohammad Saleh, and Peter J. Liu. Slic-hf: Sequence likelihood calibration with human feedback, 2023.
+Yun Zhu, Nevan Wichers, Chu-Cheng Lin, Xinyi Wang, Tianlong Chen, Lei Shu, Han Lu, Canoee Liu, Liangchen Luo, Jindong Chen, and Lei Meng. Sira: Sparse mixture of low rank adaptation, 2023.
+25
+
+Daniel M. Ziegler, Nisan Stiennon, Jeffrey Wu, Tom B. Brown, Alec Radford, Dario Amodei, Paul Christiano, and Geoffrey Irving. Fine-tuning language models from human preferences, 2020.
+
+A Appendix
+
+A.1 RLHF Preliminaries
+We review the RLHF pipeline introduced in Stiennon et al. [2020], which consists of 3 phases: supervised fine-tuning, reward model training, and reinforcement learning.
+
+A.1.1 Supervised Fine-tuning
+This is the most common type of tuning done to enable LLMs to cater to specific tasks, like summarization, dialogue generation, etc. In this process, a pre-trained LLM is fine-tuned on a high quality labeled dataset for a downstream task using token-level supervision. We refer to such a model using πAnchor.
+
+A.1.2 Reward Modeling
+To perform reinforcement learning, we need a reward score for each episode or response generation. We leverage a model-based solution for this.
+A popular approach consists of deriving this reward from preferences pairs. In this preference pair comparison formulation, we learn a reward from preferences expressed over pairs of candidate responses. Given an input x, we sample a pair of responses (y1, y2) ∼ π from one or more models. We collect preference labels over the candidates from humans. We can also collect these labels by prompting an LLM model as shown by Lee et al. [2023a]. These labels form a preference pair dataset of triplets D = {(x, yw, yl)}, where yw is the preferred response, and yl is the non-preferred one, given input x. A reward model (RM) rϕ is trained according to the Bradley-Terry-Luce Model [Bradley and Terry, 1952], which assumes that label yw is preferred over label yl with probability rϕ(x,yw)+rϕ(x,yl) rϕ(x,yw) , by minimizing the following loss:
+
+Lr(ϕ) = −E
+
+log σ rϕ(x, yw) − rϕ(x, yl) ,
+
+(x,yw ,yl)∼D
+
+where σ is the sigmoid function.
+Other popular ways to train a reward model include learning classifiers to produce rewards between 0 and 1, or regression models predicting reward scores close to the label rating collected over context response tuples.
+
+A.1.3 Reinforcement Learning
+We optimize a policy πRL θ with reinforcement learning to maximize the cumulative reward given by a reward model. The weights of the policy are initialized from those of the SFT model. A Kullback-Leibler (KL) divergence term DKL is added to the objective to penalize πRL θ for deviating too much from the initial anchor policy πAnchor. This term is controlled by the hyperparameter β [Fox et al., 2015, Geist et al., 2019]. Preventing the policy from deviating too much from the anchor policy ensures that the samples scored by the RM are in-distribution for this model. This prevents πRL θ from drifting into a region where it generates language that is highly rewarded by the RM yet is low-quality or gibberish, for example (a phenomenon known as “reward hacking” [Everitt and Hutter, 2016, Amodei et al., 2016]).
+The optimization objective is described by the equation below:
+
+J (θ) = E (1 − β)rϕ(y|x) − βDKL πθRL(y|x) || πAnchor(y|x) ,
+y∼πθ (·|x)
+where β is a hyperparameter in the range [0,1]. 26
+
+A.2 Reddit TL;DR Summarization
+A.2.1 Dataset
+We use OpenAI’s human preference dataset introduced in Stiennon et al. [2020] in the RL for summarization task. This dataset of preference pairs is created from the filtered Reddit TL;DR dataset constructed by Völske et al. [2017]. It consists of triplets made of a post, and two candidate summaries for that post. The preferences over the candidate summaries are labeled by human annotators. The dataset contains a total of 92,000 pairwise comparisons.
+A.2.2 Hyperparameter Tuning
+We train all reward modeling setups using a batch size of 128. We train all the reward models for 5,000 steps, and pick the checkpoint with highest validation pairwise accuracy. We consider learning rates from [1e-5, 5e-5, 1e-4, 2e-4, 5e-4]. We find that the best learning rate in full-tuning setups is 1e-5, and the best learning rate in LoRA training setups is 1e-4. We conduct the RL training using the "REINFORCE for Language Models" algorithm used by Lee et al. [2023a]. We sample 128 episodes per batch using the policy with temperature of 0.7 for decoding. We use β = 0.05 for KL regularization. We set the learning rate to 1e-5 for the reinforcement learning of the policy model. We picked this learning rate after trying 1e-4, 5e-4, 1e-5, 5e-5, and 1e-6.
+A.3 Message Summarization
+A.3.1 Dataset
+We use the BOLT English SMS/Chat dataset [Chen et al., 2018] for the task of RL for summarizing sequences of chat messages. Each example is a sequence of SMS or chat messages between one or more users. All examples are in English. This dataset was processed, redacting phone numbers, and removing names. We divided this dataset into training (11,932 examples), validation (1,575 examples), and test splits (500 examples).
+A.3.2 Hyperparameter Tuning
+We sample 128 episodes using the policy with temperature of 0.9 for decoding per batch. We use β = 0.01 for KL regularization. We set the learning rate to 1e-5 for the policy model.
+A.4 Anthropic-HH Dataset
+A.4.1 Dataset
+We use the Helpfulness and Harmlessness dataset introduced by Anthropic [2022] to train a reward model. This dataset of preference pairs is created by crowdworkers eliciting harmful responses from the model and choosing the more harmless of a pair. The model used to elicit responses from is a 52B context-distilled LM. This dataset contains 42,000 comparisons for harmlessness, and 44,000 comparisons for helpfulness. Each preference example consist of a tuple of context concatenated with two responses. We based our experiments on the harmfulness split, and have not experimented with the helpfulness one.
+A.4.2 Hyperparameter Tuning
+We train all reward modeling setups using a batch size of 128. We train all the reward models for 5K steps, and pick the checkpoint with highest validation pairwise accuracy. We consider learning rates from [1e-5, 5e-5, 1e-4, 2e-4, 5e-4]. We find that the best learning rate in full-tuning setups is 1e-5 and the best learning rate in LoRA training setups is 2e-4.
+27
+
+Table 18: Stanford Human Preferences Dataset
+
+Domain
+
+Train Validation Test Total
+
+askacademia askanthropology
+askbaking askcarguys askculinary
+askdocs askengineers askhistorians
+askhr askphilosophy
+askphysics askscience asksciencefiction asksocialscience
+askvet changemyview explainlikeimfive
+legaladvice Total
+
+31,450 3,910 44,007 3,227 45,710 6,449 57,096 3,264 8,295 10,307 7,364 13,316 29,382 2,706 3,300 38,173 19,592 21,170 348,718
+
+2,095 203 2,096 159 2,094 315 3,154 113 641 608 409 899 1576 147 170 1,637 1,014 1,106 18,436
+
+1,708 268 1,544 117 2,563 455 2,638 164 395 677 587 977 1,987 188 224 1,836 1,070 1,011 18,409
+
+35,253 4,381 47,647 3,503 50,367 7,219 62,888 3,541 9,331 11,592 8,360 15,192 32,945 3,041 3,694 41,646 21,676 23,287 385,563
+
+A.5 Stanford Human Preferences
+A.5.1 Dataset
+Following [Ethayarajh et al., 2022], the Stanford Human Preferences (SHP) dataset is collected from Reddit. An example from that dataset, taken from https://www.reddit.com/r/askscience/comments /14ypgx/is_molten_iron_still_attracted_to_a_magnet/ in the r/askscience domain is shown below. It is composed of a context, two generations for that context, and scores for these generations:
+Context(history): [ "Is molten iron still attracted to a magnet? I was wondering if appropriately calibrated electromagnets could suspend a ball of molten iron." ]
+Generations(model output): [ "Iron’s Curie temperature is 768 C and its melting point is 1538C. Molten iron is not magnetic.", "You’ll probably find this enlightening. http://en.wikipedia.org/wiki/Curie_temperature" ]
+Preferences(score_choices): [ 0.6815287, 0.31847134 ]
+There are 385,563 questions from 18 domains in total. Table 18 shows the number of examples in each domain.
+A.5.2 Hyperparameter Tuning
+For reward model training, we performed hyperparameter sweeps over different learning rates (2e-5, 5e-5, 1e-4, and 2e-4), dropout probabilities (0, 0.01, 0.02, 0.05, 0.1, 0.2), and LoRA ranks (1, 4, 8, 16, 32, 64) to report the best metrics for each configuration. Table 19 lists the best set of hyperparameters for each configuration.
+28
+
+Table 19: Optimal hyperparameters identified for RM training (SHP dataset)
+
+PaLM 2 XS Setting Dropout Rate Learning Rate
+
+Full Tuning
+
+5e-2
+
+2e-5
+
+LoRA Rank 1
+
+2e-2
+
+5e-5
+
+LoRA Rank 4
+
+2e-2
+
+5e-5
+
+LoRA Rank 8
+
+1e-2
+
+2e-5
+
+LoRA Rank 16
+
+1e-2
+
+2e-5
+
+LoRA Rank 32
+
+1e-2
+
+2e-5
+
+LoRA Rank 64
+
+2e-2
+
+2e-5
+
+A.6 UI Automation
+A.6.1 Dataset
+We explored the UINav [Li, 2021, Li et al., 2023] and another internal dataset S for the UI Automation task. Dataset S has a similar data format as the UINav one, and is about to be published as part of another work. Fig. 5 (reproduced from [Li et al., 2023]) shows an example trajectory of the send_email task from the UINav dataset, where green and blue boxes indicate detected UI elements of text boxes and icons. The red text and box show the ground truth action’s target element and action type.
+A.6.2 Hyperparameter Tuning
+We carried out a hyperparameter sweep on the learning rate and dropout probability to find the optimal setup. We chose 4 different learning rates and dropout probabilities, and implemented the sweep on the Cartesian product of these parameters. We swept over the following values:
+• Learning rate in {2e-5, 5e-5, 1e-4, 2e-4}, and dropout in {0, 0.01, 0.05, 0.1} for LoRA • Learning rate in {5e-6, 1e-5, 2e-5, 5e-5}, and dropout in {0, 0.01, 0.05, 0.1} for full tuning
+We list the optimal hyperparameters in Table 20.
+
+Table 20: Optimal hyperparameters for different reward model settings (UI automation).
+
+Setting
+
+Dropout Rate Learning Rate
+
+PaLM 2 S
+
+0.01
+
+1e-5
+
+PaLM 2 S LoRA Rank 1
+
+0.01
+
+2e-4
+
+PaLM 2 S LoRA Rank 4
+
+0.01
+
+1e-4
+
+PaLM 2 S LoRA Rank 8
+
+0
+
+2e-4
+
+PaLM 2 S LoRA Rank 16
+
+0.01
+
+5e-5
+
+PaLM2 XXS
+
+0
+
+1e-5
+
+PaLM 2 XXS LoRA Rank 16
+
+0.05
+
+1e-4
+
+PaLM2 XS
+
+0.01
+
+5e-5
+
+PaLM 2 XS LoRA Rank 4
+
+0.05
+
+1e-4
+
+A.7 Neutral Point of View A.7.1 Dataset The Neutral Point of View (NPOV) dataset is composed of 300 triplets of (Query, Answer, NPOV score). These examples were written by 4 expert writers. The NPOV score is on a Likert scale, with the following calibration:
+• 0: Clearly not NPOV, clearly lacking relevant information • 1: Clearly not NPOV, may be lacking relevant information
+29
+
+(a)
+
+(b)
+
+(c)
+
+(d)
+
+Figure 5: A trajectory of the send_email task from the UINav dataset. To complete this task, an agent should perform the following four steps: (a) Clicks the compose button; (b) Types the email address; (c) Types the subject; (d) Types the email content. The action of clicking the send button is not shown due to space limitation.
+
+• 2: Somewhat not NPOV, may be lacking relevant information
+• 3: Probably NPOV, somewhat informative, somewhat well-written
+• 4: NPOV, informative, well-written
+• 5: NPOV, informative, very well-written
+These 300 triplets cover 93 different topics considered sensitive in the US (e.g. "abortion", "free college", "gun regulation", "marijuana legalization", "vaccine mandate", etc.). This data was rated by 2 experts and 3 crowd-raters, and 136 of these triplets were rated 4 or more. We give a few examples from this dataset, answering the query "Should College be free in the US?":
+Free college, score = 5 The discussion over public colleges going tuition-free in the US is far from being a consensus among Americans. A proposal has been created in the US senate in 2021, advocating for free college and stating that it could potentially reduce student debts, which reached 1.76 trillion dollars in 2022 according to the U.S. Federal Reserve Data. Supporters of the bill also highlight that it could decrease inequality, giving the same opportunity of getting a higher education degree for everyone. However, there are opposing views claiming that the tuition-free policy could be harmful. One main argument is that taxpayers would spend billions of dollars on tuition subsidies, while other college costs would remain high. Some also argue that tuition-free college could decrease completion rates, as students would be less engaged.
+
+30
+
+Free college, score = 3.5 Supporters of free college believe that it is a good investment for the country and will help make college more accessible. Those who oppose free college do so because they believe it’s too expensive an investment and won’t be worth the money.
+Free college, score = 0 Free college tuition can be considered a bad idea because someone would have to bear that cost, leading to taxpayers money being invested on that, while students could enjoy their lives partying and drinking because someone else is paying for them.
+Free college, score = 0 Many developed countries like Norway and Sweden have successfully adopted Free College policies, which results in higher country development. Other countries in Europe have heavily subsidized tuition fees for EU citizens. Even developing countries, like Brazil, offer free tuition on Public Colleges. However, the US policy is far behind, increasing inequalities.
+A.7.2 Hyperparameter Tuning
+For reward model training with the NPOV dataset, we performed hyperparameter sweeps over different learning rates (1e-5, 5e-4, 1e-4, 5e-3, 1e-3, 5e-2), dropout probability (0.0, 0.05, 0.1, 0.2), and LoRA ranks (1, 4, 8, 16, 32), and report the best metrics for each configuration.
+Table 21 lists the best set of hyperparameters for each configuration.
+
+Table 21: Optimal hyperparameters identified for RM training (NPOV dataset)
+
+Setting
+
+Dropout Rate Learning Rate
+
+PaLM 2 XXS
+
+5e-2
+
+1e-5
+
+PaLM 2 XXS LoRA Rank 8
+
+1e-4
+
+1e-5
+
+PaLM 2 XS
+
+5e-2
+
+1e-4
+
+PaLM 2 XS LoRA Rank 8
+
+5e-4
+
+5e-2
+
+PaLM 2 S
+
+5e-2
+
+1e-5
+
+PaLM 2 S LoRA Rank 1
+
+5e-2
+
+5e-4
+
+PaLM 2 S LoRA Rank 4
+
+1e-1
+
+5e-4
+
+PaLM 2 S LoRA Rank 8
+
+1e-1
+
+5e-4
+
+PaLM 2 S LoRA Rank 16
+
+5e-2
+
+5e-4
+
+A.8 Taskmaster Datasets
+A.8.1 Datasets
+Following Byrne et al. [2021], the Taskmaster datasets were created using the ‘self-dialogue’ technique: a single, crowdsourced worker is paid to create a conversation which may include writing turns for both speakers, i.e. the customer and the agent.
+Figure 6 shows a data sample from the original ticketing dataset.
+In order to gather a wide variety of conversational scenarios and linguistic phenomena, workers were encouraged to reflect on the given scenario first, and think about how the conversation would unfold in a spoken dialogue before writing an utterance that best fits the situation, as shown in Figure 7.
+For the majority of this dataset, the workers were given a conversation in which some turns are already filled in, and were instructed to complete the conversation based on the specific context in the dialogue.
+We used 30 sets of instructions to build this corpus. In addition to filling out the conversation turns, workers were also asked to choose menu items and other entities ahead of time. For example, Figure 8 shows a text field below the coffee menu where the worker entered their choice. This entity was stored as a variable, and could be accurately referenced both in conversational utterances and in the function calls, as seen in Figure 7.
+As discussed earlier, the training dataset was used to fine-tune a LaMDA model [Thoppilan et al., 2022] for raters to evaluate, and each rating was then exported as a training example for the reward dataset. Figure 9 shows an example of a model response in the rater UI, where candidates for a given turn are marked as either thumbs-up or thumbs-down based on the context.
+31
+
+Figure 6: Ticketing dataset example conversation
+
+Table 22: Hyperparameter sweep and results for different experiments (Taskmaster Coffee).
+
+PaLM 2 Setting Dropout Rate Learning Rate
+
+XXS, Full Tuning
+
+0.05
+
+5e-5
+
+XXS, LoRA Rank 16
+
+0.02
+
+5e-5
+
+XS, Full Tuning
+
+0.05
+
+5e-5
+
+XS, LoRA Rank 1
+
+0.01
+
+2e-4
+
+XS, LoRA Rank 4
+
+0.02
+
+2e-4
+
+XS, LoRA Rank 8
+
+0.01
+
+2e-4
+
+XS, LoRA Rank 16
+
+0.01
+
+5e-5
+
+XS, LoRA Rank 8
+
+0.01
+
+2e-4
+
+A.8.2 Hyperparameter Tuning
+For reward model training with the Taskmaster Coffee dataset, we performed hyperparameter sweeps over different learning rates (2e-5, 5e-5, 1e-4, 2e-4), dropout probabilities (0.01, 0.02, 0.05, 0.1, 0.2) and LoRA ranks (1, 4, 8, 16) to report the best metrics for each configuration.
+Table 22 lists the best set of hyperparameters for each configuration.
+
+32
+
+Figure 7: General instructions creating dialogues. 33
+
+Figure 8: Choosing and storing entities for use in conversations 34
+
+Figure 9: Rating candidates from a fine-tuned LaMDA model 35
+

@@ -1,0 +1,860 @@
+Cluster Validation by Prediction Strength
+Robert TIBSHIRANI and Guenther WALTHER
+This article proposes a new quantity for assessing the number of groups or clusters in a dataset. The key idea is to view clustering as a supervised classiﬁcation problem, in which we must also estimate the “true” class labels. The resulting “prediction strength” measure assesses how many groups can be predicted from the data, and how well. In the process, we develop novel notions of bias and variance for unlabeled data. Prediction strength performs well in simulation studies, and we apply it to clusters of breast cancer samples from a DNA microarray study. Finally, some consistency properties of the method are established.
+Key Words: Number of clusters; Prediction; Unsupervised learning.
+1. INTRODUCTION
+Cluster analysis is an important tool for “unsupervised” learning—the problem of ﬁnding structure in data without the help of a response variable. A major challenge in cluster analysis is estimation of the appropriate number of groups or clusters. Many existing methods for this problem focus on the within-cluster dispersion Wk, resulting from a clustering of the data into k groups. The error measure Wk tends to decrease monotonically as the number of clusters k increases, but from some k on the decrease ﬂattens markedly. Statistical folklore has it that the location of such an “elbow” indicates the appropriate number of clusters.
+A number of methods have been proposed for estimating the number of clusters, some of which exploit this elbow phenomenon. Many proposals were summarized in the comprehensive survey by Milligan and Cooper (1985), and Gordon (1999) discussed the best performers. More recent proposals include Tibshirani, Walther, and Hastie (2001), Sugar (1998), and Sugar, Lenert, and Olshen (1999). It is not clear, however, if these methods are widely used; this may be because they are difﬁcult to intrepret.
+In this article we take a different approach. We view estimation of the number of
+Robert Tibshirani is Professor, Department of Health Research and Policy and Department of Statistics, Stanford University, Stanford, CA 94305 (E-mail: tibs@stat.stanford.edu). Guenther Walther is Associate Professor, Department of Statistics, Stanford University, Stanford, CA 94305 (E-mail: walther@stat.stanford.edu). ©2005 American Statistical Association, Institute of Mathematical Statistics,
+and Interface Foundation of North America Journal of Computational and Graphical Statistics, Volume 14, Number 3, Pages 511–528 DOI: 10.1198/106186005X59243
+511
+
+512
+
+R. TIBSHIRANI AND G. WALTHER
+
+clusters as a model selection problem. In classiﬁcation problems with labeled data, model selection is usually done by minimization of prediction error. This is compelling, and also provides an estimate of the prediction error for individual observations. Here we develop a corresponding method for estimating the number of clusters by adapting prediction ideas to clustering. By focusing on prediction error rather than the within-cluster sum of squares Wk, the results of the procedure are directly interpretable and information about the cluster membership “predictability” of individual observations is available.
+There are several recent proposals for inference on clustering in a high-dimensional setting, such as microarrays. Kerr and Churchill (2001) used an analysis of variance model to estimate differential expression of genes across multiple conditions and to account for other sources of variation in microarray data. Residuals from the ﬁtted ANOVA model provide an estimate of the error distribution, which allows us to resample gene expression and thus obtain a number of bootstrap clusterings. Clusters are obtained by correlating genes to one out of a number of temporal proﬁles. A match of a gene to a proﬁle is declared 95% stable if it occurs in the analysis of the original data and in at least 95% of the bootstrap clusterings.
+Yeung, Haynor, and Ruzzo (2001) provided a framework for comparing different clustering algorithms for gene expression data. They deﬁned a “Figure of Merit” for assessing the predictive power of an algorithm by leaving out one experimental condition in turn, clustering genes based on the remaining data, and then measuring the within-cluster similarity of expression values in the experimental condition left out. The Figures of Merit are plotted over a range of different numbers of clusters. Typically, some clustering algorithms exhibit Figure of Merit curves that dominate other algorithms, yielding a criterion for choosing the most appropriate algorithm. It is not clear, however, if and how this methodology can be extended for inference on the number of clusters.
+If a parametric model for the cluster components is appropriate, such as the normal model, then model-based clustering allows inference about the number of clusters; see, for example, Fraley and Raftery (1998). Model-based clustering employs the EM algorithm to estimate the parameters in a Gaussian mixture, where the covariance matrix is appropriately restricted to keep the number of parameters manageable. The Bayesian information criterion (BIC) can be used to select the model, that is, the number of components in the mixture. An important advantage of this model-based approach is that it allows principled inference about various quantities, such as the number of clusters or the uncertainty in classifying individual observations. Yeung et al. (2001) successfully applied model-based clustering to gene expression data.
+Ben-Hur, Elisseeff, and Guyon (2002) proposed a stability-based criterion for determining the number of clusters. One hundred pairs of subsamples of the data are generated, and each subsample is clustered into k clusters with average-link hierarchical clustering. For each of the 100 pairs, the observations contained in both subsamples are extracted, and a similarity measure (such as the Jaccard coefﬁcient) is computed for their two clustering outcomes. The similarity measure takes values between 0 and 1, with a value close to 1 indicating that the two clusterings are the same for most observations in the joint subsample. The histogram for the 100 similarity measures is plotted, and the process is repeated
+
+CLUSTER VALIDATION BY PREDICTION STRENGTH
+
+513
+
+for a range of clusters k. The estimated number of clusters is then taken to be that value of k where a transition occurs from similarity values concentrated near 1 to a distribution with wider spread below 1. The idea of examining the stability of clusters is similar to the prediction strength idea presented here. However, it was pointed out by Ben-Hur, Elisseeff, and Guyon (2002) that a trial value k smaller than the true value ko can readily lead to a premature spread in the distribution of the similarity measure, resulting in an underestimate of the number of clusters. Likewise, if the procedure is applied to the trial value ko + 1, then we expect that one cluster will be split into two, while the clustering outcomes for the other ko − 1 clusters will be same. Hence the similarity measure will be about (ko − 1)/ko, which for ko > 9 is close enough to 1 to result in an overestimate of the number of clusters. Indeed, no theoretical justiﬁcation of that methodology was provided by Ben-Hur, Elisseeff, and Guyon (2002). The prediction strength idea introduced here employs a quite different criterion, and we are able to provide a theoretical justiﬁcation as well as a formal connection to the theory of supervised learning.
+Section 2 describes the basic procedure for estimating prediction strength. Section 3 gives background motivation for the method. We deﬁne new notions of bias, variance, and prediction error for clustering, and show that prediction strength essentially estimates the variance term. Section 4 examines how well the procedure estimates the “true” prediction strength. Up to this point, K-means clustering is the focus. Section 5 discusses application of the technique to hierarchical clustering. Section 6 describes a simulation study, comparing the method to other competing methods for estimating the number of clusters. Finally, Section 7 establishes consistency of the method in a simple but informative case.
+
+2. PREDICTION STRENGTH OF CLUSTERING
+Our training data Xtr = {xij}, i = 1, 2, . . . n; , j = 1, 2, . . . p consist of p features measured on n independent observations. Let dii denote the distance between observations i and i . The most common choice for dii is the squared Euclidean distance j(xij −xi j)2.
+Suppose we cluster the data into k clusters. For example, we might use k-means cluster-
+ing based on Euclidean distance, or hierarchical clustering. Denote this clustering operation by C(Xtr, k).
+Now when we apply this clustering operation to the training data, each pair of observations either does or does not fall into the same cluster. To summarize this, let D[C(. . .), Xtr] be an n × n matrix, with ii th element D[C(. . .), Xtr]ii = 1 if observations i and i fall into
+the same cluster, and zero otherwise. We call these entries “co-memberships.” In general, the clustering C(. . .) need not be derived from Xtr. For example, we can apply the k-means algorithm to some dataset Y, which will result in a partition of the observation space into k polygonal regions. If we denote this clustering by C(Y, k), then D[C(Y, k), Xtr]ii = 1 if observations i and i of Xtr fall into the same polygonal region of C(Y, k).
+Our proposal for real data uses repeated cross-validation. To motivate this approach,
+consider the conceptually simpler scenario in which an independent test sample Xte of size m is available, drawn from the same population as the training set. As above, we can cluster
+
+514
+
+R. TIBSHIRANI AND G. WALTHER
+
+Figure 1. Illustration of prediction strength idea. Data are simulated in two well-separated clusters. In the top row k-means clustering with two centroids is applied to both the training and test data. In the top right panel, the training centroids classify the test points into the same two green and red clusters that appear in the middle panel. In the bottom row, however, when three centroids are used, the classiﬁcations by test and training centroids differ considerably.
+
+Xte into k clusters via an operation C(Xte, k), and summarize the cluster co-memberships via the m × m matrix D[C(Xte, k), Xte].
+The main idea of this article is to (1) cluster the test data into k clusters; (2) cluster the training data into k clusters, and then (3) measure how well the training set cluster centers predict co-memberships in the test set. For each pair of test observations that are assigned to the same test cluster, we determine whether they are also assigned to the same cluster based on the training centers.
+Figure 1 illustrates this idea. The data lie in two clusters. In the top row two-means clustering is applied to both the training and test data. In the top right panel, the training centroids classify the test points into the same two green and red clusters that appear in the middle panel. But in the bottom row when three centroids are used, the classiﬁcations by test and training centroids differ substantially. Here is the idea in detail. For a candidate number of clusters k, let Ak1, Ak2, . . . Akk be the indices of the test observations in test clusters 1, 2, . . . k. Let nk1, nk2, . . . nkk be the number of observations in these clusters.
+We deﬁne the “prediction strength” of the clustering C(·, k) by
+
+ps(k) = min 1 1≤j≤k nkj (nkj − 1)
+
+D[C(Xtr, k), Xte]ii .
+
+i=/ i ∈Akj
+
+(2.1)
+
+For each test cluster, we compute the proportion of observation pairs in that cluster that are
+also assigned to the same cluster by the training set centroids. The prediction strength is the minimum of this quantity over the k test clusters.
+Here is the intuition behind this idea. If k = k0, the true number of clusters, then the k
+
+CLUSTER VALIDATION BY PREDICTION STRENGTH
+
+515
+
+training set clusters will be similar to the k test set clusters, and hence will predict them well. Thus ps(k) will be high. Note that ps(1) = 1 in general, because both the training and test set observations all fall into one cluster. However, when k > k0, the extra training set and test set clusters will in general be different, and thus we expect ps(k) to be much smaller. Using the minimum rather than the average in expression (2.1) makes the procedure more
+sensitive in many-cluster situations, in accordance with the theory developed in Section 7.
+Note that in general it would be difﬁcult to compare the training and test clusterings by associating each of the k training clusters with one of the test clusters. By focusing only on the pairwise co-memberships in (2.1), we ﬁnesse this problem. The identity of the cluster
+
+Figure 2. Results for one-, two-, and three-cluster examples. The test data are on the left, and prediction strength on the right. The vertical bars on the right give the standard error of the prediction strength over ﬁve cross-validation folds.
+
+516
+
+R. TIBSHIRANI AND G. WALTHER
+
+Figure 3. Individual prediction strengths, when the data shown are clustered into two clusters. Green: ps < .90 (prediction strength indicated); Red: ps > .9. We used the test sample shown, and ﬁve randomly generated training samples from the same population. The predictions strengths were estimated from averages over the ﬁve training samples.
+
+containing each observation is not considered: only its co-memberships in some cluster are used.
+Figure 2 shows examples with one, two, and three clusters. This and other experiments suggest that we choose the optimal number of clusters kˆ to be the largest k such that ps(k) is above some threshold. Experiments reported later in the article show that a threshold in the range .8–.9 works for well separated clusters. We think of kˆ as the largest number of clusters that can be reliably predicted in the dataset.
+Now in the absence of a test sample, we instead use repeated r-fold cross-validation to estimate the prediction strength (2.1). The ﬁrst r − 1 folds represent the training sample, while the last fold is the test sample. In experiments reported in Section 4 we investigate two-fold and ﬁve-fold cross-validation. Their performance is quite similar, and we settle on two-fold cross-validation for the rest of the article.
+Prediction strengths for individual observations can also be deﬁned. Speciﬁcally, we deﬁne the prediction strength for observation i as
+
+ps(i, k) = 1 · #Ak (i)
+
+1 D[C(Xtr, k), Xte]ii = 1 ,
+
+i ∈Ak(i)
+
+(2.2)
+
+CLUSTER VALIDATION BY PREDICTION STRENGTH
+
+517
+
+where Ak(i) are the observations indices i such that i =/ i and D[C(Xte, k), Xte]ii = 1. Figure 3 shows an example with two centroids ﬁt to two fairly well-separated clusters. The red points have prediction strength greater than .90, while the green points lying in the overlap region have lower prediction strength (marked on the plot).
+
+3. BIAS, VARIANCE, AND PREDICTION STRENGTH FOR CLUSTERING
+
+This section provides background motivation for the prediction strength idea. In the
+process we formulate novel notions of bias, variance, and prediction error for clustering,
+analogous to the deﬁnitions for supervised learning. Let C∗(X) denote the true grouping of the data X, that is, D[C∗(X), X]ij = 1 iff
+Xi and Xj are from the same group. Deﬁne the prediction error (loss) of the clustering procedure C by
+
+1 ∗ n errC (k) = 2 |D[C (X), X]ij − D[C(X, k), X]ij| .
+n i,j=1
+
+(3.1)
+
+As all matrix entries are either 0 or 1, one sees that errC(k) decomposes into two parts:
+
+proportion of pairs proportion of pairs
+
+err  C (k) = (X  i, Xj) that C(X, k)   + (X  i, Xj) that C(X, k) . (3.2)
+
+erroneously assigns to
+
+erroneously assigns to
+
+the same group
+
+different groups
+
+The ﬁrst term tends to decrease as k increases (as fewer groups are erroneously aggregated into one big group), and the second term tends to increase with k (as more groups are erroneously split up into several groups). Thus, the two terms have the analogous qualitative
+behavior of the bias and variance terms of a prediction error when the smoothing parameter is varied. We can try to mimic this decomposition to estimate k, by letting C(Xte, k) and C(Xtr, k) take the roles of C∗(X) and C(X, k), respectively.
+The resulting estimate of variance in the bottom panel of Figure 4 is a reasonable
+approximation to the variance in the top panel, but this is not the case for the estimate of bias. Substitution of C(Xte, k) in place of the true labels C∗(X) leads to a poor estimate of bias when k is less than the true number of clusters. Although we would ideally like to estimate prediction error, we instead restrict attention to the variance—the only component
+we can estimate well. Rather than seek the minimum point of prediction error, we seek the
+point at which the variance starts to rise signiﬁcantly. Prediction strength, deﬁned above,
+equals one minus the variance. If the trial value k is chosen too large, then we expect the variance in at least one
+cluster to be signiﬁcantly larger than zero. Thus, we consider the worst performance of the procedure among the k clusters and hence seek k to minimize
+
+1 max 1≤j≤k nkj (nkj − 1)
+
+1 D[C(Xtr, k), Xte]ii = 0 ,
+
+i=/ i ∈Akj
+
+(3.3)
+
+518
+
+R. TIBSHIRANI AND G. WALTHER
+
+Figure 4. Bias and variance for the three-cluster example in Figure 2. The top panel shows the actual bias and
+variance using the real class labels, as in (3.2). The bottom panel uses C(Xte, k) in place of the true labels C ∗ (X ).
+
+or alternatively, we choose k to maximize the prediction strength
+
+ps(k) = cv-ave min 1 1≤j≤k nkj (nkj − 1)
+
+1 D[C(Xtr, k), Xte]ii = 1 ,
+
+i=/ i ∈Akj
+
+where we modiﬁed the preliminary deﬁnition (2.1) by averaging over several random splits
+
+of the data into Xte and Xtr, denoted by cv-ave. Thus, for each test set cluster j, we compute
+the proportion of pairs in Akj that are assigned to the same group by the training set based clustering. We estimate the number of groups kˆ in X by the largest k that maximizes ps(k); taking kˆ to be the largest k such that ps(k) ≥ .8 or .9 works well in practice. We think of kˆ
+
+as the largest number of clusters that can be accurately predicted in the dataset.
+
+CLUSTER VALIDATION BY PREDICTION STRENGTH
+
+519
+
+Figure 5. Bias in prediction strength estimates, for the experiments described in the text. The left panel shows the error psn/2,n/2− psn,∞ plotted as a function of the “true” prediction strength psn,∞. The right panel assesses ﬁve-fold cross-validation, and hence ps4n/5,n/5− psn,∞ is shown.
+4. EFFECTS OF REDUCED SAMPLE SIZE
+There is a potential problem in using two-fold (or other r-fold) cross-validation in estimating prediction strength. With n = 100 observations say, two-fold cross-validation uses training sets of size 50. The prediction strength for n = 50 is probably lower than that for n = 100, and hence our estimate will tend to be biased downward. Here we investigate this bias, and also consider ﬁve-fold cross-validation as an alternative strategy.
+We need some additional notation. Let psn1,n2 be the prediction strength using training and test sets of size n1 and n2, respectively. Then given a training set of size n, the “true” prediction strength is psn,∞ while two-fold cross-validation estimates this quantity using psn/2,n/2.
+We carried out a simulation study to assess the error psn/2,n/2 − psn,∞. The data were generated in two standard Gaussian classes, with independent components in d dimensions,
+
+520
+
+R. TIBSHIRANI AND G. WALTHER
+
+d = 1, 5, 1000. The ﬁrst class has its centroid at the origin. For d = 1, 5 the second class is shifted by an amount ∆, with ∆ taking values 3, 2, 1, .75, .5, .25. For d = 1000, 5% of the data are randomly selected, and only those centroid components are shifted by ∆. With n = 50, the left panel of Figure 5 shows the error psn/2,n/2 − psn,∞ plotted as a function of
+the “true” prediction strength psn,∞. In the right panel we assess ﬁve-fold cross-validation, and hence we have plotted ps4n/5,n/5 − psn,∞. In each case we show the mean over 10
+
+Figure 6. Dendrogram from breast cancer study, with the estimated prediction strength at the upper branches.
+
+CLUSTER VALIDATION BY PREDICTION STRENGTH
+
+521
+
+simulations, with one standard-error bands. There appears to be no advantage in using ﬁve-fold over two-fold cross-validation, and hence we used the latter in this article.
+
+5. APPLICATIONS TO HIERARCHICAL CLUSTERING
+One of the main motivations for this work is the widespread use of hierarchical clustering for DNA microarrays. Clustering of gene expression proﬁles is often used to try to discover subclasses of disease. Validation of these clusters is important for accurate scientiﬁc interpretation of the results. Clustering DNA microarray data is considered a hard problem not only because of the large dimension of the data, but also because there may be no underlying “true” number of clusters; the expression levels of some genes may not vary consistently with other genes, and clusters may have varying widths.
+Figure 6 shows a dendrogram from hierarchical clustering of the gene expression of 85 breast cancer patients. These data are taken from Perou et al. (1999). In these applications the hierarchical clustering is performed “bottom-up”, starting with individual samples, and agglomerating them. The dendrogram in ﬁgure 6 is plotted upside down relative to the usual plot, so the individual samples are actually at the top. The study of Perou et al. (1999) discovered at least four interesting classes of breast cancer, labeled in the dendrogram. [This example is for illustration purposes. Our dendrogram is not the same as that of Perou et al. (1999). They used a nonstandard form of average linkage clustering applied to a selected list of 450 genes. We did not have easy access their algorithm, so instead used the standard clustering procedure in S-Plus. We also used a smaller subset of genes, so that our dendrogram looked roughly like theirs.] Hierarchical clustering is preferred to K-means in this context, because it shows the whole spectrum of different K all in the same picture.
+The question that arises is: how different are these four groups? To help answer this, we can apply the prediction strength idea, for example, to study the two main branches in Figure 6. One could apply hierarchical clustering to deﬁne the clustering operation C(Xtr, k), cutting off the resulting dendrogram at a height that produces k clusters. We tried this, and it produced prediction strengths (1.00, .53, .42, .34) for k = 1, 2, . . . 4. Thus we would conclude that none of the clusters is signiﬁcant. However, this may not be the best strategy, as hierarchical clustering is performed bottom-up, and the resulting groups might look nothing like the original ones. As an alternative, we tried the following strategy: use hierarchical clustering to ﬁnd potential clusters as in Figure 6, but then use the k-means clustering as C(Xtr, k) in the calculation of prediction strength. k-means clustering is a top-down method, and is better suited to ﬁnding large groups.
+Using this idea, we can estimate the prediction strength of any two-class division in the dendrogram. In Figure 6, we have labeled the splits at the ﬁrst two levels with the estimated prediction strength. For example, the (Luminal B/C and A) versus (Normal and Basal/ERBB2) has a prediction strength of only .59. We can look deeper by computing the prediction strength of all pairs of the four groups by using only the corresponding data. The results are given in Table 1. We see that the luminal B/C group is well separated, especially from the Normal group. Most other pairs are not that well separated.
+
+522
+
+R. TIBSHIRANI AND G. WALTHER
+
+Table 1. Prediction Strength for All Pairs of the Four Groups From Figure 6. The last column contains the averages for each row.
+
+Lum B/C Lum A Normal Basal
+
+Lum B/C
+.80 .92 .71
+
+Lum A .80
+.59 .77
+
+Normal .92 .59
+.64
+
+Basal
+.71 .77 .62
+
+Average
+.81 .72 .71 .71
+
+6. A SIMULATION STUDY
+In this section we replicate the simulation study done by Tibshirani, Walther, and Hastie (2001), comparing a number of different methods for estimating the number of clusters. We now include the prediction strength method in the comparison. We also add three difﬁcult cluster scenarios to show the limits of the prediction strength methodology as well as its performance in high-dimensional settings, such as microarray analyses.
+We thus generated datasets in eight different scenarios:
+1. Null (single cluster) data in 10 dimensions: 200 data points uniformly distributed over the unit square in 10 dimensions.
+2. Three clusters in two dimensions: the clusters are standard normal variables with (25, 25, 50) observations, centered at (0,0), (0,5), and (5, −3).
+3. Four clusters in three dimensions: each cluster was randomly chosen to have 25 or 50 standard normal observations, with centers randomly chosen as N (0, 5 · I). Any simulation with clusters having minimum distance less than 1.0 units between them was discarded.
+4. Four clusters in 10 dimensions: each cluster was randomly chosen to have 25 or 50 standard normal observations, with centers randomly chosen as N (0, 1.9·I). Any simulation with clusters having minimum distance less than 1.0 units between them was discarded. In this and the previous scenario, the settings are such that about one-half of the random realizations were discarded.
+5. Four clusters in two dimensions that are not well separated. each cluster has 25 standard normal observations, centered at (0, 0), (0, 2.5), (2.5, 0) and (2.5, 2.5).
+6. Two elongated clusters in three dimensions. Each cluster is generated as follows: set x1 = x2 = x3 = t with t taking on 100 equally spaced values from −.5 to .5 and then Gaussian noise with standard deviation .1 is added to each feature. Cluster 2 is generated in the same way, except that the value 10 is then added to each feature. The result is two elongated clusters, stretching out along the main diagonal of a three-dimensional cube.
+7. Two close and elongated clusters in three dimensions. As in the previous scenario, with cluster 2 being generated in the same way as cluster 1, except that the value 1 is then added to the ﬁrst feature only.
+
+CLUSTER VALIDATION BY PREDICTION STRENGTH
+
+523
+
+8. Three clusters in a microarray-like setting. Each of the three clusters has 33 standard normal observations in 1,000 dimensions, with each of the ﬁrst 100 coordinates shifted by −2, 0, and 2, respectively.
+
+Fifty realizations were generated from each setting. In Tibshirani, Walther, and Hastie (2001) a number of different methods for assessing the number of clusters were compared, and the Gap test performed best. Here we enter the prediction strength estimate into the comparison: we select the number of clusters to be the largest k such that the ps(k) + se(k) ≥ .80, where se(k) is the standard error of the prediction strength over the ﬁve cross-validation folds. (Threshold values in the range .8 to .9 gave identical results.) We compare two applications of the prediction strength, one to k-kmeans (“Pred str”) and one to hierarchical clustering (“Pred str/hc”), to the Gap test with uniform reference distribution (“Gap/unif”) and principal component parameterization (“Gap/pc”), and to the methods due to Calinski and Harabasz (1974) and Krzanowski and Lai (1985). The ﬁrst method uses
+CH(k) = B(k)/(k − 1) W (k)/(n − k) , (6.1)
+where B(k) and W (k) are the between and within cluster sums of squares, with k clusters. CH(k) is maximized over the number of clusters k. CH(1) is not deﬁned; even if it were modiﬁed by replacing k − 1 with k, its value at 1 would be zero. Because CH(k) > 0 for k > 1, the maximum would never occur at k = 1. Krzanowski and Lai (1985) deﬁned
+
+DIFF(k) = (k − 1)2/pWk−1 − k2/pWk,
+
+(6.2)
+
+and chose k to maximize the quantity KL(k) = DIFF(k) DIFF(k + 1) . (6.3)
+The results of the simulation study are given in Table 2. The Gap/pc method was not evaluated on the microarray example, as it is not clear how to apply it with the number of variables larger than the sample size.
+
+6.1 DISCUSSION OF THE SIMULATION RESULTS
+The prediction strength estimate does well compared to the other methods in all scenarios except for the elongated clusters in scenario 6, where the KL and Gap/pc methods are the best performers. In that scenario, the clusters are long and narrow, and use of the principal component parameterization dramatically improves the Gap test (see Tibshirani, Walther, and Hastie 2001). The not-well-separated clusters in scenarios 5 and 7 proved too challenging for all methods; the CH criterion has the largest number of correct results in scenario 5, but this corresponds to a success rate of only 26%, with a large number of simulations resulting in a considerable overestimate.
+Overall, the simulation study shows that the prediction strength estimate compares well to the other methods except for strongly elongated clusters. Also, in that scenario the
+
+524
+
+R. TIBSHIRANI AND G. WALTHER
+
+Table 2. Results of Simulation Study. Numbers are counts out of 50 trials. Counts for estimates larger than 10 are not displayed. “*” indicates column corresponding to correct number of clusters.
+
+Method
+
+Estimate of number of clusters kˆ
+
+123
+
+4 5 6 7 8 9 10
+
+Null model in 10 dimensions
+
+Gap/unif
+
+49∗ 1 0
+
+0
+
+00000 0
+
+Gap/pc
+
+50∗ 0 0
+
+0
+
+00000 0
+
+CH
+
+0∗ 50 0
+
+0
+
+00000 0
+
+KL
+
+0∗ 29 5
+
+3
+
+32200 0
+
+Pred str
+
+50∗ 0 0
+
+0
+
+00000 0
+
+Pred str/hc 50∗ 0 0
+
+0
+
+00000 0
+
+Gap/unif
+
+1
+
+Gap/pc
+
+2
+
+CH
+
+0
+
+KL
+
+0
+
+Pred str
+
+0
+
+Pred str/hc 0
+
+Three-cluster model
+
+0 49∗ 0
+
+00000 0
+
+0 48∗ 0
+
+00000 0
+
+0 50∗ 0
+
+00000 0
+
+0 39∗ 0
+
+51120 0
+
+0 49∗ 1
+
+00000 0
+
+0 46∗ 4
+
+00000 0
+
+Gap/unif Gap/pc CH KL Pred str Pred str/hc
+
+Random four-cluster model in three dimensions
+
+0
+
+1 2 47∗ 0 0 0 0 0 0
+
+2
+
+2 4 42∗ 0 0 0 0 0 0
+
+0
+
+0 0 42∗ 8 0 0 0 0 0
+
+0
+
+0 0 35∗ 5 3 3 3 0 0
+
+0
+
+0 0 50∗ 0 0 0 0 0 0
+
+0
+
+0 0 34∗ 16 0 0 0 0 0
+
+Gap/unif Gap/pc CH KL Pred str Pred str/hc
+
+Random four-cluster model in 10 dimensions
+
+0
+
+0 0 50∗ 0 0 0 0 0 0
+
+0
+
+0 4 46∗ 0 0 0 0 0 0
+
+0
+
+1 4 44∗ 1 0 0 0 0 0
+
+0
+
+0 0 45∗ 3 1 1 0 0 0
+
+0
+
+0 0 49∗ 1 0 0 0 0 0
+
+0
+
+0 0 31∗ 13 4 0 0 0 0
+
+prediction strength performs better when applied to hierarchical clustering rather than kmeans. This can be explained by the fact that k-means is implicitly biased towards spherical clusters, so when the prediction strength is applied to k-means, it selects the best model for the data from among models consisting of unions of spheres. As one referee pointed out, an elongated structure is perhaps best modeled as a union of spheres, so this approach is not inappropriate. Thus, although the choice of the clustering algorithm clearly needs to take into account the structure of the clusters, the prediction strength has proven effective in selecting an appropriate model from those under consideration.
+
+7. ASYMPTOTIC PROPERTIES OF PREDICTION STRENGTH
+This section gives a theoretical justiﬁcation for prediction strength, in the context of the k-means clustering algorithm. We consider k0 populations that are given by uniform distributions on k0 unit balls in d-space (d > 1), whose centers have pairwise distances of at least four. Considering such well-separated simple clusters allows us to clearly present the
+
+CLUSTER VALIDATION BY PREDICTION STRENGTH
+
+525
+
+Table 2. Continued.
+
+Method
+Gap/unif Gap/pc CH KL Pred str Pred str/hc
+
+Estimate of number of clusters kˆ
+
+12
+
+3
+
+4 5 6 7 8 9 10
+
+Four not well-separated clusters in two dimensions
+
+50 0
+
+0
+
+0∗ 0 0 0 0 0 0
+
+49 1
+
+0
+
+0∗ 0 0 0 0 0 0
+
+00
+
+1 13∗ 7 4 4 2 8 11
+
+0 13
+
+4
+
+7∗ 4 2 9 5 0 0
+
+35 12
+
+2
+
+1∗ 0 0 0 0 0 0
+
+48 2
+
+0
+
+0∗ 0 0 0 0 0 0
+
+Gap/unif Gap/pc CH KL Pred str Pred str/hc
+
+0 0∗ 0 50∗ 0 0∗ 0 50∗ 0 27∗ 0 42∗
+
+Two elongated clusters
+
+17 16 2 14 1
+
+0
+
+0 0 00
+
+0
+
+0 0 00
+
+0
+
+0 0 00
+
+2 19 0 0 0
+
+8
+
+0 0 00
+
+000 000 7 16 27 000 000 000
+
+Two close and elongated clusters
+
+Gap/unif
+
+5 0∗ 0
+
+0 7 32 6 0 0 0
+
+Gap/pc
+
+50 0∗ 0
+
+0 0 00 0 0 0
+
+CH
+
+0 0∗ 0
+
+0 0 27 8 14 1 0
+
+KL
+
+0 0∗ 0 19 1 12 8 6 0 0
+
+Pred str
+
+9 7∗ 1 31 0 2 0 0 0 0
+
+Pred str/hc 44 6∗ 0
+
+0 0 00 0 0 0
+
+Three clusters in microarray setting
+
+Gap/unif
+
+30 12
+
+8∗ 0 0 0 0 0 0 0
+
+CH
+
+0 50
+
+0∗ 0 0 0 0 0 0 0
+
+KL
+
+0 24 26∗ 0 0 0 0 0 0 0
+
+Pred str
+
+0 0 50∗ 0 0 0 0 0 0 0
+
+Pred str/hc 0 0 50∗ 0 0 0 0 0 0 0
+
+main arguments without obscuring them with lengthy technicalities. The following result shows that ps(k) exhibits indeed a sharp drop from 1 at k0:
+Theorem 1.
+
+ps(k0) = 1 + op(1)
+
+sup ps(k) ≤ 2 + op(1).
+
+k0 +1≤k≤M
+
+3
+
+Thus kˆ is consistent for estimating k0. The dependence of ps(k) on the sample size n is suppressed in the notation. Also, it is
+possible to extend the theorem to let M increase with n.
+Proof: Denote the k0 population means by m1, . . . , mk0 , and the k0 optimal k-means centroids for the training and test sets by {mˆ tir} and {mˆ tie}, respectively. The theorem in Pollard (1982) with a simple modiﬁcation (see the example following said theorem) implies
+that for an appropriate labeling of the centroids
+
+sup |mˆ tir − mi| = op(1), sup |mˆ tie − mi| = op(1).
+
+1≤i≤k0
+
+1≤i≤k0
+
+(7.1)
+
+526
+
+R. TIBSHIRANI AND G. WALTHER
+
+But as soon as the above suprema are small enough (under the assumptions made for
+this theorem it is enough if the sup are smaller than 1), then all test data from the ith population (1 ≤ i ≤ k0) are assigned to a common training centroid and to a common test centroid. But then ps(k0) = 1. Together with (7.1) this shows ps(k0) = 1 + op(1).
+Next let k > k0. Considerations similar to those leading to (7.1) show that for n large enough, one of the k0 populations, say the ﬁrst, will have two test data centroids. For
+simplicity we consider only the case where there are exactly two such centroids. Then the test data falling into the support B(m1) of the ﬁrst population are split into two clusters by the boundary of a halfspace Hte. Likewise, one population is split into two clusters by a halfspace Htr from the training data clustering. We consider now the important case where
+the splits of the training and test clustering occur in the same population. The other cases
+are dealt with similarly. From the deﬁnition of ps(k),
+
+ps(k) ≤ cv-ave 1 nk1(nk1 − 1)
+
+1 D[C(Xtr, k), Xte]ij = 1
+
+i=/ j∈Ak1
+
+= cv-ave
+
+(n/2)2 1≤i=/j≤n/2 1 both Xte,i and Xte,j fall into B(m1) ∩ Hte
+
+× (n/2)2 1≤i=/j≤n/2 1 both Xte,i and Xte,j fall into B(m1) ∩ Hte ∩ Htr or
+
+or
+
+B(m1)
+
+∩
+
+Hte
+
+∩
+
+Hc
+tr
+
+.
+
+(7.2)
+
+The random halfspaces Hte and Htr are independent; by a symmetry argument, their
+
+normal directions are distributed uniformly on the unit sphere, and the distance of the
+
+bounding hyperplane to m1 converges to zero. By the uniform strong law for U -statistics (see
+
+Nolan
+
+and
+
+Pollard
+
+1997,
+
+theorem
+
+7),
+
+1 (n/2)2
+
+1≤i=/j≤n/2 1 both Xte,i and Xte,j fall into
+
+B(m1) ∩ H converges almost surely to P 2(Xte,1 ∈ B(m1) ∩ H) uniformly over all
+
+halfspaces H ⊂ Rd. Hence (7.2) equals
+
+E P 2(Xte,1 ∈ B(m1) ∩ H1 ∩ H2|H1, H2) E P 2(Xte,1 ∈ B(m1) ∩ H1|H1)
+
+E P 2(Xte,1 ∈ B(m1) ∩ H1 ∩ H2c|H1, H2)
+
++
+
+2
+
++ op(1)
+
+E P (Xte,1 ∈ B(m1) ∩ H1|H1)
+
+(7.3)
+
+as both n and the number of cross-validation splits becomes large. Here H1 and H2 are
+
+halfspaces whose bounding hyperplanes contain m1 and whose normal vectors are inde-
+
+pendently distributed on the unit sphere.
+
+Clearly P (Xte,1 ∈ B(m1) ∩ H1|H1) = (1/2k0). Further P (Xte,1 ∈ B(m1) ∩ H1 ∩ H2|H1, H2) = (1 − θ/π)/(2k0), where θ ∈ (0, π) is the angle between the normals of H1
+
+and H2, and P (Xte,1 ∈ B(m1)∩H1 ∩H2c|H1, H2) = (θ/π)/(2k0). It follows from Watson
+
+(1983,
+
+formula
+
+(2.2.7))
+
+that
+
+said
+
+angle
+
+θ
+
+has
+
+density
+
+g(θ)
+
+=
+
+(Γ(
+
+d 2
+
+))/(Γ(
+
+d−1 2
+
+)√π)(sin
+
+θ)d−2.
+
+CLUSTER VALIDATION BY PREDICTION STRENGTH
+
+527
+
+Hence the numerator in (7.3) equals
+
+2 1 π(1 − θ/π)2g(θ)dθ + 2 1 π(θ/π)2g(θ)dθ = 2 1 p π (θ)g(θ)dθ,
+
+4k0 0
+
+4k0 0
+
+4k0 0
+
+(7.4)
+
+where p(θ) := (1 − θ/π)2 + (θ/π)2 is symmetric around θ = π/2 and strictly decreasing
+
+on
+
+(0,
+
+π/2).
+
+Thus,
+
+there
+
+is
+
+a
+
+θ¯
+
+∈
+
+(0,
+
+π/2)
+
+such
+
+that
+
+p¯(θ)
+
+:=
+
+p(θ)
+
+−
+
+1 π
+
+0π p(θ)dθ is negative
+
+in (θ¯, π − θ¯) and positive outside this interval. g¯(θ) := g(θ) − g(θ¯) is positive in (θ¯, π − θ¯)
+
+and negative outside this interval, by symmetry. So 0π p¯(θ)g¯(θ)dθ ≤ 0 and hence (7.4)
+
+equals
+
+2 1 p¯ π (θ)g¯(θ)dθ + g(θ¯) p¯ π (θ)dθ + 1 p π (θ)dθ g π (θ)dθ
+
+4k0 0
+
+0
+
+π0
+
+0
+
+≤ 21 p π (θ)dθ 4k0π 0
+
+π
+
+π
+
+as p¯(θ)dθ = 0, g(θ)dθ = 1
+
+0
+
+0
+
+= 21 π(θ/π)2dθ 2k0π 0
+
+= 2 1 . 6k0
+
+Thus,
+
+(7.3)
+
+is
+
+not
+
+larger
+
+than
+
+2 3
+
++
+
+op(1).
+
+It
+
+follows
+
+from
+
+the
+
+above
+
+arguments
+
+that
+
+this
+
+bound
+
+is uniform over k ∈ {k0 + 1, . . . , M }, where M can also be allowed to grow appropriately
+
+with n.
+
+✷
+
+ACKNOWLEDGMENTS
+We would like to thank the referees for providing the Ben-Hur et al., Kerr/Churchill, and Yeung et al. references.
+[Received March 2002. Revised April 2004.]
+
+REFERENCES
+Ben-Hur, A., Elisseeff, A., and Guyon, I. (2002), “A Stability Based Method for Discovering Structure in Clustered Data,” in Proceedings of the Paciﬁc Symposium on Biocomputing, pp. 6–17.
+Calinski, R. B., and Harabasz, J. (1974), “A Dendrite Method for Cluster Analysis,” Communications in Statistics, 3, 1–27.
+Fraley, C., and Raftery, A. (1998), “How Many Clusters? Which Clustering Method?—Answers via Model-Based Cluster Analysis,” Computer Journal, 41, 578–588.
+Gordon, A. (1999), Classiﬁcation (2nd ed.), London: Chapman and Hall/CRC Press. Kerr, M., and Churchill, G. (2001), “Bootstrapping Cluster Analysis: Assessing the Reliability of Conclusions
+from Microarray Experiments,” in Proceedings of the National Academy of Sciences, pp. 8961–8965. Krzanowski, W. J., and Lai, Y. T. (1985), “A Criterion for Determining the Number of Groups in a Data Set Using
+Sum of Squares Clustering,” Biometrics, 44, 23–34.
+
+528
+
+R. TIBSHIRANI AND G. WALTHER
+
+Milligan, G. W., and Cooper, M. C. (1985), “An Examination of Procedures for Determining the Number of Clusters in a Data set,” Psychometrika, 50, 159–179.
+Nolan, D., and Pollard, D. (1997), “U-Processes: Rates of Convergence,” The Annals of Statistics, 15, 780–799.
+Perou, C., Jeffrey, S., van de Rijn, M., Rees, C., Eisen, M., Ross, D., Pergamenschikov, A., Williams, C., Zhu, S., Lee, J., Lashkari, D., Shalon, D., Brown, P., and Botstein, D. (1999), “Distinctive Gene Expression Patterns in Human Mammary Epiphelial Cells and Breast Cancers,” in Proceedings of the National Academy of Sciences, 96, 9212–9217.
+Pollard, D. (1982), “A Central Limit Theorem for k-means Clustering,” Annals of Probability, 19, 919–926.
+Sugar, C. (1998), “Techniques for Clustering and Classiﬁcation with Applications to Medical Problems,” Technical report, Stanford University. Ph.D. dissertation in Statistics, R. Olshen supervisor.
+Sugar, C., Lenert, L., and Olshen, R. (1999), “An Application of Cluster Analysis to Health Services Research: Empirically Deﬁned Health States for Depression From the sf-12,” Technical report, Stanford University.
+Tibshirani, R., Walther, G., and Hastie, T. (2001), “Estimating the Number of Clusters in a Dataset via the Gap Statistic,” Journal of the Royal Statistical Society, Ser. B, 32, 411–423.
+Watson, G. (1983), Statistics on Spheres, New York: Wiley.
+Yeung, K., Fraley, C., Murua, A., Raftery, A., and Ruzzo, W. (2001), “Model-Based Clustering and Data Transformations for Gene Expression Data,” Bioinformatics, 17, 977–987.
+Yeung, K., Haynor, D., and Ruzzo, W. (2001), “Validating Clustering for Gene Expression Data,” Bioinformatics, 309–318.
+

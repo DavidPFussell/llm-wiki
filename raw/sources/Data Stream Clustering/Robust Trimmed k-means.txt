@@ -1,0 +1,331 @@
+arXiv:2108.07186v1 [stat.ML] 16 Aug 2021
+
+Robust Trimmed k-means
+Olga Dorabiala∗, J. Nathan Kutz, Aleksandr Aravkin
+Department of Applied Mathematics, University of Washington, Seattle, WA
+August 17, 2021
+Abstract
+Clustering is a fundamental tool in unsupervised learning, used to group objects by distinguishing between similar and dissimilar features of a given data set. One of the most common clustering algorithms is k-means. Unfortunately, when dealing with real-world data many traditional clustering algorithms are compromised by lack of clear separation between groups, noisy observations, and/or outlying data points. Thus, robust statistical algorithms are required for successful data analytics. Current methods that robustify k-means clustering are specialized for either single or multi-membership data, but do not perform competitively in both cases. We propose an extension of the k-means algorithm, which we call Robust Trimmed k-means (RTKM) that simultaneously identiﬁes outliers and clusters points and can be applied to either single- or multi-membership data. We test RTKM on various real-world datasets and show that RTKM performs competitively with other methods on single membership data with outliers and multi-membership data without outliers. We also show that RTKM leverages its relative advantages to outperform other methods on multi-membership data containing outliers.
+Keywords— k-means, clustering, robust statistics, trimming, unsupervised learning
+1 Introduction
+Data science and machine learning have revolutionized the way that we do science today. Intelligent systems are used in the engineering, physical, social, and biological sciences to take in data and output, among other critical information, actionable decision making capabilities or data analyses that detail correlations between important features [8, 23, 18]. The three major paradigms of machine learning are supervised, unsupervised, and reinforcement learning [25]. These three classes describe the kind of data used to structure learning tasks. In supervised learning, the goal is to generate a learned mapping from inputs to outputs given labeled data. The simplest example is linear regression, while a more complex example with high impact in recent years is deep neural networks [31, 18]. In contrast, unsupervised learning is used to discover the underlying patterns or structures of unlabeled data. This area includes methods for exploratory data analysis, such as dimensionality reduction and clustering. Finally, reinforcement learning learns how to map situations to actions, so as to maximize a numerical (delayed) reward signal [33]. The relative successes of supervised and reinforcement learning are directly related to the availability of extensive labeled data. In the absence of labels, these methods are known to perform poorly. Semi-supervised learning attempts to address this issue by augmenting unlabeled data with smaller portions of labeled data [18]. However, it is often infeasible or expensive to manually label even a subset of a high-dimensional dataset. In these cases, unsupervised learning techniques are the only available approach for extracting information. Such methods are compromised by lack of clear separation between features, noisy observations, and/or outlying data points and require robustiﬁcation, which is what we aim to improve in the context of the common k-means algorithm [8, 23].
+1
+
+Unsupervised learning techniques include dimensionality reduction, cluster analysis, and anomaly detection. Although often treated as separate problems, these methods have signiﬁcant overlap in practice. Our speciﬁc algorithmic innovations pertain to the intersection between cluster analysis and anomaly detection. Cluster analysis seeks to divide a set of objects so as to maximize both intra-cluster similarity and inter-cluster diﬀerences, while the aim of anomaly detection is to identify outliers in the dataset. Many diverse algorithms have been developed to solve these important problems [23, 8], including partitioning algorithms such as classic k-means and fuzzy c-means clustering [3], density based methods such as DBSCAN (density based spatial clustering of applications with noise) [15], probabilistic methods such as mixture models [23, 8], and hiearchical clustering which produces dendrograms for data visualization [23]. In addition, spectral methods have been developed to extend the applicability of unsupervised learning to clusters that are not conﬁned to spherical and/or elliptic distributions [29].
+When data is well-separated and contains no outliers, k-means may be able to accurately assign labels to clusters [8]. Versions of the the k-means algorithm date back to the mid-1950s, with seminal contributions from Steinhaus [32] and more modern versions developed by Lloyd [26] (published much later in 1982) and Forgy [16] in the mid-1960s. The k-means algorithm is simple, intuitive and can be directly applied without restrictions. Its simplicity and applicability have contributed to its appeal and wide-spread usage; it was named one of the top-10 algorithms in data mining in 2008 [36]. Unfortunately, real-world data may be compromised by outliers and/or complicated by simultaneous membership to multiple clusters. Under these conditions, k-means is known to perform poorly.
+The poor performance of machine learning algorithms on data with corruption and noise has long been acknowledged. In the 1960s, John Tukey was the ﬁrst to recognize the need for robust methods, coining the term robust statistics [22, 13]. Tukey was agnostic to any particular procedure, but simply insisted that working with real data required robustiﬁcation in order to stabilize the performance and predictive power of machine learning and statistical methods. Since that time, scientists have proposed numerous robustiﬁcation techniques, including for clustering in unsupervised learning. These methods include data trimming [30, 2], measures of outlierness [24, 20, 37], and staging methods for outlier identiﬁcation [19]. We propose a novel extension of the k-means algorithm, which we call Robust Trimmed k-means (RTKM), that allows us to (i) capture more information than previous methods, (ii) can be used to classify both single or multi membership data, and (iii) simultaneously clusters points and identiﬁes outliers. Experimental results show that RTKM, unlike other methods, performs competitively across all realms: on single-membership data containing outliers, multi-membership data without outliers, and multi-membership data containing outliers.
+
+2 Related Work
+
+In this section, we review existing approaches to robustify k-means clustering. We focus on methods that
+
+build upon the basic k-means algorithm, due to k-means’ simplicity, speed, and scalability [8]. These
+
+developments also apply to any algorithm that depends on k-means, including spectral clustering, which can
+
+be applied to a variety of data distributions that k-means alone may not perform well on.
+
+We ﬁrst review a fundamental connection between k-means clustering and optimization. The k-means
+
+algorithm can be viewed as an alternating minimization approach to solving the challenging optimization
+
+problem
+
+kN
+
+k
+
+min
+
+wji||xi − cj||2 where wj,i = 1 for i = 1 : N
+
+(1)
+
+c,W
+
+j=1 i=1
+
+j=1
+
+where X = [x1, · · · xN ] ∈ Rm×N are the data points and C = [c1, · · · , ck] ∈ Rm×k are the cluster centers [21]. The matrix W ∈ Rk×N contains auxiliary weights wj,i that map the point-to-cluster relationship. Each column i of W assigns point xi to a cluster whose center is cj. If the weights are constrained to belonging to the discrete set wj,i ∈ {0, 1}, problem (1) is a mixed integer problem equivalent to classic clustering; it is nonsmooth and nonconvex.
+The simplest approach to solving the k-means problem is Lloyd’s (1982) algorithm [26]. Once cluster
+centers are (randomly) initialized, the algorithm works by alternatively assigning each point to its closest
+centroid and then updating cluster centers by taking the mean of all points in an assigned cluster. This iter-
+
+2
+
+Figure 1: (top) Original data consisting of three clusters and two outliers. (bottom) Standard k-means incorrectly assigns a cluster center to the outlier on the right, causing two clusters to be misidentiﬁed as one. The outlier on the left skews one cluster center assignment towards the bottom right.
+
+ative process continues until convergence. This approach can be understood as a Gauss-Seidel type method
+for the nonsmooth, nonconvex problem (1). In each iteration, the variables are alternatively minimized as
+shown in (2) and (3) until convergence [21]. The algorithmic updates in k-means are given below, with the
+pseudo-code shown in Algorithm 1
+N
+wjk,ixi cjk+1 = i=1N (2)
+wkj,i
+i=1
+
+k+1 1 if ||xi − cjk+1||2 ≤ ||xi − ctk+1||2 for 1 ≤ t ≤ k
+
+wji =
+
+(3)
+
+0 for j = t
+
+While k-means works well in an ideal situation, one of its main drawbacks is sensitivity to outliers and noise. Since points are classiﬁed by directly threshholding on the distance from cluster centers each iteration, outliers skew center assignment, and in turn point assignment, dramatically. As shown in Figure 1, k-means is unable to properly classify points in the presence of outliers.
+To solve this problem, numerous versions of a robust k-means algorithm have been proposed. The majority of these methods perform clustering in stages. In the ﬁrst stage, the dataset is divided into clusters, and in the second stage, a measure based on the clusters is applied to the data to identify outliers. One of the earliest examples of a staged method is trimmed k-means, proposed in 1997 [12]. Trimmed k-means works by running the standard k-means algorithm, removing a given percentage α of points with the greatest distance to their cluster centers, updating cluster centers as the mean of the remaining points in respective clusters, and repeating these steps until convergence. Unfortunately, this method is ultimately ineﬀective, because it is unable to improve an already poor result by the standard k-means algorithm. Other staging
+
+3
+
+Algorithm 1 k-means
+
+1: procedure kmeans(X, k)
+
+Input X = [x1, · · · xn], k, and dk > 1
+
+2: Initialize C = [c1, · · · ck]
+
+3: while not converged do
+
+wjki xi
+4: cjk+1 = wk i
+ji i
+
+k+1 1 if ||xi − ck+1 j ||2 ≤ ||xi − ck+1 t ||2 for 1 ≤ t ≤ k
+
+5:
+
+wji =
+
+0 for j = t
+
+6: w[:, i] = arg maxj w[j, i] 7: return C, w
+
+methods that suﬀer from the same drawback are those that deﬁne their own measures of outlierness, such as Outlier Removal Clustering (ORC) [19], the cluster-based local outlier factor (CBLOF) [20], the outlier factor of a cluster [24], and Local Distance-Based Outlier Factor (LDOF) [37]. In using any of these methods, it is likely that points that should be classiﬁed as outliers are masked by the standard k-means clustering. Therefore, a method that directly tackles outliers during clustering is preferred.
+Far fewer methods have been developed to simultaneously cluster and identify outliers. Among those that do are Outlier Detection and Clustering algorithm (ODC) [1], k-means − − [10], Non-exhaustive, Overlapping k-means (NEO k-means) [35], and k-means clustering with outlier removal (KMOR) [17]. On single membership data containing outliers, KMOR outperforms all of the aforementioned methods in terms of cluster accuracy and outlier detection [17]. KMOR always produces a single-membership assignment. It identiﬁes at most a given number of n0 outliers by assigning them to a k + 1th cluster based on whether they are further away than γ times the average distance between inliers and their centroids. The parameter γ is diﬃcult to identify when the proportion of outliers is unknown, and can drastically impact the results of the algorithm.
+Of all available methods, only NEO k-means, which extends k-means to overlapping clusters with noise, allows points to belong to multiple clusters simultaneously. On multi-membership data without outliers, NEO k-means outperforms similar methods [35]. The algorithm uses a single binary weight matrix to classify points and identify outliers, where parameters σ and β give the user a way to specify the degree of overlap and proportion of outliers, respectively. Note that σ is denoted as α in the original paper. If a point is not assigned to any cluster, it is designated as an outlier. NEO-k-means exhaustively assigns some multiple (1 + σ) of the total number points to clusters, where σ ≥ 0. Because of this formulation, NEO-kmeans is unable to identify outliers on datasets containing only a single cluster and cannot be restricted to single-membership on datasets containing outliers.
+We propose the Robust Trimmed k-means (RTKM) algorithm, which can be used to classify either single or multi-membership data in the presence of outliers and noise. In our numerical results, we therefore focus on the natural comparison between RTKM, KMOR, and NEO k-means. We show that RTKM performs competitively with KMOR on single-membership data with outliers and with NEO k-means on multi-membership data without outliers. Moreover, RTKM leverages its advantages in these domains to achieve superior performance on multi-membership data containing outliers. In this way, RTKM can be eﬀectively and competitively applied in multiple contexts.
+3 Robust Trimmed k-means
+3.1 Relaxation of k-means
+We propose an extension of the k-means objective in (4) that allows points to belong to multiple clusters and sets up a foundation for a robust extension. Multi-cluster membership is appealing, because it allows one to identify the extent of a point’s membership to every cluster [7]. Instead of restricting the auxiliary weight matrix W to the discrete set {0, 1}, we allow w:,i ∈ ∆s so that j=1 k wj,i = s for all i and each wj,i
+4
+
+Algorithm 2 relaxed k-means
+1: procedure relaxedkmeans(X, k, s) 2: Initialize C = [c1, · · · ck] and dk = 1.1 3: while not converged do
+wjki xi
+4: cjk+1 = wk i
+ji i
+5: w:k,i+1 = proj∆1 w:k,i − d1k ||xi − Ck+1||2
+
+6: if s = 1 then
+
+7:
+
+w[:, i] = arg maxj w[j, i]
+
+8: else
+
+9:
+
+w[:, i] = max(w[:, i], 0)
+
+10: return C, w
+
+Input X =[x1, · · · xn], k, and s
+
+is allowed to vary over the closed interval [0, 1]. The variable s denotes the minimum number of clusters a point can belong to. When s = 1, the objective in (4) is a classic relaxation of (1) where the weights wj,i can be interpreted as the probability that point i belongs to cluster j. The relaxed objective is given by
+
+kN
+
+min
+
+wji||xi − cj||2 where w:,i ∈ ∆s for i = 1 : N,
+
+(4)
+
+c,W
+
+j=1 i=1
+
+which is a continuous optimization problem, still nonsmooth and nonconvex. Problem (4) can also be solved using alternating minimization. The centers are updated as before in Algorithm 1 using a Gauss-Seidel step. To better control how quickly the weights are updated, we use the Proximal Alternating Minimization (PAM) approach, which can be thought of as a proximal regularization of the Guass-Seidel scheme [4]. The update for W is given in (5). PAM is guaranteed to converge as long as the step size dk > 1, and gives the practitioner additional control in managing the weight update in a rigorous way.
+
+w[:,i] k+1 = proj∆s w[:,i] k − 1d ||xi − Ck+1||2 (5) k
+The pseudo-code for solving the relaxed k-means objective is shown in Algorithm 2 and allows for greater modeling ﬂexibility. In Algorithm 1, the columns of the weight matrix are projected onto the vertices of the capped simplex in step 5 of each iteration. In Algorithm 2, the weights can take on continuum of values in the entire capped simplex and are projected onto the vertices during cluster assignment in step 6 after the algorithm has already converged. The relaxation allows Algorithm 2 to capture more information.
+Figure 2 gives a glimpse into how the clustering process works. Point colors existing on the gradient between blue and green represent the continuous cluster weights. In iteration 0, the weights are randomly assigned and cluster centers are initialized at random. By iteration 3, the centers begin to drift apart, and two clusters begin to form. Points on the boundary remain on the gradient between blue and green. In iteration 5, cluster centers begin to stabilize, and in iteration 20, relaxed k-means converges, and all the weights are on the vertices of the 1-capped simplex. The relaxation of weighted k-means allows us to quantify the extent of membership of a point to each cluster at every iteration.
+
+3.2 Robust Trimmed k-means
+In order to create a robust k-means method, we model outlier detection using an analogous approach taken in Section 3.1 for multi-cluster membership. In this way, we avoid having to deﬁne our own measure of “outlierness”. Our proposed method, which we call Robust Trimmed k-means (RTKM), simultaneously classiﬁes points and identiﬁes outliers by minimizing the objective function given in Equation (6).
+
+5
+
+Figure 2: Clustering process of relaxed k-means. The colors of the points represent the continuum of weights that assign points to clusters. In iteration 0, all weights are assigned randomly and cluster centers are chosen randomly as well. In iteration 3, two distinct clusters begin to form as the centers move. In iteration 5, cluster centers begin to stabilize and points on the boundary retain partial membership to both clusters. In iteration 20, relaxed k-means converges and two distinct clusters are formed.
+
+N
+
+k
+
+min vi wj,i||xi − cj ||2 c,v,W i=1 j=1 (6)
+
+w[:, i] ∈ ∆s, v ∈ ∆N−[αN]
+
+As before, X = [x1, · · · , xN ] ∈ Rm×N are the data points, C = [c1, · · · , ck] ∈ Rm×k are the cluster centers, and W ∈ Rk×N is a matrix of weights with each column in the s-capped simplex. The new variable v ∈ RN is a vector identifying outliers that belongs to the N − [αN ]-capped simplex, where α is a given proportion
+of expected outliers. Here [·] denotes the nearest integer, where we round up for half integer values. The constraint on v ensures that N − [αN ] points are designated as inliers, since i=1 N vi = N − [αN ]. In the same way the constraint on the columns of W ensures that every point is assigned to at least s clusters, since j=1 k wj,i = s. As discussed in Section 3.1, this constraint allows for each point xi to belong to more than one cluster. If we want to enforce single cluster membership, we do so by setting s = 1 and make ﬁnal
+assignments by calculating the arg max over each column of W once the algorithm converges.
+The objective in Equation (6) is approximately solved using Algorithm 3. We alternately minimize the
+objective with respect to all three variables: W, c, and v. We use a Gauss-Seidel update for the centers and
+Proximal Alternating Minimization (PAM) [4] updates for both the columns of W and for v, similar to the
+process described in Section 3.1. Algorithm 3 is guaranteed to converge as long as ek > 1 and dk > 1. In practice, we set ek = dk = 1.1.
+The algorithm takes as input the data matrix X and the number of clusters k. Centroids can be initialized
+using any scheme. The parameters α and s control the number of outliers and number of members in each
+
+6
+
+Algorithm 3 Robust Trimmed k-means (RTKM)
+1: procedure RTKM(X, k, α, s) 2: Initialize C = [c1, · · · , ck], ek = 1.1, and dk = 1.1 3: while not converged do
+N
+vik wjki xi
+4: ck+1[:, j] = i=1N
+vki wkji
+i=1
+5: wk+1 [:,i] = proj∆s wk[:,i] − 1dk vik||xi − Ck+1||2
+
+Input X = [x1, · · · xn], k, α, and s
+
+6: vk+1 = proj∆[αN] vk − e1 k k j=1 w[j,:]k=1 ||X − ckj +1||2
+
+7: if s = 1 then
+
+8:
+
+w[:, i] = arg maxj w[j, i]
+
+9: else
+
+10:
+
+w[:, i] = max(w[:, i], 0)
+
+11: return C, w, v
+
+cluster, respectively. If we know the percentage of outliers in a dataset, we can set α equal to that value. Likewise, if we know the cardinality of our dataset, we can set s = cardinality . Currently, there is no principled approach to estimating these paramenters. However, we demonstrate that RTKM performs competitively with other methods on data sets containing outliers using a range of α values.
+
+4 Experiments
+
+We compare the performance of RTKM against other methods that simultaneously perform clustering and outlier detection, speciﬁcally KMOR [17] and NEO-k-means [35]. We focus our comparison against KMOR and NEO-k-means, because these methods were shown to outperform others on various datasets. In their paper, Gan et.al [17] showed that KMOR outperformed ODC [1], k-means−− [10] and NEO-k-means [35] on single-membership data containing outliers. Similarly, NEO-k-means [35] was shown to outperform MOC [5], fuzzy k-means [7], explicit sparsity constrained clustering (esp) [27], implicit sparsity constrained clustering (isp) [27], OKM [11], and restricted OKM (rokm) [6] on multi-membership data without outliers. We evaluate the performance of RTKM on three types of datasets: single-membership datasets containing outliers, multi-membership datasets without outliers, and mutli-membership datasets with outliers.
+The quality of the cluster assignments is measured using the metric in [35], average F1 score, which quantiﬁes how well each algorithm ﬁnds the ground truth clusters. The F1 score is deﬁned as,
+TP F1 = T P + 21 (F P + F N ) (7)
+where T P denotes true positives, F P denotes false positives, and F N denotes false negatives. This metric ranges from 0 to 1, with values closer to 1 implying better classiﬁcation. To calculate the average F1 score, predicted clusters are matched to ground-truth clusters so that the average F1 score among all clusters is maximized. On datasets containing outliers, outliers are considered their own cluster for the purpose of calculating the average F1 score.
+The ability to correctly identify outliers is measured using the distance of a classifer on the Receiver Operating Curve graph from the perfect outlier classiﬁer (Me) as in [17]. The measure Me is deﬁned as,
+
+Me = (F Prate)2 + (1 − T Prate)2
+
+(8)
+
+7
+
+Figure 3: Sensitivity of RTKM, KMOR, and NEO-k-means to the choice of expected percentage of outliers on the WBC dataset. RTKM and KMOR exhibit almost identical performance as measured by Me and F1 scores. NEO-k-means is unable to identify any outliers on the WBC dataset.
+TP T Prate = T P + F N (9)
+FP F Prate = F P + T N (10) where T P , F P , and F N are deﬁned as before and T N denotes true negatives. The √Me score depends only on the true and identiﬁed outliers in the dataset. The value of Me ranges from 0 to 2, with better outlier classiﬁers having values closer to 0.
+4.1 Single-membership Data with Outliers
+We begin by evaluating RTKM against KMOR and NEO-k-means on two single-membership datasets containing outliers. The ﬁrst is the Breast Cancer Wisconsin (WBC) dataset [28] from UCI Machine Learning Repository [14]. The WBC dataset contains 699 instances of tumors with 9 numerical attributes each. All of the instances are classiﬁed as either benign or malignant, of which we treat the latter as outliers.
+All three methods are set to search for k = 1 clusters, with one member belonging to each cluster. Various values are used for the expected percentage of outliers α to see how sensitive the results are to parameter choice. For every value of α, we complete 10 runs of each algorithm with diﬀerent cluster center initialization each time. Performance metrics are reported as the minimum, maxmimum, and average Me and F1 scores over the 10 runs. Figure 3 shows these performance metrics for the three algorithms over a range of α values on the WBC dataset. RTKM and KMOR exhibit almost identical performance when given the same parameters, while NEO-k-means is unable to identify any outliers, regardless of parameter choice. This is because, by design, when k = 1, NEO-k-means cannot identify outliers.
+Next, we test the three algorithms on the shuttle training dataset, also from the UCI Machine Learning Repository [14]. This dataset contains 43,500 records and 7 classes, described by 9 numerical features. The three largest classes contain 99.57% of the data. Therefore, we consider the three largest classes as inliers, and the remaining four classes to be outliers.
+We set k = 3 as the number of clusters and allow each point to belong to at most one cluster. As before, we test the sensitivity of the results for RTKM, KMOR, and NEO-kmeans to the choice of expected percentage of outliers in the dataset. Figure 4 shows minimum, maximum, and average Me and F1 scores for
+8
+
+Figure 4: Sensitivity of RTKM, KMOR, and NEO-k-means to choice of expected number of outliers on the Shuttle dataset. All three methods perform similarly until the predicted percentage of outliers surpasses 0.02. Then, KMOR and NEO-k-means identify signiﬁcantly more outliers correctly, but the corresponding increase in false positives leads to lower F1 scores.
+10 runs of each of the methods for various α values. Up until the predicted percentage of outliers becomes 0.02, all three methods perform similarly. Beyond this point, increasing α leads KMOR and NEO-k-means to identify more outliers correctly and achieve much lower Me scores compared to KMOR. However, the corresponding increase in false positive outliers leads to comparatively lower F1 scores. In applications where there is a high cost associated with false positive outliers, KMOR may be preferential. Conversely, in applications were the goal is to identify as many outliers as possible, RTKM is superior.
+4.2 Multi-membership Data without Outliers
+Unlike KMOR, both RTKM and NEO-k-means have the ability to classify points as belonging to multiple clusters [35]. The parameters in NEO-k-means determine exactly how many point assignments are made and at most how many outliers can be identiﬁed. In contrast, RTKM’s parameters determine at least how many assignments are made and at least how many outliers are identiﬁed. In their recent paper, Whang et.al [35] showed that NEO-k-means outperformed six other methods that study multi-cluster membership on two real datasets. We evaluate RTKM and KMOR on the same two datasets and add their performance, as measured by average F1 score to the evaluation from [35].
+We use the “yeast” and “scene” datasets from [34]. The “yeast” dataset contains 2417 instances with 103 numerical attributes. There are 14 classes in total, and the cardinality of the dataset is 4.237. The “scene” dataset contains 2407 instances with 294 numeric attributes. There are 6 classes in total, and the cardinality of the dataset is 1.074. Both datasets are also used for testing MOC [5], fuzzy k-means [7], explicit sparsity constrained clustering (esp) [27], implicit sparsity constrained clustering (isp) [27], OKM [11], and restricted OKM (rokm) [6]. We borrow performance reports for all algorithms except RTKM and KMOR from [35].
+For the “yeast” dataset, we use k = 14, α = 0, and s = 4 as our inputs for RTKM and k = 14, n0 = 0, γ = 9 as our inputs for KMOR. For the “scene” dataset, we use k = 6, α = 0, and s = 1 as our inputs for RTKM and k = 6, n0 = 0, γ = 9 as our inputs for KMOR. Each algorithm is run ﬁve times using the same cluster center initialization, and the result that leads to the best objective function value for each method is chosen, as in [35]. Average F1 scores for each algorithm on both datasets are shown in Table 1. NEO-k-means achieves the highest F1 score on both datasets. However, in both cases the F1 score of RTKM is only slightly lower. In fact, it is the second highest of all the scores reported. On the “scene” dataset, KMOR performs just as well as RTKM. This result is due to the cardinality of the “scene” dataset being so
+9
+
+“yeast” “scene”
+
+RTKM 0.317 0.597
+
+KMOR 0.161 0.597
+
+NEO-k-means 0.366 0.626
+
+moc -
+0.467
+
+fuzzy 0.308 0.431
+
+esp 0.289 0.572
+
+isp 0.203 0.586
+
+okm 0.311 0.571
+
+rokm 0.203 0.593
+
+Table 1: Average F1 scores of various multi-membership clustering methods on the “yeast” and “scene” datasets. NEO-k-means achieves the best F1 score on both datasets. However, RTKM achieves the second highest F1 score on both datasets, demonstrating its competitiveness.
+
+close to one. Contrastingly, on the “yeast” dataset, KMOR is unable to produce a competitive result due to a higher cardinality.
+Recall that the optimal choice for the parameter in RTKM controlling the number of clusters each point is assigned to is s = cardinality . This means that if the cardinality of a dataset is only slightly larger than one, RTKM will perform better doing single-, rather than multi-, cluster membership. RTKM’s success on multi-membership data is most pronounced on datasets where s ≥ 2.
+4.3 Multi-membership Data with Outliers
+In order to compare RTKM against KMOR and NEO-k-means on multi-membership data containing outliers, we add noise to the “yeast” dataset from Section 4.2. We do so by adding 150 noise points, so that the data contains ∼ 10% outliers.
+We set k = 14 as the number of clusters. Additionally, RTKM is given s = 4 so that each point is assigned to at least 4 clusters, and NEO-k-means is given σ = 3, so that each point is assigned to at most 4 clusters. KMOR exhibits diﬀerent performance when using γ = 1 versus γ = 9, so we include results for both initializations. We again test the sensitivity of the results of all three methods to the expected percentage of outliers α. Figure 5 shows the minimum, maximum, and average Me and F1 scores for 10 runs of each of the methods using various parameter values.
+As seen in Figure 5, of the three methods tested, RTKM achieves the highest average F1 and the lowest average Me scores. When γ = 9, KMOR does not identify any outliers, regardless of parameter choice. Given a value of α greater than 0.100, KMOR with γ = 1 and NEO-k-means are sometimes able to achieve almost as low of an Me score as RTKM, but on average, given the same initialization, RTKM does a better job at identifying outliers. Figure 6 showcases this behavior. Given the same cluster center initialization, RTKM is able to correctly identify all of the outliers plus a few false positives, whereas NEO-k-means and KMOR do not identify any outliers correctly. This demonstrates that on multi-membership data containing noise, RTKM is able to leverage its relative advantages over KMOR and NEO-k-means to outperform both methods.
+5 Conclusions and Future Work
+We propose Robust Trimmed k-means (RTKM) as an algorithm for simultaneous point classiﬁcation and outlier detection that can operate on both single- and multi-membership data. In RTKM, the parameters k and α control the number of clusters and expected percentage of outliers respectively. The parameter s controls at least how many clusters we want each point to belong to. At the moment, there is no principled approach to estimating these parameters. We leave the investigation of such an approach for future work, and demonstrate that for the time being, RTKM remains competitive with existing methods over a range of α values.
+The innovations presented rely on a robust relaxed formulation for the weighted k-means algorithm that allows the classiﬁcation weight matrix to exist on a continuum of values [0, 1], rather than the binary set {0, 1}. This relaxation gives the user a way to track the extent of membership of a point to each cluster at every iteration and provides ﬂexibility for multi-cluster membership. We apply the same methodology for outlier identiﬁcation, thereby avoiding explicitly deﬁning a measure of “outlierness”, unlike many other methods. Relaxation-based formulations have proven to be eﬀective in a number of recent applications [38, 9]. In the context of the current application, relaxation to a continuum of values, coupled with the PAM algorithm,
+
+10
+
+Figure 5: Sensitivity of RTKM, KMOR, and NEO-k-means to the choice of expected percentage of outliers on the Yeast plus noise dataset. Over all parameter choices, RTKM achieves the highest average F1 score and the lowest average Me score.
+provides a way to search the model space more eﬀectively in order to discover clusters and outliers. Using this method, we avoid rushing into a bad local minimum, as with prior alternating methods moving across extreme points of the simplex.
+We test RTKM on three types of datasets: single-label data with outliers, multi-label data without outliers, and mutli-label data with outliers. While KMOR and NEO-k-means set the benchmark for the ﬁrst two types of datasets, respectively, they do not perform well on both. RTKM remains competitive on both types of data, and outperforms both KMOR and NEO-k-means on multi-label data with outliers. On single-label data, RTKM performs almost identically to KMOR in terms of F1 and Me scores on a simple dataset containing one cluster with outliers. NEO-k-means produces a poor result since by design, the method cannot identify outliers in a dataset containing only one cluster. On a single-membership dataset containing multiple clusters with outliers, RTKM outperforms NEO-k-means, but achieves a lower F1 score than KMOR. Even so, both RTKM and NEO-k-means identify more outliers correctly than KMOR, as evidenced by lower Me scores. We conclude that in applications where the cost of false positive outliers is high, KMOR may be preferred, but in applications where such a cost is low and it is important to identify as many outliers as possible, RTKM may be favored. On multi-label data without outliers, RTKM remains competitive against NEO-k-means, achieving a higher F1 score than every other method NEO-k-means is compared against in [35]. Furthermore, RTKM substantially outperforms KMOR when the cardinality of a dataset is greater than or equal to 2, since KMOR does not have the functionality to make multi-membership assignments. On multi-label data containing outliers, RTKM achieves the highest average F1 score and the lowest average Me score across all tested values for predicted percentage of outliers. On average, given the same cluster center initialization, only RTKM is able to correctly identify any outliers. These experiments demonstrate that although RTKM has a niche where it performs best, it does so without sacriﬁcing performance on other types of datasets.
+Code Availability: https://github.com/OlgaD400/Robust-Trimmed-K-Means
+11
+
+Figure 6: Outliers as identiﬁed by RTKM and NEO-k-means on the “yeast” dataset with noise. The leftmost ﬁgure shows the true location of outliers. The remaining ﬁgures show the location of outliers identiﬁed by RTKM, NEO-k-means, KMOR with γ = 1, and KMOR with γ = 9 for the same cluster center initialization.
+References
+[1] M. Ahmed and A. N. Mahmood. A novel approach for outlier detection and clustering improvement. In 2013 IEEE 8th Conference on Industrial Electronics and Applications (iciea), pages 577–582. IEEE, 2013.
+[2] A. Aravkin and D. Davis. Trimmed statistical estimation via variance reduction. Mathematics of Operations Research, 45(1):292–322, 2020.
+[3] S. Askari. Fuzzy c-means clustering algorithm for data with unequal cluster sizes and contaminated with noise and outliers: Review and development. Expert Systems with Applications, 165:113856, 2021.
+[4] H. Attouch, J. Bolte, P. Redont, and A. Soubeyran. Proximal alternating minimization and projection methods for nonconvex problems: An approach based on the kurdyka-lojasiewicz inequality. Mathematics of operations research, 35(2):438–457, 2010.
+[5] A. Banerjee, C. Krumpelman, J. Ghosh, S. Basu, and R. J. Mooney. Model-based overlapping clustering. In Proceedings of the eleventh ACM SIGKDD international conference on Knowledge discovery in data mining, pages 532–537, 2005.
+[6] C.-E. ben N’Cir, G. Cleuziou, and N. Essoussi. Identiﬁcation of non-disjoint clusters with small and parameterizable overlaps. In 2013 International Conference on Computer Applications Technology (ICCAT), pages 1–6. IEEE, 2013.
+[7] J. C. Bezdek. A convergence theorem for the fuzzy isodata clustering algorithms. IEEE transactions on pattern analysis and machine intelligence, (1):1–8, 1980.
+[8] C. M. Bishop. Pattern recognition and machine learning. springer, 2006.
+[9] K. Champion, P. Zheng, A. Y. Aravkin, S. L. Brunton, and J. N. Kutz. A uniﬁed sparse optimization framework to learn parsimonious physics-informed models from data. IEEE Access, 8:169259–169271, 2020.
+[10] S. Chawla and A. Gionis. k-means–: A uniﬁed approach to clustering and outlier detection. In Proceedings of the 2013 SIAM International Conference on Data Mining, pages 189–197. SIAM, 2013.
+12
+
+[11] G. Cleuziou. An extended version of the k-means method for overlapping clustering. In 2008 19th International Conference on Pattern Recognition, pages 1–4. IEEE, 2008.
+[12] J. A. Cuesta-Albertos, A. Gordaliza, C. Matr´an, et al. Trimmed k-means: An attempt to robustify quantizers. The Annals of Statistics, 25(2):553–576, 1997.
+[13] D. Donoho. 50 years of data science. Journal of Computational and Graphical Statistics, 26(4):745–766, 2017.
+[14] D. Dua and C. Graﬀ. UCI machine learning repository, 2017.
+[15] M. Ester, H.-P. Kriegel, J. Sander, X. Xu, et al. A density-based algorithm for discovering clusters in large spatial databases with noise. In Kdd, volume 96, pages 226–231, 1996.
+[16] E. W. Forgy. Cluster analysis of multivariate data: eﬃciency versus interpretability of classiﬁcations. biometrics, 21:768–769, 1965.
+[17] G. Gan and M. K.-P. Ng. K-means clustering with outlier removal. Pattern Recognition Letters, 90:8–14, 2017.
+[18] I. Goodfellow, Y. Bengio, A. Courville, and Y. Bengio. Deep learning, volume 1. MIT press Cambridge, 2016.
+[19] V. Hautam¨aki, S. Cherednichenko, I. K¨arkk¨ainen, T. Kinnunen, and P. Fr¨anti. Improving k-means by outlier removal. In Scandinavian Conference on Image Analysis, pages 978–987. Springer, 2005.
+[20] Z. He, X. Xu, and S. Deng. Discovering cluster-based local outliers. Pattern Recognition Letters, 24(9-10):1641–1650, 2003.
+[21] J. Z. Huang, M. K. Ng, H. Rong, and Z. Li. Automated variable weighting in k-means type clustering. IEEE transactions on pattern analysis and machine intelligence, 27(5):657–668, 2005.
+[22] P. J. Huber. John w. tukey’s contributions to robust statistics. Annals of statistics, pages 1640–1648, 2002.
+[23] G. James, D. Witten, T. Hastie, and R. Tibshirani. An introduction to statistical learning, volume 112. Springer, 2013.
+[24] S.-y. Jiang and Q.-b. An. Clustering-based outlier detection method. In 2008 Fifth International Conference on Fuzzy Systems and Knowledge Discovery, volume 2, pages 429–433. IEEE, 2008.
+[25] M. I. Jordan and T. M. Mitchell. Machine learning: Trends, perspectives, and prospects. Science, 349(6245):255–260, 2015.
+[26] S. Lloyd. Least squares quantization in pcm. IEEE transactions on information theory, 28(2):129–137, 1982.
+[27] H. Lu, Y. Hong, W. N. Street, F. Wang, and H. Tong. Overlapping clustering with sparseness constraints. In 2012 IEEE 12th International Conference on Data Mining Workshops, pages 486–494. IEEE, 2012.
+[28] O. L. Mangasarian and W. H. Wolberg. Cancer diagnosis via linear programming. Technical report, University of Wisconsin-Madison Department of Computer Sciences, 1990.
+[29] A. Y. Ng, M. I. Jordan, and Y. Weiss. On spectral clustering: Analysis and an algorithm. In Advances in neural information processing systems, pages 849–856, 2002.
+[30] P. J. Rousseeuw and A. M. Leroy. Robust regression and outlier detection, volume 589. John wiley & sons, 2005.
+[31] J. Schmidhuber. Deep learning in neural networks: An overview. Neural networks, 61:85–117, 2015.
+[32] H. Steinhaus. Sur la division des corps mat´eriels en parties. Bull. Acad. Polon. Sci, 1(804):801, 1956.
+[33] R. S. Sutton and A. G. Barto. Reinforcement learning: An introduction. MIT press, 2018.
+13
+
+[34] G. Tsoumakas, E. Spyromitros-Xiouﬁs, J. Vilcek, and I. Vlahavas. Mulan: A java library for multi-label learning. Journal of Machine Learning Research, 12:2411–2414, 2011.
+[35] J. J. Whang, I. S. Dhillon, and D. F. Gleich. Non-exhaustive, overlapping k-means. In Proceedings of the 2015 SIAM International Conference on Data Mining, pages 936–944. SIAM, 2015.
+[36] X. Wu, V. Kumar, J. R. Quinlan, J. Ghosh, Q. Yang, H. Motoda, G. J. McLachlan, A. Ng, B. Liu, S. Y. Philip, et al. Top 10 algorithms in data mining. Knowledge and information systems, 14(1):1–37, 2008.
+[37] K. Zhang, M. Hutter, and H. Jin. A new local distance-based outlier detection approach for scattered real-world data. In Paciﬁc-Asia Conference on Knowledge Discovery and Data Mining, pages 813–822. Springer, 2009.
+[38] P. Zheng, T. Askham, S. L. Brunton, J. N. Kutz, and A. Y. Aravkin. A uniﬁed framework for sparse relaxed regularized regression: Sr3. IEEE Access, 7:1404–1423, 2018.
+14
+

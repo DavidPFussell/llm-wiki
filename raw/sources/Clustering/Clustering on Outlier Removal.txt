@@ -1,0 +1,1013 @@
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+1
+
+Clustering with Outlier Removal
+Hongfu Liu, Member, IEEE, Jun Li, Member, IEEE, Yue Wu and Yun Fu, Fellow, IEEE
+
+Abstract—Cluster analysis and outlier detection are strongly coupled tasks in data mining area. Cluster structure can be easily destroyed by few outliers; on the contrary, outliers are deﬁned by the concept of cluster, which are recognized as the points belonging to none of the clusters. Unfortunately, most existing studies do not notice the coupled relationship between these two task and handle them separately. In light of this, we consider the joint cluster analysis and outlier detection problem, and propose the Clustering with Outlier Removal (COR) algorithm. Generally speaking, the original space is transformed into the binary space via generating basic partitions in order to deﬁne clusters. Then an objective function based Holoentropy is designed to enhance the compactness of each cluster with a few outliers removed. With further analyses on the objective function, only partial of the problem can be handled by K-means optimization. To provide an integrated solution, an auxiliary binary matrix is nontrivally introduced so that COR completely and efﬁciently solves the challenging problem via a uniﬁed K-means-- with theoretical supports. Extensive experimental results on numerous data sets in various domains demonstrate the effectiveness and efﬁciency of COR signiﬁcantly over state-of-the-art methods in terms of cluster validity and outlier detection. Some key factors in COR are further analyzed for practical use. Finally, an application on ﬂight trajectory is provided to demonstrate the effectiveness of COR in the real-world scenario.
+Index Terms—Outlier detection, Clustering, Holoentropy, K-means--.
+!
+
+arXiv:1801.01899v2 [cs.LG] 2 Sep 2019
+
+1 INTRODUCTION
+Cluster analysis is a fundamental task in data mining and machine learning area, which aims to separate a bunch of data points into different groups so that similar points are assigned into the same cluster. Although cluster analysis has been studied for long time, it is still catching rising attention in industrial scenarios due to its wide applications, from customer segmentation [1] to information retrieval [2], and from recommendation systems [3] to resource allocation [4]. Accordingly, cluster analysis has also been extensively explored in the academia. K-means is one of the most representative clustering methods, which seeks K prototypes as the centroids to present the data points with the nearest distance. Spectral clustering designed for graph partition, minimizes the weights of cut edges to obtain disconnected sub-graphs with roughly even sizes. Gaussian mixture model estimates K Gaussian distribution with means and variances to ﬁt the data.
+Although tremendous efforts have been devoted in the cluster analysis, most of the existing methods assume that all the data points should be assigned a cluster label. In another word, there are no anomaly data points for during clustering process. Unfortunately, this is not always true, especially for the unsupervised task. The potential anomalies or outliers inevitably degrade the clustering performance. For example, few outliers easily destroy the cluster structure derived from K-means and generate bizarre distributions of Gaussian mixture model. To handle outliers or noisy data, some robust clustering methods have been proposed to recover the clean data. Metric learning aims to learn a robust distance function to resist the outliers [5]; L1 norm is employed to alleviate the negative impact of outliers on the cluster structure [6].
+• H. Liu is with Department of Computer Science, Brandeis University, Waltham; Email: hongfuliu@brandeis.edu. J. Li (co-ﬁrst author) is with Laboratory for Computational Physiology at Massachusetts Institute of Technology; Email: junli@mit.edu. Y. Wu and Y. Fu are with Department of Electrical & Computer Engineering, Northeastern University, Boston; Email: {yuewu, yunfu}@ece.neu.edu.
+Manuscript received XXX; revised XXX.
+
+Beyond these, some methods aim to learn the more effective representation with some constraints. Low-rank representation assumes that the intrinsic or clean data lie in low-dimensional manifold [7]; subspace sparse clustering explores self-expression property with sparse coefﬁcient for representation learning. Recently, consensus clustering generates basic partition ﬁrst, and employs the basic partitions as the representation for robust partition. Note that these methods still assign the cluster labels for each data point, rather than explicitly removing anomaly points.
+To tackle the negative impacts of outliers during the clustering processing, some unsupervised outlier detection methods have been put forward from different aspects. Usually each data point is calculated a score to identify the outlier degree, returning top K outlier candidates. Local outlier factor is one of the popular density-based methods, where outliers are identiﬁed by comparing the local density of the data point and its neighbors [8]. Similarly, local distance-based outlier detection uses the relative location of an object to its neighbours to determine the degree to which the object deviates from its neighbourhood [9]. Angle-based outlier detection focuses on variance in the angles between the difference vectors of a point to the other points, where the angles of the outliers and other two randomly selected points have some deviations [10], [11]. Other representative methods include ensemblebased iForest [12], eigenvector-based OPCA [13], cluster-based TONMF [14], and so on.
+Although outlier detection methods can be regarded as a preprocess for cluster analysis, outlier detection and cluster analysis are usually conducted as two separated tasks. In fact, they are strongly coupled. Cluster structure can be easily destroyed by few outliers [15]; on the contrary, outliers are deﬁned by the concept of cluster, which are recognized as the points belonging to none of the clusters [8]. However, few of the existing works treat the cluster analysis and outlier detection in a uniﬁed framework. DBSCAN is one of the pioneering works for density-based cluster analysis with the outlier set as an extra output [16], where all the data points are divided in three categories, core points, border points and outliers according to the density, then the clusters are generated by
+
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+2
+
+connecting core points and their afﬁliated border points. Strictly DBSCAN does not belong to the joint cluster analysis and outlier detection, which identiﬁes and removes the outliers ﬁrst and then follows the cluster generation. To our best knowledge, K-means- [17] is the ﬁrst work along this direction. It aims to detect o outliers and partition the rest points into K clusters, where the instances far away from the nearest centroid are regarded as outliers during clustering process. Since this problem is a discrete optimization problem in essence, it is natural that Langrangian Relaxation (LP) [18] formulates the clustering with outliers as an integer programming problem with several constraints, which requires the cluster creation costs as the input parameter. Although these two pioneering works provide new directions for joint clustering and outlier detection, the spherical structure assumption of K-means-- and the original feature space limit its capacity for complex data analysis, and the setup of input parameters and high time complexity in LP make it infeasible for large-scale data.
+In this paper, we focus on the joint cluster analysis and outlier detection problem, and propose the Clustering with Outlier Removal (COR) algorithm. Since the outliers are relied on the concept of clusters, we transform the original space into the partition space via running some clustering algorithms (e.g. Kmeans) with different parameters to generate a set of different basic partitions. By this means, the continuous data are mapped into a binary space via one hot encoding of basic partitions. In the partition space, an objective function is designed based on Holoentropy [19] to increase the compactness of each cluster after some outliers are removed. With further analyses, we transform the partial problem of the objective function into a K-means optimization. To provide a complete and neat solution, an auxiliary binary matrix derived from basic partitions is introduced. Then COR is conducted on the concatenated matrix, which completely and efﬁciently solves the challenging problem via a uniﬁed Kmeans-- with theoretical supports. To evaluate the performance of COR, we conduct extensive experiments on numerous data sets in various domains. Compared with K-means-- and numerous outlier detection methods, COR outperforms rivals over in terms of cluster validity and outlier detection by four metrics. Moreover, we demonstrate the high efﬁciency of COR, which indicates it is suitable for large-scale and high-dimensional data analysis. Some key factors in COR are further analyzed for practical use. Finally, an application on ﬂight trajectory is provided to demonstrate the effectiveness of COR in the real-world scenario. Here we summarize our major contributions as follows.
+• To our best knowledge, we are the ﬁrst to conduct the clustering with outlier removal in the partition space, which achieves simultaneous consensus clustering and outlier detection.
+• Based on Holoentropy, we design the objective function from the aspect of outlier detection, which is partially solved by K-means clustering. By introducing an auxiliary binary matrix, we completely transform the non K-means clustering problem into a K-means-- optimization with theoretical supports.
+• Extensive experimental results demonstrated the effectiveness and efﬁciency of our proposed COR signiﬁcantly over the state-of-the-art rivals in terms of cluster validity and outlier detection.
+The rest of this paper is organized as follows. Section 2 introduces the related work on robust clustering, outlier detection
+
+and joint learning. Section 3 provides the preliminary knowledge and our problem formulation. In Section 4, we elaborate the equivalent relationship between our addressed problem and Kmeans-- with an augmented matrix. Section 5 delivers a thorough discussion on the relationship among COR and cluster analysis, outlier detection and consensus clustering. Extensive experiments are conducted in Section 6. Finally, we conclude this paper in Section 7.
+2 RELATED WORK
+In this section, we present the related work in terms of robust clustering, consensus clustering, outlier detection, and highlight the difference between existing work and ours.
+2.1 Robust Clustering To alleviate the impact of outliers, robust clustering1 has been proposed from different aspects. From the distance function aspect, metric learning is used to learn a robust metric to measure the similarity between two points by taking the outliers into account [5], [20]; L1 norm models the outliers as the sparse constraint for cluster analysis [6], [21]. From the data aspect, the outliers are assigned few weights during clustering process [22]; low-rank representation treats the data as the clean part and outliers, and constrains the clean part with the lowest rank [7]. From the model fusion aspect, ensemble clustering integrates different partitions into a consensus one to deliver a robust result [23], [24]. Although these robust clustering methods reduce the negative impacts of outliers on the cluster structure, they fail to explicitly detect or remove outlier points for clustering. In another word, each data point is assigned with a cluster label, even for the outliers.
+2.2 Consensus Clustering
+Consensus clustering, also known as ensemble clustering, targets to integrate several diverse partition results from traditional clustering methods into a consensus one [23]. It has been widely recognized of robustness, consistency, novelty and stability over traditional clustering methods, especially in generating robust partitions, discovering novel structures, handling noisy features, and integrating solutions from multiple sources. The process of consensus clustering generally has two steps: basic partitions generation and consensus fusion. Given basic partitions as input, consensus clustering is in essence a fusion problem rather than a partitioning problem, which seeks for an optimal combinatorial result from basic partitions. Over the past years, many clustering ensemble techniques have been proposed, resulting in various of ways to face the problem together with new ﬁelds of application for these techniques. Generally speaking, consensus clustering can be divided into two categories, i.e., those with or without an explicit global objective function. The methods that do not set objective functions make use of some heuristics or metaheuristics to ﬁnd approximate solutions. Representative methods include co-association matrix-based [25], [26], graph-based [23], [27], relabeling and voting based [28] and locally adaptive clusterbased algorithms [29]. On another hand, the methods with explicit objectives employ global objective functions to measure the similarity between basic partitions and the consensus one. Representative solutions include K-means-like algorithm [30],
+1. The concept of robust clustering means that the partition is robust to outliers, rather than noisy features.
+
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+3
+
+NMF [31], EM algorithm [32], simulated annealing [33] and combination regularization [34]. More information on consensus clustering can be found in the recent survey [35].
+2.3 Outlier Detection
+Outlier detection, also known as anomaly detection, seeks the points deviation from others and identiﬁes these points as outliers, where most of the existing studies focus on unsupervised outlier detection. Some criteria are designed to assign a score to each point, and the points with large scores are regarded as the outlier candidates. Some representative methods include densitybased LOF [8], COF [36], distance-based LODF [9], frequent pattern-based Fp-outlier [37], angle-based ABOD [10] and its fast version FABOD [11], ensemble-based iForest [12], BSOD [38], eigenvector-based OPCA [13], cluster-based TONMF [14]. Recently, there are deep learning based outlier detection methods such as deep one-class SVM [39] and GAN-based methods [40], [41], [42], which learns a non-linear transformation to project the original data into hidden space for effective recognition. However, these methods train the model only with clear data, and predict new data whether they are outliers, which is different from the problem we address here.
+2.4 Joint Clustering and Outlier Detection
+Cluster analysis and outlier detection are consistently hot topics in data mining area; however, they are usually considered as two independent tasks. Although robust clustering resists to the impact of outliers, each point including outliers is assigned the cluster label. Few of the existing works treat the cluster analysis and outlier detection in a uniﬁed framework. Two-stage frameworks, such as DBSCAN conduct the outlier detection ﬁrst, then apply the clustering method for partition, which becomes struggled to handle complex data. K-measn-- [17] detects o outliers and partitions the rest points into K clusters, where the instances with large distance to the nearest centroid are regarded as outliers during the clustering process. Langrangian Relaxation (LP) [18] formulates the clustering with outliers as an integer programming problem, which requires the cluster creation costs as the input parameter. This problem has also been theoretically studied in facility location. Charikar et al. proposed a bi-criteria approximation algorithm for the facility location with outliers problem [43]. Chen proposed a constant factor approximation algorithm for the K-median with outliers problem [44].
+In this paper, we consider the clustering with outlier removal problem, which partitions the entire data sets into several clusters and one outlier set. Although some pioneering works provide new directions for joint clustering and outlier detection, none of these algorithms expect K-means-- are amenable to a practical implementation on large data sets, while of theoretical interests. Moreover, the spherical structure assumption of K-means-- and the original feature space limit its capacity for complex data analysis. In light of this, we transform the original feature space into the partition space, where based on Holoentropy, the COR is designed to achieve simultaneous consensus clustering and outlier detection.
+3 PROBLEM FORMULATION
+In this section, we ﬁrst illustrate some preliminary knowledge and elaborate our objective function for clustering and outlier removal.
+
+3.1 Preliminaries
+Here we introduce some basic knowledge on K-means-- and Holoentropy.
+K-means-- [17] is a variant of K-means, which is particularly designed for handling the sensitivity of K-means on outliers. It is widely recognized that few outliers deviate the centroids from their intrinsic positions. To tackle with this, some data points with far distance to their centroids are regarded as the outlier candidates, which are not assigned with any cluster label and involved into the centroid updating, either. Similar to K-means, K-means-- also has two iterative stages, data point assignment and centroid updating. During the data point assignment, we calculate the distances between each data point and its nearest centroid, and sort the distances, where the data points with top o largest distances are outlier candidates. For the centroid updating, it is the same with K-means since these outlier candidates are not assigned with cluster labels. It is worthy to note that the outlier candidates are changing during the iteration. Compared with K-means, Kmeans-- requires two input parameters, the numbers of clusters and outlier K and o. It enjoys many properties as K-means in terms of neat mathematical formulation, model efﬁciency and convergence.
+As pointed out by Ref [19], it is not suitable to only employ entropy or total correlation for outlier detection. They proposes a new measure Holoentropy as follows.
+Deﬁnition 1 (Holoentropy). Holoentropy HL(Y) is deﬁned as the sum of the entropy and the total correlation of the random vector Y, and can be expressed by the sum of the entropies on all attributes.
+Holoentropy is an outlier detection metric based on information theory, which handles the categorical data and takes both entropy and total correlation into consideration. In the rest of this paper, we elaborate our proposed objective function based on Holoentropy, and derive its to K-means-- algorithm for a neat and efﬁcient solution.
+3.2 Objective Function
+Cluster analysis and outlier detection are closely coupled tasks. Cluster structure can be easily destroyed by few outlier points; on the contrary, outliers are deﬁned by the concept of cluster, which are recognized as the points belonging to none of the clusters. To cope with this challenge, we focus on the Clustering with Outlier Removal (COR). Speciﬁcally, the outlier detection and clustering tasks are jointly conducted, where o points are detected as the outliers and the rest instances are partitioned into K clusters. Table 1 shows the notations used in the following sections.
+The cluster structure is vulnerable to few outliers, and outliers request to be identiﬁed with cluster boundary. The coupling relationship among cluster analysis and outlier detection makes it like a chicken-and-egg problem. To escape the chicken-andegg problem in joint clustering and outlier detection, we are inspired by consensus clustering [23], [25], [29], which incorporates several basic partitions generated from the data for a robust fusion to alleviate the negative effects from outliers. Moreover, the deﬁnition of outliers relies on the clusters. The above two points motivate us to transform the data from the original feature space into partition space via generating several basic partitions. This process is similar to generate basic partitions in consensus clustering [45], [46]. Let X denote the data matrix with n points and d features. A partition of X into K crisp clusters can be
+
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+4
+
+Notation n d K o r
+X
+O
+Π B
+
+TABLE 1 The Contingency Matrix
+
+Domain Z Z Z Z Z
+R{n×d} R{o×d} Z {n×r} {0, 1}n×R
+
+Description Number of instances Number of features Number of clusters Number of outliers Number of basic partitions
+Data set
+Outlier set
+Set of basic partitions Binary matrix derived from Π
+
+represented as a collection of K subsets of objects with a label vector π = (Lπ(x1), · · · , Lπ(xn)), 1 ≤ l ≤ n, where Lπ(xl) maps xl to one of the K labels in {1, 2, · · · , K}. Some basic partition generation strategy, such as K-means clustering with different cluster numbers can be applied to obtain r basic partitions Π = {πi}, 1 ≤ i ≤ r. Let Ki denote the cluster number for πi and R = i=1 r Ki. Then a binary matrix B = {bl}, 1 ≤ l ≤ n can be derived from Π as follows:
+
+bl = (bl,1, · · · , bl,i, · · · , bl,r), with
+
+bl,i = (bl,i1, · · · , bl,ij , · · · , bl,iKi), and (1)
+
+bl,ij =
+
+1, if Lπi (xl) = j . 0, otherwise
+
+It is worthy to note that we do not require a speciﬁc algorithm to generate basic partitions. For the sake of simplicity and efﬁciency, K-means with different cluster numbers are recommended to generated basic partitions. Although K-means is vulnerable to outliers, our COR still delivers promising results based on the basic partitions generated by K-means. The beneﬁts to transform the original space into the partition space lie in (1) the binary value indicates the cluster-belonging information, which is particularly designed according to the deﬁnition of outliers, and (2) compared with the continuous space, the binary space is much easier to identify the outliers due to the categorical features. For example, Holoentropy is a widely used outlier detection metric for categorical data [19].
+In Ref [19], the authors aimed to minimize the Holoentropy of the data set with o outliers removed. Here we assume there exists the cluster structure within the whole data set. Therefore, it is more reasonable to minimize the Holoentropy of each cluster. In such a way, the clusters become compact after the outliers are removed, rather than the entire data set. Therefore, based on Holoentropy of each cluster, we give our objective function of COR as follows.
+
+K
+
+min pkHL(Ck),
+
+(2)
+
+π
+
+k=1
+
+where HL(·) is deﬁned in Deﬁnition 1, π is the cluster indicator, including K clusters C1 ∪ · · · ∪ CK = X\O, with Ck ∩ Ck = ∅ if k = k and pk+ = |Ck|/(n − o). Actually, the objective function in Eq. (2) is the summation of weighted Holoentropy of each cluster, where the weight pk is proportional to the cluster size. Here the number of cluster K and the number of outliers o are two parameters of our proposed algorithm, which is the same setting with K-means-- [17], and we treat determining K and o as an orthogonal problem beyond this paper. In the next section, we provide an efﬁcient solution for COR by introducing another auxiliary binary matrix.
+
+4 CLUSTERING WITH OUTLIER REMOVAL
+To solve the problem in Eq. (2), we provide a detailed objective function on the binary matrix B as follows.
+
+K
+
+K
+
+r Ki
+
+pkHL(Ck) ∝
+
+H(Ck,ij ), and
+
+k=1 k=1 bl∈Ck i=1 j=1 (3)
+
+H(Ck,ij ) = −(1 − pk,ij ) log(1 − pk,ij ) − pk,ij log pk,ij ,
+
+where H denotes the Shannon entropy and pk,ij denotes the probability of bl,ij = 1 in the ij-th column of Ck.
+To better understand the meaning of pk,ij in Eq. (3), we provide the following lemma.
+
+Lemma 1. For K-means clustering on the binary data set B, the k-th centroid satisﬁes
+
+mk = (mk,1, · · · , mk,i, · · · , mk,r), with
+
+mk,i = (mk,i1, · · · mk,ij · · · mk,iKi ), and (4)
+
+mk,ij =
+
+bl,ij /|Ck| = pk,ij , ∀ k, i, j.
+
+bl,ij ∈Ck
+
+The proof of Lemma 1 is self-evident according to the arithmetic mean of the centroid in K-means clustering. Based on Lemma 1, we uncover the bridge between the problem in Eq. (3) and K-means clustering on the binary matrix B.
+
+Theorem 1. If K-means is conducted on n−o inliers of the binary matrix B, we have
+
+K
+
+r Ki
+
+K
+
+max pk
+
+pk,ij log pk,ij ⇔ min
+
+f (bl, mk),
+
+k=1 i=1 j=1
+
+k=1 bl∈Ck
+(5)
+
+where mk is the k-th centroid by Eq. (4) and the distance function f (bl, mk) = i=1 j=1 r Ki DKL(bl,ij ||mk,ij ), here DKL(·||·) is the KL-divergence.
+
+Proof. According to the Bregman divergence [47], we have DKL(s||t) = H(t) − H(s) + (s − t) ∇H(t), where s and t are two vectors with the same length. Then we start on the right side of Eq. (5).
+
+K
+
+f (bl, mk)
+
+k=1 bl∈Ck
+
+K
+=
+
+r Ki
+(H(mk,ij ) − H(bl,ij )
+
+k=1 bl∈Ck i=1 j=1
+
++ (bl,ij − mk,ij ) ∇H(mk,ij ))
+
+K
+
+r Ki
+
+K
+
+= |Ck|
+
+H(mk,ij ) −
+
+r Ki
+H(bl,ij ).
+
+k=1
+
+i=1 j=1
+
+k=1 bl∈Ck i=1 j=1
+(6)
+
+The above equation holds due to bl∈Ck (bl,ij − mk,ij ) = 0, and the second term is a constant given the binary matrix B. According to Lemma 1, we ﬁnish the proof.
+
+Remark 1. Theorem 1 uncovers the equivalent relationship between the second part in Eq. (3) and K-means on the binary matrix B. By this means, some part of this complex problem can be efﬁciently solved by the simple K-means clustering with KLdivergence on each dimension.
+
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+5
+
+Algorithm 1 Clustering with Outlier Removal
+Input: X: data matrix; K, o, r: number of clusters, outliers, basic partitions.
+Output: K clusters C1, · · · CK and outlier set O; 1: Generate r basic partitions from X; 2: Build the binary matrices B and B by Eq. (1)&(7); 3: Initialize K centroids from [B B]; 4: repeat 5: Calculate the distance between each point in [B B] and its nearest centroid; 6: Identify o points with largest distance as outliers; 7: Assign the rest n − o points to their nearest centroids; 8: Update the centroids by arithmetic mean; 9: until the objective value in Eq. (2) remains unchanged.
+
+Although Theorem 1 formulates the second part in Eq. (3) into a K-means optimization problem on the binary matrix B, there still remains two challenges. (1) The ﬁrst part in Eq. (3) is difﬁcult to formulate into a K-means objective function, and (2) Lemma 1 and Theorem 1 are conducted on n − o inliers, rather than the whole matrix B. In the following, we focus on these two challenges, respectively.
+The second part in Eq. (3) can be solved by K-means clustering, which inspires us to make efforts in order to transform the complete problem into the K-means solution. Since 1 − pk,ij is difﬁcult involved into the K-means clustering by Theorem 1, which means 1 − pk,ij cannot be modeled by the binary matrix B, here we aim to model it by introducing another binary matrix B = {bl}, 1 ≤ l ≤ n as follows.
+
+bl = (bl,1, · · · , bl,i, · · · , bl,r), with
+
+bl,i = (bl,i1, · · · , bl,ij , · · · , bl,iKi), and
+
+(7)
+
+bl,ij =
+
+0, if Lπi (xl) = j . 1, otherwise
+
+From Eq. (7), B is also derived from Π. Compared with the binary matrix B in Eq. (1), B can be regarded as the ﬂip of B. In fact, B and B are the 1-of-Ki and (Ki-1)-of-Ki codings of the original data, respectively. Based on B, we can deﬁne mk according to Eq. (4), then we have mk,ij = 1−mk,ij = 1−pk,ij .
+Based on the binary matrices B and B, we transform the problem in Eq. (3) into a uniﬁed K-means optimization by the following theorem.
+
+Theorem 2. If K-means is conducted on n−o inliers of the binary matrix [B B], we have
+
+K
+
+K
+
+min pkHL(Ck) ⇔ min
+
+(f (bl, mk) + f (bl, mk)),
+
+π
+
+k=1
+
+k=1 bl∈Ck
+
+where mk, mk are the k-th centroid by Eq. (4), and the distance function f (bl, mk) = i=1 j=1 r Ki DKL(bl,ij ||mk,ij ), f (bl, mk) = i=1 j=1 r Ki DKL(bl,ij ||mk,ij ), and DKL(·||·) is the
+KL-divergence.
+
+Remark 2. The problem in Eq. (3) cannot be solved via K-means on the binary matrix B. Nontrivially, we introduce the auxiliary binary matrix B, a ﬂip of B, in order to model 1 − pk,ij. By this means, the complete problem can be formulated by K-means clustering on the concatenated binary matrix [B B] in Theorem 2. The beneﬁts not only lie in simplifying the problem with a neat
+
+mathematical formulation, but also inherit the efﬁciency from K-means, which is suitable for large-scale data clustering with outlier removal.
+Theorem 2 completely solves the ﬁrst challenge that the problem in Eq. (2) with inliers with the auxiliary matrix B. This makes a partial K-means solution into a complete K-means solution. In the following, we handle the second challenge, which conducts on the entire data points, rather than n − o inliers.
+In this paper, we consider the clustering with outlier removal, which simultaneously partitions the data and discovers outliers. That means the outlier detection and clustering are conducted in a uniﬁed framework. Since the centroids in K-means clustering are vulnerable to outliers, these outliers should not contribute to the centroids. Inspired by K-means-- [17], the outliers are identiﬁed as the points with large distance to the nearest centroid. The major difference is that K-means-- is proposed on the original feature space, while our problem starts from the Holoentropy on the partition space, and we formulate the problem into a Kmeans optimization with the auxiliary matrix B. After delicate transformation and derivation, K-means-- is used as a tool to solve the problem in Eq. (2), which returns K clusters C1, · · · , CK and outlier set O. The complete process of our proposed clustering with outlier removal is summarized in Algorithm 1.
+Next, we analyze the property of Algorithm 1 in terms of time complexity and convergence. In Line-1, we ﬁrst generate r basic partitions, which are usually ﬁnished by K-means clustering with different cluster numbers. This step takes O(rt Knd), where t and K are the average iteration number and cluster number, respectively. Line 5-8 denotes the standard K-means-- algorithm, which has the similar time complexity O(tKnR), where R =
+i=1 r Ki is the dimension of the binary matrix B and B. It is worthy to note that only R elements are non-zero in [B B]. In Line 6, we ﬁnd o points with largest distances, rather than sorting n points so that it can be achieved with O(n). It is worthy to note that r basic partitions can be generated via parallel computing, which dramatically decreases the execution time. Moreover, t , t, r and R are relatively small compared with the number of points n. Therefore, the time complexity of our algorithm is roughly linear to the number of points, which easily scales up for big data clustering with outliers. Moreover, Algorithm 1 is also guaranteed to converge to a local optimum by the following theorem.
+Theorem 3. Algorithm 1 converges to a local optimum.
+The proof holds due to the good convergence of K-means--.
+5 DISCUSSIONS
+In this section, we launch several discussions on clustering with outlier removal. Generally speaking, we elaborate it in terms of the traditional clustering, outlier detection and consensus clustering.
+Comparison with cluster analysis. Traditional cluster analysis aims to separate a bunch of points into different groups that the points in the same cluster are similar to each other. Each point is assigned with a hard or soft label. Although robust clustering is put forward to alleviate the impact of outliers, each point including outliers are assigned the cluster label. Differently, the problem we address here, clustering with outlier removal only assigns the labels for inliers and discovers the outlier set. Technically speaking, our COR belongs to the non-exhaustive clustering, where not all data points are assigned labels and some data points
+
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+6
+
+might belong to multiple clusters. NEO-K-Means [48] is one of the representative methods in this category. In fact, if we set the overlapping parameter to be zero in NEO-K-Means, it just degrades into K-means--. Our COR is different from K-means-- in the feature space. The partition space not only naturally caters to the deﬁnition of outliers and Holoentropy, but also alleviates the spherical structure assumption of K-means optimization.
+Comparison with outlier detection. Outlier Detection is a hot research area, where tremendous efforts have been made to thrive this area from different aspects. Few of them simultaneously conduct cluster analysis and outlier detection. Except K-means--, Langrangian Relaxation (LP) [18] formulates the clustering with outliers as an integer programming problem, which requires the cluster creation costs as the input parameter. LP not only suffers from huge algorithmic complexity, but also struggles to set this parameter in practical scenarios, which leads LP to return the infeasible solutions. That is the reason that we fail to report the performance of LP in the experimental part. To our best knowledge, we are the ﬁrst to solve the outlier detection in the partition space, and simultaneously achieve clustering and outlier removal. Our algorithm COR starts from the objective function in terms of outlier detection, and solves the problem via clustering tool, where demonstrates the deep connection between outlier detection domain and cluster analysis area.
+Comparison with consensus clustering. Consensus Clustering aims to fuse several basic partitions into an integrated one. In our previous work, we proposed K-means-based Consensus Clustering (KCC) [49], [50], which transforms the complex consensus clustering problem into a K-means solution with ﬂexible KCC utility functions. Similarly, the input of our COR is also a set of basic partitions, and it delivers the partition with outliers via K-means--. The partition space derived from basic partitions enables COR not only to identify outliers, but also to fuse basic partition to achieve consensus clustering. From this view, Holoentropy can be regarded as the utility function to measure the similarity between the basic partition in B or B and the ﬁnal one. For the centroid updating, the missing values in basic partitions within KCC framework provide no utility, further do not contribute the centroids. For COR, we can automatically identify the outliers, which do not participate into the centroid updating either.
+6 EXPERIMENTAL RESULTS
+In this section, we ﬁrst introduce the experimental settings and data sets , then showcase the effectiveness of our proposed method compared with K-means and K-means--. Moreover, a variety of outlier detection methods are involved as the competitive methods. Some key factors in COR are further analyzed for practical use. Finally, an application on ﬂight trajectory is provided to demonstrate the effectiveness of COR in the real-world scenario.
+6.1 Experimental Settings
+Data sets. To fully evaluate our COR algorithm, numerous data sets in different domains are employed. They include the gene expression data, image data, high-dimensional text data and other multivariate data. These data sets can be found from [51], [52] and UCI2. Here we treat the class with smallest size as outliers. For ecoil, three smallest classes in the original datasets are regarded
+2. https://archive.ics.uci.edu/ml/datasets.html
+
+Data set ecoli yeast caltech sun09 fbis k1b re0 re1 tr11 tr23 wap glass shuttle kddcup
+
+TABLE 2 Characteristics of data sets
+
+Type Gene Gene Image Image Text Text Text Text Text Text Text UCI UCI UCI
+
+#instance 336 1484 1415 3282 2463 2340 1504 1657 414 204 1560 214 58000
+494021
+
+#feature 7 8
+4096 4096 2000 21839 2886 3758 6129 5832 8460
+9 9 38
+
+#cluster 5 4 4 3 10 5 5 6 4 3 10 3 3 3
+
+#outlier 9 185 67 50 332 60 218 527 87 32 251 39 244
+54499
+
+as the outliers. Table 2 shows the numbers of instances, features,
+
+clusters and outliers of these data sets.
+
+Competitive Methods. K-means and K-means-- are used for
+
+comparisons. For our COR algorithm, 100 basic partitions are
+
+generated via K-means by different cluster numbers from 2 to
+
+2K, then K-means-- is employed with the distance function in
+
+Eq. (1) for the partition and outliers. Note that K-means-- and
+
+COR are fed with K and o for fair comparisons, which are true
+
+numbers of clusters and outliers, respectively. For K-means, we
+
+set the cluster number as the true number plus one, the cluster
+
+found by K-means with the smallest size is regarded as the outlier
+
+set. Codes of K-means, K-measn-- and COR are implemented by
+
+MATLAB. Each algorithm runs 20 times, and returns the average
+
+result and standard deviation. Moreover, several classical outlier
+
+detection methods including density-based LOF [8], COF [36],
+
+distance-based LODF [9], angle-based FABOD [11], ensemble-
+
+based iForest [12], eigenvector-based OPCA [13], cluster-based
+
+TONMF [14] are also involved as the competitive methods to
+
+evaluate the outlier detection performance3. o points with the
+
+largest scores by these methods are regarded as outliers. For the
+
+outlier detection methods, some default settings in the original
+
+papers are used for stable results. The number of nearest neighbors
+
+in LOF, COF, LODF and FABOD is set to 50; the sub-sampling
+
+size and the number of trees in iForest are 200 and 100; the
+
+forgetting number is set to 0.1 in OPCA; the rank and two
+
+parameters in TONMF are 10, 10 and 0.1, respectively.
+
+Validation metric. Although the clustering with outlier removal
+
+is an unsupervised task, we can still apply the ground truth to
+
+evaluate the performance with label information. Since we focus
+
+on the jointly clustering and outlier detection, four metrics are
+
+employed to evaluate the performance in terms of cluster validity
+
+and outlier detection. The outlier set is regarded as a special cluster
+
+in the ground truth.
+
+Normalized Mutual Information (N M I) and Normalized
+
+Rand Index (Rn) are two widely used external measurements
+
+for cluster validity [53]. N M I measures the mutual information
+
+between resulted cluster labels and ground truth labels, followed
+
+by a normalization operation, while Rn measures the similarity
+
+between two partitions in a statistical way. They can be computed
+
+as follows.
+
+NMI =
+
+i,j nij log ni+·n+j n·nij ,
+( i ni+ log n ni+ )( j nj+ log n n+j )
+
+3. The codes of outlier detection methods can be found at https:// github.com/dsmi-lab-ntust/AnomalyDetectionToolbox and https://github.com/ ramkikannan/outliernmf.
+
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+7
+
+Data set
+ecoli yeast caltech sun09 fbis k1b re0 re1 tr11 tr23 wap glass shuttle kddcup Average Score
+
+K-means 62.27±2.78 19.91±0.77 69.13±9.92 19.67±0.21 9.77±2.41 34.4±18.55 17.14±3.06 16.19±3.47 9.61±0.68 7.08±0.81 40.51±2.85 31.35±5.90 11.06±12.49 1.41±0.05
+24.96 58.48
+
+NMI K-means-61.81±2.37 15.81±1.52 65.34±11.76 10.76±1.41 30.27±3.43 33.11±17.06 15.28±2.78 11.57±3.92 14.89±6.95 9.82±2.86 22.75±10.42 33.48±3.78 22.95±3.21 67.04±5.18
+29.63 62.54
+
+TABLE 3 Performance of clustering with outlier removal via different algorithms (%)
+
+COR 63.16±1.76 20.41±1.08 82.69±7.04 21.50±1.17 54.13±0.85 50.00±5.15 32.12±2.76 35.46±2.69 58.69±3.94 19.43±6.60 48.31±2.47 35.88±3.94 30.74±5.41 86.12±0.60
+45.62 100
+
+K-means 56.6±11.23 14.40±0.72 47.65±15.48 18.61±0.21 -0.90±0.23 25.12±18.87 8.86±2.80 2.79±1.36 0.40±0.12 -3.67±0.47 12.03±2.31 20.03±3.50 18.18±22.67 0.04±0.00
+15.72 42.47
+
+Rn K-means-52.62±10.33 11.85±1.93 53.26±24.94 9.11±1.69 9.00±3.65 21.74±22.48 8.74±4.54 3.59±1.81 3.92±4.71 1.31±3.02 6.33±6.33 23.47±2.09 27.73±5.71 71.40±9.81
+21.72 49.05
+
+COR 61.68±8.74 18.07±2.04 71.25±18.18 20.29±1.91 38.36±2.32 32.19±9.82 21.76±3.83 20.79±2.51 50.95±8.55 14.01±8.04 29.24±7.40 24.86±1.72 47.40±12.89 93.91±0.85
+38.91 100
+
+K-means 2.34±2.02 4.92±1.33 8.27±11.41 1.84±0.09 0.02±0.07 0.00±0.00 3.18±2.38 0.29±0.25 0.00±0.00 0.00±0.00 0.60±0.51 8.23±5.41 0.00±0.00 0.01±0.00
+2.12 8.56
+
+Jaccard K-means-45.76±12.78 14.38±6.14 30.36±15.45 3.27±0.44 5.21±0.15 0.00±0.00 8.82±0.68 16.75±0.34 9.93±0.42 5.87±1.02 10.98±0.31 24.00±8.28 5.39±0.00 15.06±3.26
+12.98 54.34
+
+COR 47.37±3.75 50.47±1.45 97.19±1.39 2.27±0.22 23.77±2.24 20.53±0.82 28.50±1.20 27.64±1.88 34.06±3.03 12.35±2.66 22.01±1.30 32.67±2.87 5.58±0.93 15.98±0.63
+30.03 97.82
+
+K-means 4.50±3.71 9.34±2.45 13.59±17.88 3.62±0.16 0.03±0.14 0.00±0.00 6.07±4.45 0.59±0.50 0.00±0.00 0.00±0.00 1.18±0.99 14.8±8.84 0.00±0.00 0.02±0.00
+3.84 10.03
+
+F-measure K-means-61.58±14.6 24.69±8.92 44.37±19.84 6.34±0.81 9.91±0.27 0.00±0.00 16.20±1.15 28.70±0.51 18.06±0.70 11.08±1.84 19.78±0.50 37.97±11.59 10.22±0.00 26.03±5.55
+22.49 58.28
+
+COR 64.21±3.24 67.07±1.29 98.57±0.72 4.44±0.42 38.35±2.95 34.06±1.12 44.34±1.44 43.28±2.30 50.74±3.44 21.88±4.31 36.06±1.74 49.18±3.24 10.56±1.73 27.55±0.96
+42.16 97.87
+
+(a) caltech
+
+(b) caltech
+
+(c) fbis
+
+Fig. 1. Performance of COR with different numbers of basic partitions on caltech and fbis.
+
+(d) fbis
+
+Rn =
+
+i,j 2 nij − i 2 ni+ · j 2 n+j / 2n , ni+ i 2 /2 + n+j j 2 /2 − i 2 ni+ · j 2 n+j / 2n
+
+where nij, ni+, n+j are the co-occurrence number and cluster size of i-th and j-th cluster in the obtained partition and ground truth, respectively.
+Jaccard index and F-measure are designed for the binary classiﬁcation, which are employed to evaluate the outlier detection. They can be computed as follows.
+
+|O ∩ O∗| Jaccard = |O ∪ O∗| ,
+
+precition · recall
+
+F −measure = 2 ∗
+
+,
+
+precition + recall
+
+where O and O∗ are the outlier sets by the algorithm and ground truth, respectively, and F-measure is the harmonic average of the precision and recall for outlier class.
+To evaluate the overall performance on all used data sets, we propose a score as follows.
+
+sorce(Ai) =
+
+P (Ai, Dj) ,
+
+j maxi P (Ai, Dj)
+
+where P (Ai, Dj) denotes the performance of algorithm Ai on data set Dj in terms of some metric.
+Note that these four metrics and the score are positive measurements, i.e, a larger value means better performance. Although Rn is normalized, it can still be negative, which means that the partition is even worse than random label assignment.
+Environment. All experiments were run on a PC with an Intel Core i7-5930K@3.50 GHz and a 64 GB DDR3 RAM.
+
+6.2 Algorithmic Performance
+Here we evaluate the performance of COR by comparing with K-means-- and outlier detection methods. Table 3 shows the
+
+performance of clustering with outlier removal via K-means, Kmeans-- and COR. There are three obvious observations. (1) few outliers can easily destroy the whole cluster structure. This point can be veriﬁed from the fact that K-means delivers poor clustering results on fbis, tr23 and kddcup in terms of NMI and Rn. Moreover, K-means fails to capture the outliers by simply increasing the cluster number. (2) K-means-- jointly learns the cluster structure and detects the outliers, which alleviates the negative impact of outliers on the clusters and achieves better performance over K-means on the average level. Although Kmeans-- slightly outperforms COR on sun09 in terms of outlier detection, the cluster structure provided by K-means-- is much worse than COR, even K-means clustering. (3) COR exceeds Kmeans and K-means-- by a large margin in both cluster analysis and outlier detection. For example, COR gains more than 10%, 20% and 40% improvements by cluster validity over rivals on caltech, fbis and tr11, respectively. Moreover, COR also provides better outlier detection results. On yeast and caltech, there exists more than 30%, 50% gains over K-means--; especially, on k1b, COR achieves 25.53 and 34.06 in terms of Jaccard and F-measure; however, K-means-- fails to detect any outliers. Recall that COR is in essence K-means-- on the binary matrix [B B]. The huge improvements result from the partition space, where deﬁnes the concept of clusters and achieves the joint consensus clustering and outlier removal. From the score, COR signiﬁcantly outperforms K-means and K-means-- in terms of all four metrics. Since COR is conducted in the partition space, we also compare with Kmeans-based Consensus Clustering (KCC) [50] with the same basic partitions by adding one more cluster to capture the outliers. Due to the limited page, we report that on the average level, KCC delivers the competitive cluster results, where COR slightly outperforms KCC by 1.21% and 3.95% in terms of NMI and Rn. Unfortunately, KCC fails to detect any outliers on all the datasets.
+Beyond K-means and K-means--, we also compare COR with several outlier detection methods. Table 4 shows the performance
+
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+8
+
+TABLE 4 Performance of outlier detection via different algorithms (%)
+
+Data set
+
+Jaccard
+
+F-measure
+
+LOF COF LDOF FABOD iForest OPCA TONMF K-means-- COR LOF COF LDOF FABOD iForest OPCA TONMF
+
+ecoli
+
+20.00 38.46 5.88
+
+20.00
+
+38.28 5.88
+
+0.00
+
+45.76
+
+47.37 33.33 55.56 11.11 33.33 55.56 11.11
+
+0.00
+
+yeast
+
+11.45 11.45 5.11
+
+13.85 23.75 26.71
+
+8.66
+
+14.38
+
+50.47 20.54 20.54 9.73
+
+24.32 38.38 42.16
+
+8.11
+
+caltech 2.29 0.75 1.52
+
+8.06
+
+27.62 0.00
+
+0.00
+
+30.36
+
+97.19 4.48 1.49 2.99
+
+14.93 43.28 0.00
+
+1.49
+
+sun09
+
+1.01 2.04 0.00
+
+2.04
+
+2.04
+
+0.00
+
+0.00
+
+3.27
+
+2.27 2.00 4.00 0.00
+
+4.00
+
+4.00
+
+0.00
+
+6.00
+
+fbis
+
+8.32 5.56 4.90
+
+6.41
+
+5.40
+
+4.40
+
+8.32
+
+5.21
+
+23.77 15.36 10.54 9.34
+
+12.05
+
+10.24 8.43
+
+15.36
+
+k1b
+
+0.00 0.00 0.00
+
+0.84
+
+0.00
+
+0.00
+
+1.69
+
+0.00
+
+20.53 0.00 0.00 0.00
+
+1.67
+
+0.00
+
+0.00
+
+3.33
+
+re0
+
+2.59 5.31 3.07
+
+6.34
+
+2.83 11.79
+
+7.13
+
+8.82
+
+28.50 5.05 10.09 5.96
+
+11 93
+
+5.50 21.10
+
+13.30
+
+re1
+
+21.85 15.44 15.19
+
+18.83
+
+16.85 17.77
+
+16.98
+
+16.75
+
+27.64 35.86 26.76 26.38 31.69 28.84 30.17
+
+29.03
+
+tr11
+
+10.13 8.75 19.18 10.83
+
+8.75
+
+8.75
+
+12.99
+
+9.93
+
+34.06 18.39 16.09 32.18
+
+19.54
+
+16.09 16.09
+
+22.99
+
+tr23
+
+4.92 4.92 6.67
+
+10.34
+
+6.67
+
+1.59
+
+10.34
+
+5.87
+
+12.35 9.37 9.37 12.50 18.75 12.50 3.12
+
+18.75
+
+wap
+
+10.82 12.30 6.36
+
+12.81
+
+11.31 6.58
+
+7.49
+
+10.98
+
+22.01 19.52 21.91 11.95 22.71 23.75 12.35
+
+13.94
+
+glass
+
+16.42 36.84 4.00
+
+25.81 13.04 14.71
+
+0.00
+
+24.00
+
+32.67 28.21 53.85 76.90 41.03 23.08 25.64
+
+0.00
+
+shuttle 12.44 12.96 0.21
+
+7.25
+
+1.46
+
+3.61
+
+0.00
+
+5.39
+
+5.58 22.13 22.95 0.41
+
+13.52
+
+2.87
+
+6.97
+
+0.00
+
+kddcup N/A N/A N/A
+
+N/A
+
+21.22 15.66
+
+8.66
+
+15.06
+
+15.98 N/A N/A N/A
+
+N/A
+
+35.01 27.08
+
+15.94
+
+Average 9.40 11.91 5.55
+
+11.03
+
+12.80 8.39
+
+5.83
+
+12.98
+
+30.03 16.48 19.47 15.34 19.19 21.36 14.59
+
+10.59
+
+Score
+
+34.33 41.88 18.73
+
+40.10
+
+42.14 28.54
+
+30.72
+
+48.15
+
+91.17 37.09 42.80 27.79 43.02 46.70 31.48
+
+33.60
+
+Note: We omit the standard deviations due to the determinacy of most outlier detection methods. N/A means failure to deliver results due to out-of-memory on a PC machine with 64G RAM.
+
+K-means-61.58 24.69 44.37 6.34 9.91 0.00 16.20 28.70 18.06 11.08 19.78 37.97 10.22 26.03 22.49 51.13
+
+COR 64.21 67.07 98.57 4.44 38.35 34.06 44.34 43.28 50.74 21.88 36.06 49.18 10.56 27.55 42.16 89.91
+
+TABLE 5 Execution time by second
+
+Method
+
+sun09
+
+K-means
+
+1.12
+
+LOF
+
+65.16
+
+COF
+
+79.50
+
+LDOF
+
+277.25
+
+FABOD
+
+567.47
+
+iForest
+
+12.55
+
+OPCA
+
+0.40
+
+TONMF
+
+7.87
+
+K-means--
+
+3.56
+
+BP
+
+52.86
+
+COR
+
+2.31
+
+Note: BP shows the time
+
+k1b
+
+wap
+
+4.55
+
+1.25
+
+150.38
+
+26.81
+
+154.02
+
+30.18
+
+2638.97 903.43
+
+5373.76 1811.28
+
+12.88
+
+8.53
+
+6.18
+
+1.75
+
+31.76
+
+7.67
+
+65.28
+
+12.73
+
+121.95
+
+36.58
+
+0.15
+
+0.19
+
+for generating 100 basic
+
+shuttle 0.22
+11.93 181.45 246.87 495.43 165.42
+0.30 1.18 0.33 5.09 0.57 partitions.
+
+kddcup 0.62 N/A N/A N/A N/A
+1455.41 2.51 18.17 5.98 5.55 2.89
+
+of outlier detection in terms of Jaccard and F-measure. These algorithms are based on different assumptions including density, distance, angle, ensemble, eigenvector and clusters, and sometimes effective on certain data set. For example, COF and iForest get the best performance on shuttle and kddcup, respectively. However, in the most cases, these competitors show the obvious disadvantages in terms of performance. The reasons are complicated, but the original space and unsupervised parameter setting might be two of them. For TONMF, there are three parameters as the inputs, which are difﬁcult to set without any knowledge from domain experts. Differently, COR requires two straightforward parameters, and beneﬁts from the partition space and joint clustering with outlier removal, which brings the extra gains on several data sets. On shuttle and kddcup, COR does not deliver the results as good as the outlier detection methods. In the next subsection, we further improve the performance of COR via different basic partition generation strategy.
+Next we continue to evaluate these algorithms in terms of efﬁciency. Table 5 shows the execution time of these methods on ﬁve large-scale or high-dimensional data sets. Generally speaking, the density-based, distance-based and angle-based methods become struggled on high-dimensional data sets, especially FABOD is the most time consuming method, while the cluster-based methods including TONMF, K-means-- are relatively fast. It is worthy to note that the density-based, distance-based and angle-based methods require to calculate the nearest neighbor matrix, which takes huge space complexity and fails to deliver results on largescale data sets due to out-of-memory on a PC machine with 64G RAM. For COR, the time complexity is roughly linear to the number of instances; moreover, COR is conducted on the binary matrix, rather than the original feature space. Thus, COR is also suitable for high-dimensional data. On k1b, COR only takes 0.15
+
+(a) shuttle
+
+(b) kddcup
+
+Fig. 2. Performance of COR with different basic partition generation strategies.
+
+seconds, over 400 times faster than K-means--. Admittedly, COR requires a set of basic partitions as the input, which takes the extra execution time. In Table 5, we report the execution time of generating 100 basic partitions as well. This process can be further accelerated by parallel computing. Even taking the time of generating basic partition, COR is still much faster than the density-based, distance-based and angle-based outlier detection methods.
+6.3 Factor Exploration
+In this subsection, we provide further analyses on the factors inside COR, the number of basic partitions and the basic partition generation strategy.
+In consensus clustering, the performance of clustering goes up with the increase of basic partitions [46], [50], [52]. Similarly, we test COR with different numbers of basic partitions. Figure 1 shows the boxplot of the performance of COR with 10, 30, 50, 70 and 90 basic partitions on caltech and fbis in terms of NMI and Jaccard. For a certain number of basic partitions, we generate 100 sets of basic partitions and run COR for the boxplot. From Figure 1, we have that COR delivers high quality partitions even with 10 basic partitions, and that for outlier detection, the performance slightly increases with more basic partitions and stabilizes in a small region. Generally speaking, 30 basic partitions are enough for COR to deliver a good result.
+So far, we employ the Random Parameter Selection (RPS) strategy to generate basic partitions, which employs K-means clustering with different cluster numbers. In fact, Random Feature Selection (RFS) is another widely strategy to generation basic partitions, which randomly selects partial features for K-means clustering. In the following, we evaluate the performance of COR with RFS. Here we set the random feature selection ratio to be 50% for 100 basic partitions. Figure 2 shows the performance of
+
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+PEK
+CTU PVG
+CAN
+
+PEK
+CTU PVG
+CAN
+
+SEA SFO
+
+SEA ATL SFO
+
+9 ATL
+
+(a) Chinese ﬂight trajectories
+
+(b) Outlier trajectories in China
+
+(c) US ﬂight trajectories
+
+(d) Outlier trajectories in US
+
+Fig. 3. Chinese and US ﬂight trajectories. (a) & (c) show the ﬂight trajectories and (b) & (d) demonstrate the outlier trajectories detected by COR.
+
+COR with different basic partition generation strategies on shuttle and kddcup. RFS achieves some improvements over RPS on these two data sets with different metrics, except on shuttle in terms of Rn. This indicates that RFS is helpful to alleviate the negative impact of noisy features, and further produces high quality basic partitions for COR. It is worthy to note that COR with RFS on kddcup achieves 21.18 and 34.95 in terms of Jaccard and Fmeasure, which exceeds the one with RPS over 5% and 7%, and competes with iForest. This means that COR with RFS gets the competitive performance with the best rival on kddcup, and it is over 170 times faster than iForest.
+6.4 Application on Trajectory Detection
+Finally, we evaluate our COR in the real-world application on outlier trajectory detection. The data come from Flight Tracker4, including ﬂightID, ﬂightNum, timestamp, latitude, longitude, height, departure airport, arrival airport and other information. We employ the API to request the ﬂight trajectory every 5 minutes, and collect one-year data from October, 2016 to September, 2017 all over the world. After the data processing, we organize the data with each row representing one ﬂight with evolutional latitude and longitude. Since these ﬂights have different lengths of records, we uniformly sample 10 records for each ﬂight, where only the latitude and longitude are used as features. Therefore, each ﬂight is processed in a 20-length vector for further analysis. Here we select the Chinese ﬂights between Beijing (PEK), Shanghai (PVG), Chengdu (CTU) and Guangzhou (CAN), and US ﬂights between Seattle (SEA), San Francisco (SFO) and Atlanta (ATL) for further analysis. Figure 3(a) & 3(c) show the trajectories of Chinese and US ﬂights. By this means, we have the Chinese and US ﬂight trajectory data sets with 85,990 and 33,648 ﬂights, respectively.
+Then COR is applied on these two data sets for outlier trajectory detection. Here we set the cluster numbers to be 6 and 3 for these two data sets, and the outlier numbers are both 200. Figure 3(b) & 3(d) show the outlier trajectories in these two data sets. There are two kinds of outliers. The ﬁrst category includes the outliers with extra ranges. Although we focus on 7 airports in China and US, there are some trajectories out of the scope of these airport locations in terms of latitude and longitude. The transmission error and loss lead to that the trajectories of different ﬂights are mixed together. In such cases, the system stores a non-existence trajectory. The second category has the partial trajectories. The ﬂight location is not captured due to the failure of the sensors. These two kinds of outliers detected by COR are advantageous to further analyze the problems in trajectory
+4. https://www.ﬂightradar24.com.
+
+system, which demonstrates the effectiveness of COR in the realworld application.
+7 CONCLUSION
+In this paper, we considered the joint clustering and outlier detection problem and proposed the algorithm COR. Different from the existing K-means--, we ﬁrst transformed the original feature space into the partition space according to the relationship between outliers and clusters. Then we provided the objective function based on the Holoentropy, which was partially solved by K-means optimization. Nontrivally, an auxiliary binary matrix was designed so that COR completely solved the challenging problem via K-means-- on the concatenated binary matrices. Extensive experimental results demonstrated the effectiveness and efﬁciency of COR signiﬁcantly over the rivals including K-means-- and other state-of-the-art outlier detection methods in terms of cluster validity and outlier detection.
+ACKNOWLEDGMENT
+This research is supported in part by the NSF IIS Award 1651902 and U.S. Army Research Ofﬁce Award W911NF-17-1-0367.
+REFERENCES
+[1] C. Tsai, Y. Hu, and Y. Lu, “Customer segmentation issues and strategies for an automobile dealership with two clustering techniques,” Expert Systems, vol. 32, no. 1, pp. 65–76, 2015.
+[2] R. Campos, G. Dias, A. M. Jorge, and A. Jatowt, “Survey of temporal information retrieval and related applications,” ACM Computing Surveys, vol. 47, no. 2, p. 15, 2015.
+[3] A. Shepitsen, J. Gemmell, B. Mobasher, and R. Burke, “Personalized recommendation in social tagging systems using hierarchical clustering,” in Proceedings of ACM conference on Recommender systems, 2008.
+[4] R. Grandl, G. Ananthanarayanan, S. Kandula, S. Rao, and A. Akella, “Multi-resource packing for cluster schedulers,” ACM SIGCOMM Computer Communication Review, vol. 44, no. 4, pp. 455–466, 2015.
+[5] J. V. Davis, B. Kulis, P. Jain, S. Sra, and I. S. Dhillon, “Informationtheoretic metric learning,” in Proceedings of International Conference on Machine Learning, 2007.
+[6] C. Ding, D. Zhou, X. He, and H. Zha, “R 1-pca: rotational invariant l 1-norm principal component analysis for robust subspace factorization,” in Proceedings of International Conference on Machine Learning, 2006.
+[7] G. Liu, Z. Lin, and Y. Yu, “Robust subspace segmentation by low-rank representation,” in Proceedings of International Conference on Machine Learning, 2010.
+[8] M. M. Breunig, H.-P. Kriegel, R. T. Ng, and J. Sander, “Lof: identifying density-based local outliers,” in ACM sigmod record, vol. 29, no. 2, 2000, pp. 93–104.
+[9] K. Zhang, M. Hutter, and H. Jin, “A new local distance-based outlier detection approach for scattered real-world data,” in Proceedings of Paciﬁc-Asia Conference on Knowledge Discovery and Data Mining, 2009.
+
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+10
+
+[10] H. Kriegel and A. Zimek, “Angle-based outlier detection in highdimensional data,” in Proceedings of ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 2008.
+[11] N. Pham and R. Pagh, “A near-linear time approximation algorithm for angle-based outlier detection in high-dimensional data,” in Proceedings of ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 2012.
+[12] F. T. Liu, K. M. Ting, and Z.-H. Zhou, “Isolation forest,” in Proceedings of IEEE International Conference on Data Mining, 2008.
+[13] Y. Lee, Y. Yeh, and Y. Wang, “Anomaly detection via online oversampling principal component analysis,” IEEE Transactions on Knowledge and Data Engineering, vol. 25, no. 7, pp. 1460–1470, 2013.
+[14] R. Kannan, H. Woo, C. C. Aggarwal, and H. Park, “Outlier detection for text data,” in Proceedings of SIAM International Conference on Data Mining, 2017.
+[15] A. Georgogiannis, “Robust k-means: a theoretical revisit,” in Proceedings of Advances in Neural Information Processing Systems, 2016.
+[16] M. Ester, H.-P. Kriegel, J. Sander, X. Xu et al., “A density-based algorithm for discovering clusters in large spatial databases with noise.” in Proceedings of ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 1996.
+[17] S. Chawla and A. Gionis, “k-means-: A uniﬁed approach to clustering and outlier detection,” in Proceedings of SIAM International Conference on Data Mining, 2013.
+[18] L. Ott, L. Pang, F. Ramos, and S. Chawla, “On integrated clustering and outlier detection,” in Proceedings of Advances in Neural Information Processing Systems, 2014.
+[19] S. Wu and S. Wang, “Information-theoretic outlier detection for largescale categorical data,” IEEE Transactions on Knowledge and Data Engineering, vol. 25, no. 3, pp. 589–602, 2013.
+[20] J. Yi, R. Jin, S. Jain, T. Yang, and A. Jain, “Semi-crowdsourced clustering: Generalizing crowd labeling by robust distance metric learning,” in Proceedings of Advances in Neural Information Processing Systems, 2012.
+[21] E. Elhamifar and R. Vidal, “Sparse subspace clustering: Algorithm, theory, and applications,” IEEE Transactions on Pattern Analysis and Machine Intelligence, vol. 35, no. 11, pp. 2765–2781, 20013.
+[22] F. Dotto, A. Farcomeni, L. Garca-Escudero, and A. Mayo-Iscar, “A reweighting approach to robust clustering,” Statistics and Computing, pp. 1–17, 2016.
+[23] A. Strehl and J. Ghosh, “Cluster ensembles — a knowledge reuse framework for combining partitions,” Journal of Machine Learning Research, vol. 3, pp. 583–617, 2003.
+[24] H. Liu, J. Wu, T. Liu, D. Tao, and Y. Fu, “Spectral ensemble clustering via weighted k-means: Theoretical and practical evidence,” IEEE Transactions on Knowledge and Data Engineering, vol. 29, no. 5, pp. 1129–1143, 2017.
+[25] A. Fred and A. Jain, “Combining multiple clusterings using evidence accumulation,” IEEE Transactions on Pattern Analysis and Machine Intelligence, vol. 27, no. 6, pp. 835–850, 2005.
+[26] A. Lourenco, S. Bulo`, N. Rebagliati, A. Fred, M. Figueiredo, and M. Pelillo, “Probabilistic consensus clustering using evidence accumulation,” Machine Learning, vol. 98, no. 1-2, pp. 331–357, 2013.
+[27] X. Z. Fern and C. E. Brodley, “Solving cluster ensemble problems by bipartite graph partitioning,” in Proceedings of ICML, 2004.
+[28] H. Ayad and M. Kamel, “Cumulative voting consensus method for partitions with variable number of clusters,” IEEE Transactions on Pattern Analysis and Machine Intelligence, vol. 30, no. 1, pp. 160–173, 2008.
+[29] C. Domeniconi and M. Al-Razgan, “Weighted cluster ensembles: Methods and analysis,” ACM Transactions on Knowledge Discovery from Data, vol. 2, no. 4, p. 17, 2009.
+[30] A. Topchy, A. Jain, and W. Punch, “Combining multiple weak clusterings,” in Proceedings of International Conference on Data Mining, 2003.
+[31] T. Li, D. Chris, and M. Jordan, “Solving consensus and semi-supervised clustering problems using nonnegative matrix factorization,” in Proceedings of International Conference on Data Mining, 2007.
+[32] A. Topchy, A. Jain, and W. Punch, “A mixture model for clustering ensembles,” in Proceedings of SIAM International Conference on Data Mining, 2004.
+[33] Z. Lu, Y. Peng, and J. Xiao, “From comparing clusterings to combining clusterings,” in Proceedings of AAAI Conference on Artiﬁcial Intelligence, 2008.
+[34] S. Xie, J. Gao, W. Fan, D. Turaga, and P. Yu, “Class-distribution regularized consensus maximization for alleviating overﬁtting in model combination,” in Proceedings of ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 2014.
+
+[35] H. Liu, Z. Tao, and Z. Ding, “Consensus clustering: An embedding perspective, extension and beyond,” arXiv preprint arXiv:1906.00120, 2019.
+[36] J. Tang, Z. Chen, A. W.-C. Fu, and D. W. Cheung, “Enhancing effectiveness of outlier detections for low density patterns,” in Proceedings of Paciﬁc-Asia Conference on Knowledge Discovery and Data Mining, 2002.
+[37] Z. He, X. Xu, Z. Huang, and S. Deng, “Fp-outlier: Frequent pattern based outlier detection,” Computer Science and Information Systems, vol. 2, no. 1, pp. 103–118, 2005.
+[38] H. Liu, Y. Zhang, B. Deng, and Y. Fu, “Outlier detection via sampling ensemble,” in Proceedings of IEEE Conference on Big Data, 2016.
+[39] L. Ruff, N. Go¨rnitz, L. Deecke, S. A. Siddiqui, R. Vandermeulen, A. Binder, E. Mu¨ller, and M. Kloft, “Deep one-class classiﬁcation,” in International Conference on Machine Learning, 2018, pp. 4390–4399.
+[40] T. Schlegl, P. Seebo¨ck, S. M. Waldstein, U. Schmidt-Erfurth, and G. Langs, “Unsupervised anomaly detection with generative adversarial networks to guide marker discovery,” in International Conference on Information Processing in Medical Imaging. Springer, 2017, pp. 146– 157.
+[41] H. Zenati, C. S. Foo, B. Lecouat, G. Manek, and V. R. Chandrasekhar, “Efﬁcient gan-based anomaly detection,” arXiv preprint arXiv:1802.06222, 2018.
+[42] D. Li, D. Chen, J. Goh, and S.-k. Ng, “Anomaly detection with generative adversarial networks for multivariate time series,” arXiv preprint arXiv:1809.04758, 2018.
+[43] M. Charikar, S. Khuller, D. Mount, and G. Narasimhan, “Algorithms for facility location problems with outliers,” in Proceedings of ACM-SIAM symposium on Discrete algorithms, 2001.
+[44] K. Chen, “A constant factor approximation algorithm for k-median clustering with outliers,” in Proceedings of ACM-SIAM symposium on Discrete algorithms, 2008.
+[45] H. Liu, T. Liu, J. Wu, D. Tao, and Y. Fu, “Spectral ensemble clustering,” in Proceedings of ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 2015.
+[46] H. Liu, M. Shao, S. Li, and Y. Fu, “Inﬁnite ensemble for image clustering,” in Proceedings of ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 2016.
+[47] A. Banerjee, S. Merugu, I. Dhillon, and J. Ghosh, “Clustering with bregman divergences,” Journal of Machine Learning Research, vol. 6, pp. 1705–1749, 2005.
+[48] J. Whang, I. Dhillon, and D. Gleich, “Non-exhaustive, overlapping kmeans,” in Proceedings of SIAM International Conference on Data Mining, 2015.
+[49] J. Wu, H. Liu, H. Xiong, and J. Cao, “A theoretic framework of kmeans-based consensus clustering,” in Proceedings of International Joint Conference on Artiﬁcial Intelligence, 2013.
+[50] J. Wu, H. Liu, H. Xiong, J. Cao, and J. Chen, “K-means-based consensus clustering: A uniﬁed view,” IEEE Transactions on Knowledge and Data Engineering, vol. 27, no. 1, pp. 155–169, 2015.
+[51] H. Liu, J. Wu, D. Tao, Y. Zhang, and Y. Fu, “Dias: A disassembleassemble framework for highly sparse text clustering,” in Proceedings of SIAM International Conference on Data Mining, 2015.
+[52] H. Liu, M. Shao, S. Li, and Y. Fu, “Inﬁnite ensemble clustering,” Data Mining and Knowledge Discovery, no. 1-32, 2017.
+[53] J. Wu, H. Xiong, and J. Chen, “Adapting the right measures for k-means clustering,” in Proceedings of ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 2009.
+
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, VOL. XX, NO. XX, APRIL 2019
+
+11
+
+Hongfu Liu received his bachelor and master degree in Management Information Systems from the School of Economics and Management, Beihang University, in 2011 and 2014 respectively. He received the Ph.D. degree in computer engineering from Northeastern University, Boston MA, 2018. Currently he is a tenuretrack Assistant Professor afﬁliated with Michtom School of Computer Science at Brandeis University. His research interests generally focus on data mining and machine learning, with special interests in ensemble learning. He has served as the reviewers for many IEEE Transactions journals including TKDE, TNNLS, TIP, and TBD. He has also served on the program committee for the conferences including AAAI, IJCAI, and NIPS. He is the Associate Editor of IEEE Computational Intelligence Magazine.
+
+Yun Fu (S’07-M’08-SM’11-F’19) received the B.Eng. degree in information engineering and the M.Eng. degree in pattern recognition and intelli- gence systems from Xian Jiaotong University, China, respectively, and the M.S. degree in statistics and the Ph.D. degree in electrical and computer engineering from the University of Illinois at Urbana- Champaign, respectively. He is an interdisciplinary faculty member afﬁliated with College of Engineering and the College of Computer and Information Science at Northeastern University since 2012. His research interests are Machine Learning, Computational Intelligence, Big Data Mining, Computer Vision, Pattern Recognition, and Cyber-Physical Systems. He has extensive publications in leading journals, books/book chapters and international conferences/workshops. He serves as associate editor, chairs, PC member and reviewer of many top journals and international conferences/workshops. He received seven Prestigious Young Investigator Awards from NAE, ONR, ARO, IEEE, INNS, UIUC, Grainger Foundation; nine Best Paper Awards from IEEE, IAPR, SPIE, SIAM; many major Industrial Research Awards from Google, Samsung, and Adobe, etc. He is currently an Associate Editor of the IEEE Transactions on Neural Networks and Leaning Systems (TNNLS). He is fellow of IEEE, IAPR, OSA and SPIE, a Lifetime Distinguished Member of ACM, Lifetime Member of AAAI, and Institute of Mathematical Statistics, member of AAAS, ACM Future of Computing Academy, Global Young Academy (GYA), INNS and Beckman Graduate Fellow during 2007-2008.
+
+Jun Li (M’16) received the B.A. in Applied Mathematics from Pan Zhi Hua University in 2006. He received the M.S. in Computer Application from China West Normal University in 2009 and the PhD degree in pattern recognition and intelligence systems from the Nanjing University of Science and Technology in 2015. From Oct. 2012 to July 2013, he was a visiting student at Department of Statistics, Rutgers University, Piscataway, NJ, USA. From Dec. 2015 to Oct. 2018, he was a postdoctoral associate with the Department of Electrical and Computer Engineering, Northeastern University, Boston, MA, USA. He is currently a postdoctoral associate with the Institute of Medical Engineering and Science, Massachusetts Institute of Technology, Cambridge, MA, USA. He is the Associate Editor of IEEE Access. His current research interests include deep learning, reinforcement learning, sparse representations, subspace clustering and recurrent neural networks.
+
+Yue Wu received the BS and MS degree in Beijing University of Posts and Telecommunications at 2013 and 2016. He is currently a PhD student at Northeastern University. His current research interests are face recognition, object detection and deep learning.
+

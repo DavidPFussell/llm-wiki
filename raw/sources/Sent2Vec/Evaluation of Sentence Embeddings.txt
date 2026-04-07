@@ -1,0 +1,793 @@
+Evaluation of sentence embeddings in downstream and linguistic probing tasks
+
+arXiv:1806.06259v1 [cs.CL] 16 Jun 2018
+
+Christian S. Perone
+
+Roberto Silveira
+
+Thomas S. Paula
+
+christian.perone@gmail.com rsilveira79@gmail.com tsp.thomas@gmail.com
+
+Abstract
+Despite the fast developmental pace of new sentence embedding methods, it is still challenging to ﬁnd comprehensive evaluations of these different techniques. In the past years, we saw signiﬁcant improvements in the ﬁeld of sentence embeddings and especially towards the development of universal sentence encoders that could provide inductive transfer to a wide variety of downstream tasks. In this work, we perform a comprehensive evaluation of recent methods using a wide variety of downstream and linguistic feature probing tasks. We show that a simple approach using bag-of-words with a recently introduced language model for deep contextdependent word embeddings proved to yield better results in many tasks when compared to sentence encoders trained on entailment datasets. We also show, however, that we are still far away from a universal encoder that can perform consistently across several downstream tasks.
+1 Introduction
+Word embeddings are nowadays pervasive on a wide spectrum of Natural Language Processing (NLP) and Natural Language Understanding (NLU) applications. These word representations improved downstream tasks in many domains such as machine translation, syntactic parsing, text classiﬁcation, and machine comprehension, among others [6]. Ranging from count-based to predictive or task-based methods, in the past years, many approaches were developed to produce word embeddings, such as Neural Probabilistic Language Model [3], Word2Vec [28], GloVe [32], and more recently ELMo [33], to name a few.
+Although most of the recent word embedding techniques rely on the distributional linguistic hypothesis, they differ on the assumptions of how meaning or context are modeled to produce the word embeddings. These differences between word embedding techniques can have unsuspected implications regarding their performance in downstream tasks as well as in their capacity to capture linguistic properties. Nowadays, the choice of word embeddings for particular downstream tasks is still a matter of experimentation and evaluation.
+Even though word embeddings produce high-quality representations for words (or sub-words), representing large chunks of text such as sentences, paragraphs or documents is still an open research problem [10]. The tantalizing idea of learning sentence representations that could achieve good performance on a wide variety of downstream tasks, also called universal sentence encoder is, of course, the major goal of many sentence embedding techniques. However, as we will see, we are still far away from a universal representation that has consistent performance on a wide range of tasks.
+A common approach for sentence representations is to compute the Bag-of-Words (BoW) of the word vectors, traditionally using a simple arithmetic mean of the embeddings for the words in a sentence along the words dimension. This usually yielded limited performance, however, some recent methods demonstrated important improvements over the traditional averaging. By using weighted averages and modifying them using singular-value decomposition (SVD), the method known as smooth inverse
+Preprint. Work in progress.
+
+frequency (SIF) [1], proved to be a strong baseline over traditional averaging. Recently, p-mean [35] also demonstrated improvements over SIF and traditional averaging by concatenating power means of the embeddings, closing the gap with other complex sentence embedding techniques such as InferSent [10].
+Other sentence embedding techniques were also developed based on encoder/decoder architectures, such as the Skip-Thought [23], where the skip-gram model from Word2Vec [28] was abstracted to form a sentence level encoder that is trained on a self-supervised fashion. Recently, bi-directional LSTM models were also employed by InferSent [10] on a supervised training scheme using the Stanford Natural Language Inference (SNLI) dataset [5] to predict entailment/contradiction. InferSent [10] proved to yield much better results on a variety of downstream tasks when compared to many strong baselines or self-supervised methods such as Skip-Thought [23], by leveraging strong supervision. Lately, the Universal Sentence Encoder (USE) [8] mixed an unsupervised task using a large corpus together with the supervised SNLI task and showed a signiﬁcant improvement by leveraging the Transformer architecture [37], which is solely based on attention mechanisms, although without providing an evaluation with other baselines and previous works such as InferSent [10].
+Neural Language Models can be tracked back to [3], and more recently deep bi-directional language models (biLM) [33] have successfully been applied to word embeddings in order to incorporate contextual information. Very recently, [34] used unsupervised generative pre-training of language models followed by discriminative ﬁne-tunning to achieve state-of-the-art results in several NLP downstream tasks (improving 9 out of 12 tasks). The authors concluded that using language model as objective to ﬁne-tuning helped both in model generalization and convergence. A similar approach of transfer learning using pre-trained language model was previously presented in ULMFiT paper [18], with surprisingly good results even when ﬁne-tuning using small datasets.
+Despite the fast development of a variety of recent methods for sentence embedding, there are no extensive evaluations covering recent techniques on common grounds. The developmental pace of new methods has surpassed the pace of inter-methodology evaluation. SentEval [9] was recently proposed to reduce this comparison gap and the common problems associated with the evaluation of sentence embeddings, creating a common evaluation pipeline to assess the performance on different downstream tasks.
+Recently, [11] introduced an evaluation method based on 10 probing tasks designed to capture linguistic properties from sentence embeddings, which was later integrated into SentEval [9]. However, many recent sentence embedding techniques were not evaluated in this pipeline, such as the Universal Sentence Encoder [8].
+In this work, we describe an extensive evaluation of many recent sentence embedding techniques. We perform an analysis of the transferability of these embeddings to downstream tasks as well as their linguistic properties through the use of probing tasks [11]. We heavily make use of recent evaluation protocols based on SentEval [9], creating a useful panorama of the current sentence embedding techniques and drawing important conclusions about their performance for different tasks.
+This paper is organized as follows: In Section 2, we review work on both word and sentence embeddings, which are the basis of our experiments. In Section 3 we describe the evaluation tasks and datasets employed for the evaluations and, in Section 4, we describe the evaluated models and the methodology used to generate the sentence embeddings. In Section 5, we describe the experimental results in downstream tasks and linguistic probing tasks. Finally, we summarize the contribution of this work in the concluding section.
+2 Related Work
+Word embeddings are extensively used in state-of-the-art NLP techniques, mainly due to their ability to capture semantic and syntactic information of words using large unlabeled datasets and providing an important inductive transfer to other tasks.
+There are several implementations of word embeddings in the literature. Following the pioneering work by [3] on the neural language model for distributed word representations, the seminal Word2Vec [28] is one of the ﬁrst popular approaches of word embeddings based on neural networks. This type of representation is able to preserve semantic relationships between words and their context, where context is modeled by nearby words. In [28], they presented two different methods to compute
+2
+
+Table 1: Comparison of different sentence embeddings evaluated in this work. These embedding sizes are the ﬁnal sentence embeddings (i.e. after applying BoW). Since p-mean [35] is a concatenation of other embeddings, its training method was left unspeciﬁed.
+
+Name
+ELMo (BoW, all layers, 5.5B) ELMo (BoW, all layers, original) ELMo (BoW, top layer, original) Word2Vec (BoW, Google news) p-mean (monolingual) FastText (BoW, Common Crawl) GloVe (BoW, Common Crawl) USE (DAN) USE (Transformer) InferSent (AllNLI) Skip-Thought
+
+Training method1
+Self-supervised Self-supervised Self-supervised Self-supervised – Self-supervised Self-supervised Supervised Supervised Supervised Self-supervised
+
+Embedding size
+3072 3072 1024 300 3600 300 300 512 512 4096 4800
+
+word embeddings: Skip-gram (SG), which predicts context words given a target word and Continuous Bag-of-Words (CBOW), which predicts target word using a bag-of-words context. Word2Vec was later found [25] to be implicitly factorizing a word-context matrix, where the cells are the pointwise mutual information (PMI) of the respective word and context pairs.
+Global Vectors (GloVe) [32] aims to overcome some limitations of Word2Vec, focusing on the global context for learning the representations. The global context is captured by the statistics of word co-occurrences in a corpus (count-based, as opposed to the prediction-based method as in Word2Vec), while still capturing semantic and syntactic meaning as in Word2Vec.
+FastText [4] is a recent method for learning word embeddings for large datasets. It can be seen as an extension of Word2Vec that treats each word as a composition of character n-grams. The sub-word representation allows fastText to represent words more efﬁciently, enabling the estimation of rare and out-of-vocabulary (OOV) words. In [21] the authors used fastText word representation combined with techniques such as bag of n-gram features and demonstrated that fastText obtained performance on par with deep learning methods, while being faster.
+Two main challenges exist when learning high-quality representations: they should capture semantic and syntax and the different meanings the word can represent in different contexts (polysemy). To solve these two issues, Embedding from Language Models (ELMo) [33] was recently introduced. It uses representations from a bi-directional LSTM that is trained with a language model (LM) objective on a large text dataset. ELMo [33] representations are a function of the internal layers of the bi-directional Language Model (biLM), which provides a very rich representation about the tokens.
+Like in fastText [4], ELMo [33] breaks the tradition of word embeddings by incorporating sub-word units, but ELMo [33] has also some fundamental differences with previous shallow representations such as fastText or Word2Vec. In ELMo [33], they use a deep representation by incorporating internal representations of the LSTM network, therefore capturing the meaning and syntactical aspects of words. Since ELMo [33] is based on a language model, each token representation is a function of the entire input sentence, which can overcome the limitations of previous word embeddings where each word is usually modeled as an average of their multiple contexts.
+Through the lens of the Ludwig Wittgenstein philosophy of language [40], it is clear that the ELMo [33] embeddings are a better approximation to the idea of “meaning is use” [40], where a word can contain a wide spectrum of different meanings depending on context, as opposed to traditional word embeddings that are not only context-independent but have a very limited deﬁnition of context.
+Although bag-of-words of word embeddings showed good performance for some tasks, it is still unclear how to properly represent the full sentence meaning. Nowadays, there is still no consensus on how to represent sentences and many studies were proposed towards that research direction.
+1We adopt here the term self-supervised for some tasks, however, literature often use the term unsupervised as well. The authors of this work believe that the self-supervised term help to disambiguate situations that can lead to a misunderstanding of the training task.
+3
+
+Skip-Thought Vectors [23] are based on a sentence encoder that, instead of predicting the context of a word as Word2Vec, it predicts the surrounding sentences of a given sentence. It is based on encoder-decoder models, where the encoder (usually based on RNNs) maps words to a sentence vector and the decoder generates the surrounding sentences. A major advantage of Skip Thought Vectors for representing sentences when compared with a simple average of word embeddings is that order is considered during the encoding/decoding process.
+InferSent [10] proposes a supervised training for the sentence embeddings, contrasting with previous works such as Skip-Thought. The sentence encoders are trained using Stanford Natural Language Inference (SNLI) dataset, which consists of 570k human-generated English sentence-pairs and it is considered one of the largest high-quality labeled datasets for building sentence semantics understanding [5]. The authors tested 7 different architectures for the sentence encoder and the best results are achieved with a bi-directional LSTM (BiLSTM) encoder.
+p-mean [35] emerged as a response to InferSent [10] and baselines such as Sent2Vec [29]. According to the authors, averaging the word embeddings and comparing with approaches such as InferSent [10] can be unfair due to the difference in embedding dimensions (e.g. 300 vs 4096). p-mean is a method that concatenates different word embeddings that represent different information such as syntactic and semantic information, resulting in a larger representation for the word embeddings. In addition, the computation of mean is based on power means [14].
+Google recently introduced Universal Sentence Encoder [8], where two different encoders were implemented. The ﬁrst is the Transformer based encoder model [37], which aims for high-accuracy but has larger complexity and uses more computational resources. The second model uses a deep averaging network (DAN) [20], where embeddings for words and bi-grams are averaged together and then used as input to a deep neural network that computes the sentence embeddings.
+Some other efforts in creating sentences embeddings include, but are not limited to, Doc2Vec/Paragraph2Vec [24], fastSent [17] and Sent2Vec [29]. In our work, we did not include these other approaches since we believe that the chosen ones are already representative of the existing ones and can enable indirect comparisons with omitted methods.
+3 Evaluation tasks
+In this section, we describe the evaluation tasks that were employed to asses the performance on downstream or linguistic probing tasks.
+3.1 Downstream tasks
+One of the main issues with both word and sentence embeddings is the evaluation procedure. One approach is to make use of such embeddings in downstream tasks, evaluating how suitable they are to different problems and which kind of semantic information they carry. Another approach is to explore the nature of the semantics by experimental methods from cognitive sciences [2].
+To evaluate each method, we used the entire set of tasks and datasets available on the SentEval [9] evaluation framework. These tasks cover a wide range of different tasks that are suitable for general-purpose/universal sentence embeddings. These tasks can be divided into 5 groups: binary and multi-class classiﬁcation, entailment and semantic relatedness, semantic textual similarity, paraphrase detection, and caption-image retrieval. Please refer to the original SentEval [9] article for more information about these tasks. We provide a description and sample instances of these datasets and tasks in Table 2 for the classiﬁcation tasks and in Table 3 for the semantic similarity tasks.
+3.2 Linguistic probing tasks
+Downstream tasks are not suitable to understand what the representations are in fact capturing from the linguistic perspective. Probing tasks are classiﬁcation problems that focus on simple linguistic properties of the sentences [11]. We executed experiments using the 10 probing tasks proposed by [11] and a summary of the tasks with examples is shown in Table 4. Each task aims to capture a different linguistic property. For instance, Coordination Invertion (CoordInv) measures whether two coordinate clauses in a sentence are inverted or not, while Past Present (Tense) aims to detect if the
+4
+
+Table 2: Downstream classiﬁcation tasks description and samples.
+
+Dataset
+Customer Reviews (CR) [19]
+Multi-Perspective Question and Answering (MPQA) [39]
+Movie Reviews (MR) [31]
+Stanford Sentiment Analysis 2 (SST-2) [36]
+Stanford Sentiment Analysis 5 (SST-5) [36]
+Subjectivity / Objectivity (SUBJ) [30]
+Text REtrieval Conference (TREC) [38]
+
+Task Sentiment analysis of customer products’ reviews
+Evaluation of opinion polarity
+
+Example
+We tried it out Christmas night and it worked great .
+Don’t want
+
+Output Positive
+Negative
+
+Sentiment analysis of movie reviews
+Sentiment analysis with two classes: Negative and Positive
+Sentiment analysis with 5 classes, that range from 0 (most negative) to 5 (most positive) Classify the sentence as Subjective or Objective
+Question and answering
+
+Too slow for a younger crowd , too shallow for an older one .
+Audrey Tautou has a knack for picking roles that magnify her [..]
+Nothing about this movie works
+A movie that doesn’t aim too high , but doesn’t need to .
+What are the twin cities ?
+
+Negative Positive
+0 Subjective LOC:city
+
+main verb in a given sentence is in the present or past tense. For more information about these tasks, please refer to the original article [11].
+4 Methods
+4.1 Experimental setup
+In this section, we describe where the pre-trained models were obtained as well as the procedures employed to evaluate each method.
+ELMo (BoW, all layers, 5.5B) [33]: this model was obtained from the authors’ website at https: //allennlp.org/elmo. According to the authors, the model was trained on a dataset with 5.5B tokens consisting of Wikipedia (1.9B) and all of the monolingual news crawl data from WMT 2008-2012 (3.6B). To evaluate this model, we used the AllenNLP framework [13]. An averaging bag-of-words was employed to produce the sentence embeddings, using features from all three layers of the ELMo [33] model. We did not employ the trainable task-speciﬁc weighting scheme described in [33].
+ELMo (BoW, all layers, original) [33]: this model was obtained from the authors website at https://allennlp.org/elmo. According to the authors, the model was trained on the 1 Billion Word Benchmark, approximately 800M tokens of news crawl data from WMT 2011. To evaluate this model, we used the AllenNLP framework [13]. An averaging bag-of-words was employed to produce the sentence embeddings, using features from all three layers of the ELMo [33] model and averaging along the word dimension. We did not employ the trainable task-speciﬁc weighting scheme described in [33].
+ELMo (BoW, top layer, original) [33]: the same model and procedure as in ELMo (BoW, all layers, original) was employed, except that in this experiment, we used only the top layer representation from the ELMo [33] model. As shown in [33], the higher-level LSTM representations capture context-dependent aspects of meaning, while the lower level representations capture aspects of syntax. Therefore, we split the evaluation of the top layer from the evaluation using all layers described in the previous experiment. We did not employ the trainable task-speciﬁc weighting scheme described in [33].
+5
+
+Table 3: Downstream semantic relatedness and textual similarity tasks descriptions and samples.
+
+Dataset
+Microsoft Common Objects
+in Context (COCO) [26]
+Microsoft Research Paraphrase Corpus (MRPC) [12]
+Semantic Text Similarity (STS) [7]
+Sentences Involving Compositional Knowledge Entailment (SICK-E) [27]
+Sentences Involving Compositional Knowledge Semantic Relatedness (SICK-R) [27]
+Stanford Natural Language Inference (SNLI) [5]
+
+Task
+Image-caption retrieval (ICR)
+Classify whether a pair of sentences capture a paraphrase relationship
+To measure the semantic similarity between two sentences from 0 (not similar) to 5 (very similar)
+To measure semantics in terms of Entailment, Contradiction, or Neutral
+
+Sentence 1 -
+
+The procedure
+
+is
+
+generally
+
+performed in the
+
+second or third
+
+trimester.
+
+Liquid ammonia leak kills 15 in Shanghai
+
+A man is sitting on a chair and rubbing his eyes
+
+Sentence 2
+A group of people on some horses riding through the beach
+The technique is used during the second and, occasionally, third trimester of pregnancy
+Liquid ammonia leak kills at least 15 in Shanghai
+There is no man sitting on a chair and rubbing his eyes
+
+Output Rank
+Paraphase
+4.6
+Contradiction
+
+To measure the degree of semantic relatedness between sentences from 0 (not related) to 5 (related)
+To measure semantics in terms of Entailment, Contradiction, or Neutral
+
+A man is singing a song and playing the guitar
+A small girl wearing a pink jacket is riding on a carousel
+
+A man is opening a package that contains headphones
+The carousel is moving
+
+1.6 Entailment
+
+FastText (BoW, Common Crawl) [4]: this model was obtained from the authors website at https: //fasttext.cc/docs/en/english-vectors.html. According to the authors, this model contains 2 million word vectors trained on Common Crawl (600B tokens) dataset. A traditional bag-ofwords averaging was employed to produce the sentence embedding.
+GloVe (BoW, Common Crawl) [32]: this model was obtained from the authors website at https: //nlp.stanford.edu/projects/glove/. According to the authors, it contains a 2.2M vocabulary and was trained on the Common Crawl (840B tokens) dataset. A traditional bag-of-words averaging was employed to produce the sentence embedding.
+Word2Vec (BoW, Google News) [28]: this model was obtained from the authors website at https: //code.google.com/archive/p/word2vec/. According to the authors, it was trained on part of the Google News dataset (about 100 billion words). A traditional bag-of-words averaging was employed to produce the sentence embedding.
+p-mean (monolingual) [35]: this model was obtained from the authors website at https://github. com/UKPLab/arxiv2018-xling-sentence-embeddings. A TensorFlow (TF-Hub) module was employed and the sentences were all made lowercase as per authors website recommendation.
+Skip-Thought [23]: this model was obtained from the authors website at https://github.com/ ryankiros/skip-thoughts. The sentences were embedded according to the authors’ website instructions.
+InferSent (AllNLI) [10]: this model was obtained from the authors website at https://github. com/facebookresearch/InferSent. According to the authors, it was trained on the SNLI and MultiNLI datasets. The sentences were embedded according to the authors website instructions.
+6
+
+Table 4: Linguistic probing tasks description and samples.
+
+Task Bigram Shift (BShift)
+Coordination Inversion (CoordInv)
+Object Number (ObjNum)
+Sentence Length (SentLen)
+Semantic Odd Man Out (SOMO)
+Subject Number (SubjNum)
+Past Present (Tense)
+Top-Constituent (TopConst)
+Depth of Syntactic Tree (TreeDepth) Word Content (WC)
+
+Description
+Whether two words (tokens) in a sentence have been inverted
+Sentences comprised of two coordinate clauses. Detect whether clauses are inverted
+Number of the direct object in the main clause (singular and plural)
+Predict the sentence length among 6 classes, which are length intervals
+Random noun or verb replaced in the sentence by another noun or verb. Detect whether the sentence has been modiﬁed
+Number of the subject in the main clause (singular and plural)
+Whether the main verb in the sentence is in the past or present tense
+Classiﬁcation task, where the classes are given by the 19 most common topconstituent sequences in the corpus
+Predict the maximum depth of the syntactic tree of the sentence
+Predict which of the target words (among 1000) appear in the sentence
+
+Example This is my Eve Christmas .
+I returned to my work , and Lisa headed for her ofﬁce .
+He received the 200 points .
+I can ’t wait to show you and Mr. Taylor .
+Tomas surmised as well .
+If there was ever a time to let loose , this vacation would have to be it . She smiled at him , her eyes alight with love .
+Did he buy anything from Troy ?
+The leaves were in various of stages of life .
+She eyed him skeptically .
+
+Output Inverted Inverted NNS (Plural) 9 − 12 words Changed
+Singular Present VBD_NP_VP_
+10 eyed
+
+USE (DAN) [8]: the Universal Sentence Encoder (USE) was obtained from the TF Hub website at https://tfhub.dev/google/universal-sentence-encoder/1. According to the TF Hub website, the model was trained with a deep averaging network (DAN) encoder [20].
+USE (Transformer) [8]: the Universal Sentence Encoder (USE) was obtained from the TF Hub website at https://www.tensorflow.org/hub/modules/google/ universal-sentence-encoder-large/1. According to the TF Hub website, the model was trained with a Transformer [37] encoder.
+4.2 Downstream classiﬁcation tasks
+As in [9], a classiﬁer was employed on top of the sentence embeddings for the classiﬁcation tasks. In this work, a Multi-Layer Perceptron (MLP) was used with a single hidden layer of 50 neurons with no dropout added, using Adam [22] optimizer and a batch size of 64. We provide more information about the number of classes and validation scheme employed for each task in Table 5.
+4.3 Semantic relatedness and textual similarity tasks
+We used the same scheme as in [9] to evaluate the semantic relatedness (SICK-R, STS Benchmark) and semantic textual similarity (STS-[12-16]). For semantic relatedness, which predicts a semantic value between 0 and 5 between two input sentences, we learn to predict the probability distribution of relatedness scores. For the semantic textual similarity, where the goal is to assess how the cosine similarity between two sentences correlates with a human annotation, we employed a Pearson correlation coefﬁcient. For more information about these tasks, please refer to the SentEval [9] paper.
+7
+
+Table 5: Downstream classiﬁcation tasks setup.
+
+Task
+CR MPQA MR SUBJ TREC MRPC SICK-E SST-2 SST-5
+
+Classiﬁer
+MLP MLP MLP MLP MLP MLP MLP MLP MLP
+
+Num. Classes
+2 2 2 2 6 2 3 2 5
+
+Validation
+10-fold cross-validation (nested) 10-fold cross-validation (nested) 10-fold cross-validation (nested) 10-fold cross-validation (nested) 10-fold cross-validation 10-fold cross-validation Standard cross-validation (holdout) Standard cross-validation (holdout) Standard cross-validation (holdout)
+
+4.4 Information retrieval tasks
+In the caption-image retrieval task, each image and language features are jointly evaluated with the objective of ranking a collection of images in respect to a given caption (image retrieval task text2image) or ranking captions with respect to a given image (caption retrieval - image2text). The dataset used to evaluate the quality of image and caption retrieval tasks in SentEval is the Microsoft COCO [26], which contains 91 common object categories present in 2,5 million labeled instances in 328k images. SentEval used 113k images from COCO dataset, each containing 5 captions. The metric used to rank caption and image retrieval in this task is recall at K (Recall@K), with K = 1, 5, 10, and also median over 5 splits of 1k images. COCO uses a ResNet-101 [16] for image embedding extraction, yielding 2048-d representation.
+4.5 Linguistic probing tasks
+For the linguistic probing tasks, a MLP was also used with a single hidden layer of 50 neurons, with no dropout added, using Adam [22] optimizer with a batch size of 64, except for the Word Content (WC) probing task, as in [11], in which a Logistic Regression was used since it provided consistently better results.
+5 Experimental results
+5.1 Downstream classiﬁcation tasks
+In Table 6 we show the tabular results for the downstream classiﬁcation tasks, and in Figure 1 we show a graphical comparison between the different methods. As seen in Table 6, although no method had a consistent performance among all tasks, ELMo [33] achieved best results in 5 out of 9 tasks. Even though ELMo [33] was trained on a language model objective, it is important to note that in this experiment a bag-of-words approach was employed. Therefore, these results are quite impressive, which lead us to believe that excellent results can be obtained by integrating ELMo [33] and the trainable task-speciﬁc weighting scheme described in [33] into InferSent [10].
+InferSent [10] achieved very good results in the paraphrase detection as well as in the SICK-E (entailment). We hypothesize that these results were due to the similarity of these tasks to the tasks were InferSent [10] was trained on (SNLI and MultiNLI). As described in [10], the SICK-E can be seen as an out-domain version of the SNLI dataset.
+The Universal Sentence Encoder (USE) [8] model, with the Transformer encoder, also achieved good results on the product review (CR) and on the question-type (TREC) tasks. Given that the USE model was trained on SNLI as well as on web question-answer pages, it is possible that these results were also due to the similarity of these tasks to the training data employed by the USE model.
+p-mean [35] also performed better on most tasks than a simple bag-of-words of GloVe, Word2Vec or fastText independently, and it is a recommended strong baseline when computational resources are limited.
+As we can see, sentence embedding methods are still far away from the idea of a universal sentence encoder that can have a broad transfer quality. Given that ELMo [33] demonstrated excellent results on a broad set of tasks, it is clear that a proper integration of deep representation from language
+8
+
+models can potentially improve sentence embedding methods by a signiﬁcant margin and it is a promising research line.
+For completeness, we also provide an evaluation using Logistic Regression instead of a MLP in Table 11 of the appendix.
+
+Table 6: Results from downstream classiﬁcation tasks results using a MLP. Values in this table are accuracies for the test set.
+
+Approach
+Baseline
+Random Embedding
+Experiments
+ELMo (BoW, all layers, 5.5B) ELMo (BoW, all layers, original) ELMo (BoW, top layer, original) Word2Vec (BoW, google news) p-mean (monolingual) FastText (BoW, common crawl) GloVe (BoW, common crawl) USE (DAN) USE (Transformer) InferSent (AllNLI) SkipThought
+
+CR
+61.16
+83.95 85.11 84.13 79.23 80.82 79.63 78.67 80.50 86.04 83.58 81.03
+
+MPQA
+68.41
+91.02 89.55 89.30 88.24 89.09 87.99 87.90 83.53 86.99 89.02 87.06
+
+MR
+48.75
+80.91 79.72 79.36 77.44 78.34 78.03 77.63 74.03 80.20 80.02 76.60
+
+MRPC
+64.35
+72.93 71.65 70.20 73.28 73.22 74.49 73.10 71.77 72.29 74.55 73.22
+
+SICK-E
+54.94
+82.36 81.86 79.64 79.09 83.52 79.28 79.01 80.39 83.32 86.44 84.33
+
+SST-2
+49.92
+86.71 86.33 85.28 80.83 84.07 83.31 81.55 80.34 86.05 83.91 81.77
+
+SST-5
+24.48
+47.60 48.73 47.33 44.25 44.89 44.34 45.16 42.17 48.10 47.74 44.80
+
+SUBJ
+49.83
+94.69 94.32 94.06 90.98 92.63 92.19 91.48 91.93 93.74 92.41 93.33
+
+TREC
+18.00
+93.60 93.40 93.40 83.60 88.40 86.20 84.00 89.60 93.80 89.80 91.00
+
+InferSent (AllNLI) Word2Vec (BoW, google news)
+Random Embeddings ELMo (BoW, all layers, 5.5B) ELMo (BoW, top layer, original)
+USE (Transformer) FastText (BoW, common crawl)
+p-mean (monolingual)
+ELMo (BoW, all layers, original) Skip-Thought USE (DAN)
+GloVe (BoW, common crawl)
+0
+
+CR
+20 40 60 Accuracy
+
+80 0
+
+MPQA
+20 40 60 80 Accuracy
+
+MR
+
+0
+
+20
+
+40
+
+60
+
+80
+
+Accuracy
+
+InferSent (AllNLI) Word2Vec (BoW, google news)
+Random Embeddings ELMo (BoW, all layers, 5.5B) ELMo (BoW, top layer, original)
+USE (Transformer) FastText (BoW, common crawl)
+p-mean (monolingual)
+ELMo (BoW, all layers, original) Skip-Thought USE (DAN)
+GloVe (BoW, common crawl)
+0
+
+MRPC
+
+20
+
+40
+
+60
+
+Accuracy
+
+SICKEntailment
+
+SST2
+
+0
+
+20
+
+40
+
+60
+
+80 0
+
+20 40 60 80
+
+Accuracy
+
+Accuracy
+
+SST5
+
+SUBJ
+
+InferSent (AllNLI) Word2Vec (BoW, google news)
+Random Embeddings ELMo (BoW, all layers, 5.5B) ELMo (BoW, top layer, original)
+USE (Transformer) FastText (BoW, common crawl)
+p-mean (monolingual)
+ELMo (BoW, all layers, original) Skip-Thought USE (DAN)
+GloVe (BoW, common crawl)
+
+0 10 20 30 40 50 0 20 40 60 80
+
+Accuracy
+
+Accuracy
+
+TREC
+0 20 40 60 80 Accuracy
+
+Figure 1: Results for the downstream classiﬁcations tasks using a MLP. Best viewed in color.
+
+9
+
+5.2 Semantic relatedness and textual similarity tasks
+
+As can be seen in Table 7, where we report the results for the semantic relatedness and textual similarity tasks, the Universal Sentence Encoder (USE) [8] using Transformer model achieved excellent results on almost all tasks, except for the SICK-R (semantic relatedness) where InferSent [10] achieved better results. In Figure 2 we show a graphical comparison.
+
+Table 7: Results of the semantic relatedness and textual similarity tasks. Values in this table are the Pearson correlation coefﬁcient for the test sets.
+
+Approach
+Experiments
+ELMo (BoW, all layers, 5.5B) ELMo (BoW, all layers, original) ELMo (BoW, top layer, original) Word2Vec (BoW, google news) p-mean (monolingual) FastText (BoW, common crawl) GloVe (BoW, common crawl) USE (DAN) USE (Transformer) InferSent (AllNLI) Skip-Thought
+
+SICK-R
+0.84 0.84 0.81 0.80 0.86 0.82 0.80 0.84 0.86 0.89 0.86
+
+STS-12
+0.55 0.55 0.54 0.52 0.54 0.58 0.52 0.59 0.61 0.61 0.41
+
+STS-13
+0.53 0.51 0.49 0.58 0.52 0.58 0.50 0.59 0.64 0.56 0.29
+
+STS-14
+0.63 0.63 0.62 0.66 0.63 0.65 0.55 0.68 0.71 0.68 0.40
+
+STS-15
+0.68 0.69 0.67 0.68 0.66 0.68 0.56 0.72 0.74 0.71 0.46
+
+STS-16
+0.60 0.64 0.63 0.65 0.67 0.64 0.51 0.70 0.74 0.71 0.52
+
+STSBenchmark
+0.67 0.65 0.62 0.64 0.72 0.70 0.65 0.76 0.78 0.77 0.75
+
+InferSent (AllNLI) Word2Vec (BoW, google news)
+ELMo (BoW, all layers, 5.5B) ELMo (BoW, top layer, original)
+USE (Transformer) FastText (BoW, common crawl)
+p-mean (monolingual)
+ELMo (BoW, all layers, original) Skip-Thought USE (DAN)
+GloVe (BoW, common crawl) 0.00
+InferSent (AllNLI) Word2Vec (BoW, google news)
+ELMo (BoW, all layers, 5.5B) ELMo (BoW, top layer, original)
+USE (Transformer) FastText (BoW, common crawl)
+p-mean (monolingual)
+ELMo (BoW, all layers, original) Skip-Thought USE (DAN)
+GloVe (BoW, common crawl) 0.0
+
+SICKRelatedness
+0.25 0.50 0.75 Pearson Correlation
+STS15
+0.2 0.4 0.6 Pearson Correlation
+
+STS12
+
+STS13
+
+STS14
+
+0.0 0.2 0.4 0.6 Pearson Correlation
+STS16
+
+0.0 0.2 0.4 0.6 Pearson Correlation
+STSBenchmark
+
+0.0 0.2 0.4 0.6 Pearson Correlation
+
+0.0 0.2 0.4 0.6 Pearson Correlation
+
+0.00 0.25 0.50 0.75 Pearson Correlation
+
+Figure 2: Results of the semantic relatedness and textual similarity tasks. Values are the Pearson correlation coefﬁcient for the test sets. Best viewed in color.
+
+5.3 Linguistic probing tasks
+In Table 8 we report the results for the linguistic probing tasks and in Figure 3 we show a graphical comparison as well.
+As we can see in Table 8, ELMo [33] was one of the methods that were able to achieve high performance on a broad set of different tasks. Interestingly, in the BShift (bi-gram shift) task, where the goal is to identify whether if two consecutive tokens within the sentence have been inverted or not, ELMo [33] achieved a result that was better by a large margin when compared to all other methods, clearly a beneﬁt of the language model objective, where it makes it easy to spot token inversion in sentences such as “This is my Eve Christmas”, a sample from the BShift dataset.
+In [11], they found that the binned sentence length task (SentLen) was negatively correlated with the performance in downstream tasks. This hypothesis was also supported by the model learning dynamics, since it seems that as model starts to capture deeper linguistic properties, it will tend to
+
+10
+
+forget about this superﬁcial feature [11]. However, the [33] bag-of-words not only achieved the best result in the SentLent task but also in many downstream tasks. Our hypothesis is that this is due to the fact that ELMo [33] is a deep representation composed by different levels that can capture superﬁcial features such as sentence length as well as deep linguistic properties as seen in the challenging SOMO task. ELMo [33] word embeddings can be seen as analogous to the hypercolumns [15] approach in Computer Vision, where multiple feature levels are aggregated to form a single pixelwise representation. We leave the exploration of probing tasks for each ELMo [33] layer representation to future research, given that it could provide a framework to expose the linguistic properties capture by each representation level of the LSTM.
+In [11], they also found that the WC (Word Content) task was positively correlated with the performance in a wide variety of downstream tasks. However, in our evaluation, the p-mean [35] approach, which has achieved better results in the WC task did not exceed other techniques such as ELMo [33] bag-of-words or InferSent [10] and USE in the downstream classiﬁcation tasks. We believe that the high performance of the p-mean [35] in the WC task is due to the concatenative approach employed to aggregate the different power means.
+For completeness, we also provide an evaluation using Logistic Regression instead of a MLP in Table 10 of the appendix.
+
+Table 8: Linguistic probing tasks results using a MLP. Values in this table are accuracies on the test set.
+
+Approach
+Baseline
+Random Embedding
+Experiments
+ELMo (BoW, all layers, 5.5B) ELMo (BoW, all layers, original) ELMo (BoW, top layer, original) Word2Vec (BoW, google news) p-mean (monolingual) FastText (BoW, common crawl) GloVe (BoW, common crawl) USE (DAN) USE (Transformer) InferSent (AllNLI) SkipThought
+
+BShift
+50.16
+85.23 84.29 81.18 40.89 50.09 50.28 49.52 60.19 60.52 56.64 70.19
+
+CoordInv
+51.38
+69.92 69.44 68.47 53.24 50.45 53.87 55.28 54.28 58.19 68.34 71.89
+
+ObjNum
+50.82
+89.06 88.65 87.61 80.03 83.27 80.08 78.00 69.04 74.60 80.54 83.55
+
+SentLen
+17.07
+89.28 89.03 78.20 53.03 86.42 66.97 73.00 57.89 79.84 84.13 86.03
+
+SOMO
+50.44
+59.20 58.20 58.64 54.29 53.27 55.21 54.21 55.01 58.48 55.79 54.74
+
+SubjNum
+50.79
+91.16 90.18 90.16 81.34 81.73 80.66 79.75 71.94 77.78 84.45 86.06
+
+Tense
+50.02
+89.73 90.33 88.78 86.20 88.18 87.41 85.52 80.43 86.15 86.74 90.05
+
+TopConst
+4.71
+84.50 84.96 81.54 63.14 61.66 67.10 66.20 60.21 68.73 78.34 82.77
+
+TreeDepth
+17.57
+48.62 48.32 44.97 28.74 38.20 36.72 36.30 25.90 30.49 41.02 41.22
+
+WC
+0.12
+88.86 89.90 72.78 90.20 98.85 91.09 88.69 60.06 54.19 95.18 79.64
+
+5.4 Information retrieval tasks
+
+In Table 9, we show the results for the image retrieval and caption retrieval tasks for the Microsoft COCO [26] dataset.
+
+Table 9: Results for the image retrieval and caption retrieval tasks using the Microsoft COCO [26] dataset and features extracted with a ResNet-101 [16]. In this table we present Recall at 1 (R@1), Recall at 5 (R@5) and so on, as well as the median.
+
+Approach
+ELMo (BoW, all layers, 5.5B) ELMo (BoW, all layers, original) ELMo (BoW, top layer, original) Word2Vec (BoW, google news) p-mean (monolingual) FastText (BoW, common crawl) GloVe (BoW, common crawl) USE (DAN) USE (Transformer) InferSent (AllNLI) SkipThought
+
+Caption Retrieval
+R@1 R@5 R@10 Med r
+41.14 74.68 85.82 2.0 38.98 74.08 85.52 2.0 35.42 70.32 83.10 2.6 33.82 66.56 80.32 2.8 39.18 73.40 85.22 2.0 33.96 68.26 81.88 2.8 33.96 66.08 79.42 2.8 29.04 62.08 76.50 3.4 33.48 66.74 80.42 3.0 42.14 75.78 87.08 2.0 37.66 71.02 84.06 2.6
+
+R@1
+31.65 31.46 29.04 27.18 31.34 27.71 26.70 23.37 26.96 33.44 30.67
+
+Image Retrieval
+
+R@5 R@10
+
+67.75 67.26 64.43 61.91 67.11 62.68 61.18 57.63 62.34 69.50 65.74
+
+82.14 82.05 79.76 77.77 82.02 78.57 77.35 74.61 78.33 83.48 80.98
+
+Med r
+3.0 3.0 3.0 3.8 3.0 3.2 3.8 4.0 3.4 3.0 3.0
+
+As we can see in Table 9, InferSent [10] achieved excellent results on the three raking evaluations (R@k for k in [1, 5, 10]) and for both tasks (caption retrieval and image retrieval), a similar performance to the results reported by [10].
+
+11
+
+InferSent (AllNLI) Word2Vec (BoW, google news)
+Random Embeddings ELMo (BoW, all layers, 5.5B) ELMo (BoW, top layer, original)
+USE (Transformer) FastText (BoW, common crawl)
+p-mean (monolingual)
+ELMo (BoW, all layers, original) Skip-Thought USE (DAN)
+GloVe (BoW, common crawl) 0
+InferSent (AllNLI) Word2Vec (BoW, google news)
+Random Embeddings ELMo (BoW, all layers, 5.5B) ELMo (BoW, top layer, original)
+USE (Transformer) FastText (BoW, common crawl)
+p-mean (monolingual)
+ELMo (BoW, all layers, original) Skip-Thought USE (DAN)
+GloVe (BoW, common crawl) 0
+InferSent (AllNLI) Word2Vec (BoW, google news)
+Random Embeddings ELMo (BoW, all layers, 5.5B) ELMo (BoW, top layer, original)
+USE (Transformer) FastText (BoW, common crawl)
+p-mean (monolingual)
+ELMo (BoW, all layers, original) Skip-Thought USE (DAN)
+GloVe (BoW, common crawl) 0
+
+BigramShift
+25 50 75 Accuracy
+ObjNumber
+25 50 75 Accuracy
+TopConstituents
+25 50 75 Accuracy
+
+CoordinationInversion
+
+Depth
+
+0 20 40 60 Accuracy
+OddManOut
+
+0
+
+20
+
+40
+
+Accuracy
+
+SubjNumber
+
+0 20 40 60 0 25 50 75
+
+Accuracy
+
+Accuracy
+
+WordContent
+
+0
+
+50
+
+100
+
+Accuracy
+
+Length
+0 25 50 75 Accuracy
+Tense
+0 25 50 75 Accuracy
+
+Figure 3: Graphical results for the linguistic probing tasks using a MLP. Best viewed in color.
+
+6 Discussion
+We provided a comprehensive evaluation of the inductive transfer as well as an exploration of the linguistic properties of multiple sentence embedding techniques that included bag-of-word baselines, as well as encoder architectures trained with supervised or self-supervised approaches. We showed that a bag-of-words approach using a recently introduced context-dependent word embedding technique was able to achieve excellent performance on many downstream tasks as well as capturing important linguistic properties.
+We demonstrated the importance of the linguistic probing tasks as a means for exploration of sentence embeddings. Especially for evaluating different levels of word representations, where it can be a very useful tool to provide insights on what kind of relationships and linguistic properties each representation level (in the case of deep representations such as ELMo [33]) is capturing.
+We also showed that no method had a consistent performance across all tasks, with performance being linked mostly with the downstream task similarity to the trained task of these techniques. Given that we are still far from a universal sentence encoder, we believe that this evaluation can provide an important basis for choosing which technique can potentially perform well in particular tasks.
+Finally, we believe that new embedding training techniques that include language models as a way to capture context and meaning, such as ELMo [33], combined with clever techniques of encoding sentences such as in InferSent [10], can improve the performance of these encoders by a signiﬁcant margin. However, as we saw in the experiments, the performance of these encoders trained on particular datasets such as entailment did not perform well on a broad set of downstream tasks. Therefore, one hypothesis is that these encoders are too narrow at modeling what these embeddings can carry. We believe that the research direction of incorporating language models and multiple levels of representations can help to provide a wide set of rich features that can capture context-dependent semantics as well as linguistic features, such as seen on ELMo [33] downstream and linguistic probing task experiments, but for sentence embeddings.
+12
+
+Acknowledgments
+We would like to acknowledge SentEval [9] authors for making the code open-source and freely available. We are thankful to Roberto Silveira for the GPU time donation to execute all the experiments.
+
+References
+
+[1] S. Arora, Y. Liang, and T. Ma. A simple but tough-to-beat baseline for sentence embeddings. 2017.
+
+[2] A. Bakarov. A survey of word embeddings evaluation methods. arXiv:1801.09536, 2018.
+
+arXiv preprint
+
+[3] Y. Bengio, R. Ducharme, P. Vincent, and C. Janvin. A Neural Probabilistic Language Model. The Journal of Machine Learning Research, 3:1137–1155, 2003. ISSN 15324435. doi: 10. 1162/153244303322533223. URL http://www.jmlr.org/papers/volume3/bengio03a/ bengio03a.pdf.
+
+[4] P. Bojanowski, E. Grave, A. Joulin, and T. Mikolov. Enriching word vectors with subword information. Transactions of the Association for Computational Linguistics, 5:135–146, 2017.
+
+[5] S. R. Bowman, G. Angeli, C. Potts, and C. D. Manning. A large annotated corpus for learning natural language inference. In Proceedings of the 2015 Conference on Empirical Methods in Natural Language Processing (EMNLP). Association for Computational Linguistics, 2015.
+
+[6] J. Camacho-Collados and M. T. Pilehvar. From Word to Sense Embeddings: A Survey on Vector Representations of Meaning. URL https://arxiv.org/pdf/1805.04032.pdf.
+
+[7] D. Cer, M. Diab, E. Agirre, I. Lopez-Gazpio, and L. Specia. Semeval-2017 task 1: Semantic textual similarity-multilingual and cross-lingual focused evaluation. arXiv preprint arXiv:1708.00055, 2017.
+
+[8] D. Cer, Y. Yang, S. Kong, N. Hua, N. Limtiaco, R. S. John, N. Constant, M. Guajardo-Cespedes, S. Yuan, C. Tar, Y. Sung, B. Strope, and R. Kurzweil. Universal sentence encoder. CoRR, abs/1803.11175, 2018. URL http://arxiv.org/abs/1803.11175.
+
+[9] A. Conneau and D. Kiela. Senteval: An evaluation toolkit for universal sentence representations. arXiv preprint arXiv:1803.05449, 2018.
+
+[10] A. Conneau, D. Kiela, H. Schwenk, L. Barrault, and A. Bordes. Supervised learning of universal sentence representations from natural language inference data. In EMNLP, pages 670–680. Association for Computational Linguistics, 2017.
+
+[11] A. Conneau, G. Kruszewski, G. Lample, L. Barrault, and M. Baroni. What you can cram into a single vector: Probing sentence embeddings for linguistic properties. arXiv preprint arXiv:1805.01070, 2018.
+
+[12] B. Dolan, C. Quirk, and C. Brockett. Unsupervised construction of large paraphrase corpora: Exploiting massively parallel news sources. In Proceedings of the 20th international conference on Computational Linguistics, page 350. Association for Computational Linguistics, 2004.
+
+[13] M. Gardner, J. Grus, M. Neumann, O. Tafjord, P. Dasigi, N. F. Liu, M. Peters, M. Schmitz, and L. S. Zettlemoyer. Allennlp: A deep semantic natural language processing platform. 2017.
+
+[14] G. H. Hardy, J. E. Littlewood, and G. Pólya. Inequalities. Cambridge university press, 1952.
+
+[15] B. Hariharan, P. Arbeláez, R. Girshick, and J. Malik. Hypercolumns for object segmentation and ﬁne-grained localization. In Computer Vision and Pattern Recognition (CVPR), 2015.
+
+[16] K. He, X. Zhang, S. Ren, and J. Sun. Deep residual learning for image recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition, pages 770– 778, 2016.
+
+[17] F. Hill, K. Cho, and A. Korhonen. Learning distributed representations of sentences from unlabelled data. In 2016 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, NAACL HLT 2016 - Proceedings of the Conference, pages 1367–1377. Association for Computational Linguistics (ACL), 2016.
+
+[18] J. Howard and S. Ruder. Fine-tuned language models for text classiﬁcation. CoRR, abs/1801.06146, 2018.
+
+13
+
+[19] M. Hu and B. Liu. Mining and summarizing customer reviews. In Proceedings of the tenth ACM SIGKDD international conference on Knowledge discovery and data mining, pages 168–177. ACM, 2004.
+[20] M. Iyyer, V. Manjunatha, J. Boyd-Graber, and H. Daumé III. Deep unordered composition rivals syntactic methods for text classiﬁcation. In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing (Volume 1: Long Papers), volume 1, pages 1681–1691, 2015.
+[21] A. Joulin, E. Grave, P. Bojanowski, and T. Mikolov. Bag of tricks for efﬁcient text classiﬁcation. arXiv preprint arXiv:1607.01759, 2016.
+[22] D. P. Kingma and J. Ba. Adam: A method for stochastic optimization. CoRR, abs/1412.6980, 2014. URL http://dblp.uni-trier.de/db/journals/corr/corr1412. html#KingmaB14.
+[23] R. Kiros, Y. Zhu, R. R. Salakhutdinov, R. Zemel, R. Urtasun, A. Torralba, and S. Fidler. Skipthought vectors. In Advances in neural information processing systems, pages 3294–3302, 2015.
+[24] Q. Le and T. Mikolov. Distributed representations of sentences and documents. In International Conference on Machine Learning, pages 1188–1196, 2014.
+[25] O. Levy and Y. Goldberg. Neural word embedding as implicit matrix factorization. In Z. Ghahramani, M. Welling, C. Cortes, N. D. Lawrence, and K. Q. Weinberger, editors, Advances in Neural Information Processing Systems 27, pages 2177–2185. Curran Associates, Inc., 2014. URL http://papers.nips.cc/paper/ 5477-neural-word-embedding-as-implicit-matrix-factorization.pdf.
+[26] T.-Y. Lin, M. Maire, S. Belongie, J. Hays, P. Perona, D. Ramanan, P. Dollár, and C. L. Zitnick. Microsoft coco: Common objects in context. In European conference on computer vision, pages 740–755. Springer, 2014.
+[27] M. Marelli, S. Menini, M. Baroni, L. Bentivogli, R. Bernardi, R. Zamparelli, et al. A sick cure for the evaluation of compositional distributional semantic models. In LREC, pages 216–223, 2014.
+[28] T. Mikolov, I. Sutskever, K. Chen, G. S. Corrado, and J. Dean. Distributed representations of words and phrases and their compositionality. In Advances in neural information processing systems, pages 3111–3119, 2013.
+[29] M. Pagliardini, P. Gupta, and M. Jaggi. Unsupervised Learning of Sentence Embeddings using Compositional n-Gram Features. In NAACL 2018 - Conference of the North American Chapter of the Association for Computational Linguistics, 2018.
+[30] B. Pang and L. Lee. A sentimental education: Sentiment analysis using subjectivity summarization based on minimum cuts. In Proceedings of the 42nd annual meeting on Association for Computational Linguistics, page 271. Association for Computational Linguistics, 2004.
+[31] B. Pang and L. Lee. Seeing stars: Exploiting class relationships for sentiment categorization with respect to rating scales. In Proceedings of the 43rd annual meeting on association for computational linguistics, pages 115–124. Association for Computational Linguistics, 2005.
+[32] J. Pennington, R. Socher, and C. D. Manning. Glove: Global vectors for word representation. In Empirical Methods in Natural Language Processing (EMNLP), pages 1532–1543, 2014. URL http://www.aclweb.org/anthology/D14-1162.
+[33] M. E. Peters, M. Neumann, M. Iyyer, M. Gardner, C. Clark, K. Lee, and L. Zettlemoyer. Deep contextualized word representations. In Proc. of NAACL, 2018.
+[34] A. Radford, K. Narasimhan, T. Salimans, and I. Sutskever. Improving language understanding by generative pre-training. 2018. URL https://blog.openai.com/ language-unsupervised/.
+[35] A. Rücklé, S. Eger, M. Peyrard, and I. Gurevych. Concatenated p-mean word embeddings as universal cross-lingual sentence representations. CoRR, abs/1803.01400, 2018. URL http://arxiv.org/abs/1803.01400.
+[36] R. Socher, A. Perelygin, J. Wu, J. Chuang, C. D. Manning, A. Ng, and C. Potts. Recursive deep models for semantic compositionality over a sentiment treebank. In Proceedings of the 2013 conference on empirical methods in natural language processing, pages 1631–1642, 2013.
+14
+
+[37] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin. Attention is all you need. In Advances in Neural Information Processing Systems, pages 6000–6010, 2017.
+[38] E. M. Voorhees and D. M. Tice. Building a question answering test collection. In Proceedings of the 23rd annual international ACM SIGIR conference on Research and development in information retrieval, pages 200–207. ACM, 2000.
+[39] J. Wiebe, T. Wilson, and C. Cardie. Annotating expressions of opinions and emotions in language. Language resources and evaluation, 39(2-3):165–210, 2005.
+[40] L. Wittgenstein. Philosophical Investigations. Basil Blackwell, Oxford, 1953. ISBN 0631119000.
+
+A Appendix
+
+A.1 Supplemental Results
+
+In Table 10 we show the results for the probing tasks using a Logistic Regression instead of a MLP.
+
+Table 10: Linguistic probing tasks results using Logistic Regression. Values in this table are accuracies on the test set.
+
+Approach
+Baseline
+Random Embedding
+Experiments
+ELMo (BoW, all layers, 5.5B) ELMo (BoW, all layers, original) ELMo (BoW, top layer, original) Word2Vec (BoW, google news) p-mean (monolingual) FastText (BoW, common crawl) GloVe (BoW, common crawl) USE (DAN) USE (Transformer) InferSent (AllNLI) Skip-Thought
+
+BShift
+50.69
+84.87 84.19 79.66 50.36 50.08 49.62 49.84 59.87 59.67 56.49 69.48
+
+CoordInv
+49.68
+68.27 67.27 65.44 52.98 50.74 52.32 53.84 54.78 57.88 65.93 68.98
+
+ObjNum
+50.92
+88.84 87.32 86.47 79.57 82.62 79.88 76.25 68.86 73.82 79.90 83.24
+
+SentLen
+16.44
+87.70 85.73 73.71 34.91 80.06 55.81 60.29 55.15 73.91 80.73 81.27
+
+SOMO
+50.02
+58.21 57.63 56.82 49.33 50.95 49.39 49.80 54.71 57.35 53.21 54.51
+
+SubjNum
+49.67
+90.76 89.66 88.92 80.59 81.30 79.79 78.37 72.01 76.69 84.28 86.16
+
+Tense
+50.32
+89.28 89.81 88.60 85.28 87.69 86.57 84.08 79.50 85.68 86.95 90.27
+
+TopConst
+5.09
+83.71 83.72 80.37 58.17 60.57 63.37 62.74 58.39 65.17 78.13 82.11
+
+TreeDepth
+16.83
+43.13 42.13 39.40 26.98 35.53 32.23 31.87 24.86 27.53 37.53 39.61
+
+WC
+0.12
+88.86 89.90 72.78 90.20 98.85 91.09 88.69 60.05 54.19 95.18 79.64
+
+In Table 11 we show the results for the downstream tasks using a Logistic Regression instead of a MLP.
+
+Table 11: Results for the downstream classiﬁcation tasks using a Logistic Regression. Values in this table are the accuracies on the test set.
+
+Approach
+Baseline
+Random Embedding
+Experiments
+ELMo (BoW, all layers, 5.5B) ELMo (BoW, all layers, original) ELMo (BoW, top layer, original) Word2Vec (BoW, google news) p-mean (monolingual) FastText (BoW, common crawl) GloVe (BoW, common crawl) USE (DAN) USE (Transformer) InferSent (AllNLI) Skip-Thought
+
+CR
+57.86
+84.98 84.64 83.87 78.60 80.37 78.83 78.22 79.74 85.48 83.23 80.45
+
+MPQA
+67.87
+91.28 88.86 88.99 88.17 88.95 87.75 87.87 83.16 86.79 89.00 86.83
+
+MR
+49.90
+81.09 80.70 79.06 76.76 78.61 77.96 77.23 73.82 79.92 79.89 76.31
+
+MRPC
+62.14
+76.35 71.42 71.54 72.17 74.72 74.43 72.70 69.33 71.94 75.59 73.80
+
+SICK-E
+54.27
+81.35 82.06 79.38 78.30 83.42 78.87 78.55 78.47 81.17 86.20 82.91
+
+SST-2
+48.00
+86.77 85.06 84.40 80.56 82.81 82.32 80.29 79.74 86.22 83.64 81.82
+
+SST-5
+23.08
+46.33 48.05 46.74 42.13 44.03 45.11 44.66 41.99 47.69 44.98 43.80
+
+SUBJ
+49.24
+94.87 94.55 94.00 90.46 92.63 91.68 91.18 91.73 93.52 92.65 93.60
+
+TREC
+21.6
+92.2 93.6 93.6 84.2 88.2 83.4 83.0 89.6 93.2 89.0 89.2
+
+15
+

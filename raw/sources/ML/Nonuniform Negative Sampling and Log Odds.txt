@@ -1,0 +1,3094 @@
+Nonuniform Negative Sampling and Log Odds Correction with Rare Events Data
+
+arXiv:2110.13048v1 [stat.ML] 25 Oct 2021
+
+HaiYing Wang Department of Statistics University of Connecticut haiying.wang@uconn.edu
+
+Aonan Zhang ByteDance Inc. aonan.zhang@bytedance.com
+
+Chong Wang ByteDance Inc. chong.wang@bytedance.com
+
+Abstract
+We investigate the issue of parameter estimation with nonuniform negative sampling for imbalanced data. We ﬁrst prove that, with imbalanced data, the available information about unknown parameters is only tied to the relatively small number of positive instances, which justiﬁes the usage of negative sampling. However, if the negative instances are subsampled to the same level of the positive cases, there is information loss. To maintain more information, we derive the asymptotic distribution of a general inverse probability weighted (IPW) estimator and obtain the optimal sampling probability that minimizes its variance. To further improve the estimation efﬁciency over the IPW method, we propose a likelihood-based estimator by correcting log odds for the sampled data and prove that the improved estimator has the smallest asymptotic variance among a large class of estimators. It is also more robust to pilot misspeciﬁcation. We validate our approach on simulated data as well as a real click-through rate dataset with more than 0.3 trillion instances, collected over a period of a month. Both theoretical and empirical results demonstrate the effectiveness of our method.
+1 Introduction
+Imbalanced data are ubiquitous in scientiﬁc ﬁelds and applications with binary response outputs, where the number of instances in the positive class is much smaller than that in the negative class. For example, in online search or recommendation systems where billions of impressions appear each day, non-click impressions usually dominate. Using these non-click impressions as negative instances is prevalent and proved to be useful especially in modern machine learning systems (McMahan et al., 2013; He et al., 2014; Chen et al., 2016; Guo et al., 2017; Huang et al., 2020). A common approach to address imbalanced data is to balance it by subsampling the negative class (Drummond et al., 2003; Liu et al., 2009) and/or up-sampling the positive class (Chawla et al., 2002; Han et al., 2005; Mathew et al., 2017; Douzas and Bacao, 2017), and a great deal of attentions have been drawn to this problem, see Japkowicz (2000); King and Zeng (2001); Chawla et al. (2004); Estabrooks et al. (2004); Owen (2007); Sun et al. (2007); Chawla (2009); Rahman and Davis (2013); Fithian and Hastie (2014); Lemaître et al. (2017); Wang (2020), and the references therein.
+In this paper, we focus on subsampling the negative class, i.e., negative sampling, while keeping all rare positive instances. This is beneﬁcial for modern online learning systems, where negative sampling signiﬁcantly reduces data volume in distributed storage while saving training time for multiple downstream models. Rare events data and negative sampling are studied in Wang (2020),
+35th Conference on Neural Information Processing Systems (NeurIPS 2021).
+
+but it focused on linear logistic regression and only considered uniform sampling. We approach this problem under general binary response models from the perspective of optimal subsampling, which aims to minimize the asymptotic variance of the IPW estimator (Wang et al., 2018; Ting and Brochu, 2018; Wang and Ma, 2021; Yu et al., 2020). This topic was not well investigated neither for imbalanced data nor for negative sampling. In addition, existing optimal probability formulation minimizes the conditional asymptotic variance and the variations due to the data randomness are ignored. We ﬁll these gaps by deriving the asymptotic distributions for both full data and subsample estimators under general binary response models, and we ﬁnd the unconditional optimal probability for negative sampling. In addition, since IPW may inﬂate the variance (Hesterberg, 1995; Owen and Zhou, 2000), we develop a more efﬁcient likelihood-based estimator through nonuniform log odds correction to avoid IPW. Our main contributions are summarized as follows.
+• Under a general binary response model with rare events data, we ﬁnd that the difference between the full data estimator and the true parameter converges to a normal distribution at a rate that is tied to the number of rare positive instances only. This indicates the possibility to throw away the majority of negative instances without information loss, i.e, it justiﬁes the usage of negative sampling.
+• We show that there is no asymptotic information loss with aggressive negative sampling if the negative instances kept dominates the positive instances. However there is information loss expressed as a variance inﬂation if the negative instances are brought down to the same level of the positive instances. For this case, we obtain optimal subsampling probabilities by minimizing the unconditional asymptotic variance of a general IPW estimator.
+• We develop a likelihood estimator through nonuniform log odds correction for sampled data, and prove that it has the smallest asymptotic variance among a large class of estimators.
+• We apply the proposed method to a real online streaming click-through rate (CTR) dataset with more than 0.3 trillion instances and demonstrate its effectiveness.
+The rest of paper is organized as follows. Section 2 deﬁnes the problem this paper focuses on and shows the full data results. Section 3 presents the optimal probability for the IPW estimator. Section 4 proposes the likelihood-based estimator and establishes its asymptotic optimality. Section 5 discusses practical implementation and the theoretical properties of the resulting estimators. Section 6 presents numerical experiments with simulated data, and applies the proposed method to a real online streaming CTR dataset with more than 0.3 trillion instances. Section 7 concludes the paper and points out limitations of our investigation. Proofs and additional experiments with misspeciﬁcations are in the supplementary materials.
+
+2 Problem setup and full data results
+
+Let {(xi, yi)}Ni=1 be training data of size N that satisﬁes the binary response model,
+
+Pr(y = 1 | x) = p(x; θ),
+
+(1)
+
+where y ∈ {0, 1} is the binary class label (y = 1 for the positive and y = 0 for the negative), x is the vector of features, and θ is the unknown d-dimensional parameter.
+Let N1 be the number of positive instances (N1 = i=1 N yi) and N0 be the number of negative instances (N0 = N − N1). We consider the scenario of massive imbalanced data, i.e., N1 N0. For asymptotic investigations when N1 is much smaller than N0, it is more appropriate to assume that N1 increases in a slower rate compared with N0, i.e., N1/N0 → 0 in probability as N → ∞ (Wang, 2020). This requires Pr(y = 1) = E{p(x; θ)} → 0 as N → ∞ on the model side. We assume that the parameter θ contains two components θ = (α, βT)T and the log odds can be written as
+
+p(x; θ)
+
+g(x; θ) := log
+
+= α + f (x; β),
+
+1 − p(x; θ)
+
+where the true parameter, denoted as θ∗ = (α∗, β∗T)T, satisﬁes that α∗ → −∞ as N → ∞ and β∗ is ﬁxed. Here f (x; β) is a smooth function of β, such as a linear function or a nonlinear neural network model. If it is linear, the model reduces to the logistic regression model. A diverging α∗ and a ﬁxed β∗ indicate that both the marginal and conditional probabilities for a positive instance are
+
+2
+
+small. Heuristically, this implies that a change in the feature value does make a rare event become a large probability event. We can also allow β∗ to change with N , but as long as β∗ has a ﬁnite limit, the situation is essentially the same as a ﬁxed β∗. So here we assume β∗ to be ﬁxed to simplify the presentation. Throughout this paper, we use g˙(x; θ) and g¨(x; θ) to denote the gradient and Hessian of g(x; θ) with respect to (w.r.t.) θ, respectively. Let v be the Frobenius norm and v⊗2 = vvT for a vector or a matrix v. We denote π(x, y) as the sampling probability for an instance (x, y). For negative cases, we sometimes use a shorthand notation π(x) to denote its sampling probability. We use oP (1) to represent a random quantity that converges to 0 in probability as N → ∞.
+2.1 It is the number of positive instances that matters
+We show that for rare events data, the estimation error rate for θ is related to N1 instead of N . Using the full data, a commonly used estimator of θ is the maximum likelihood estimator (MLE)
+N
+θˆf := arg max yig(xi; θ) − log 1 + eg(xi;θ) .
+θ i=1
+To investigate the theoretical properties of the estimator θˆf , we make the following assumptions. Assumption 1. The ﬁrst, second, and third derivatives of f (x; β) and ef(x;β)f (x; β) w.r.t. any components of β are bounded by a square intergrable random variable B(x). Assumption 2. The matrix E{g˙⊗2(x; θ∗)} is ﬁnite and positive deﬁnite.
+Assumption 1 imposes constraints on the smoothness of f (x; θ) w.r.t. θ and on the tightness of the distribution of x. Assumption 2 ensures that all components of θ are estimable. Theorem 1. Let Vf = E{ef(x;β∗)}Mf−1 where Mf = E{ef(x;β∗)g˙⊗2(x; θ∗)}. Under Assumptions 1 and 2, as N → ∞,
+N1(θˆf − θ∗) −→ N(0, Vf ), in distribution.
+This result shows that even if all the N instances are used for model training, the resulting estimator θˆf converges to the true parameter θ∗ at the rate of N1−1/2, which is much slower than the usual rate of N −1/2 for regular cases. This indicates that with rare events data, the available information about unknown parameters is at the scale of N1. Although N → ∞ much faster than N1 → ∞ (in terms of N1/N → 0), N does not explicitly show in the asymptotic normality result of Theorem 1. For the speciﬁc case of linear logistic regression with g(x; θ) = α + xTβ, our Theorem 1 reduces to Theorem 1 of Wang (2020).
+2.2 Negative sampling
+Since the available information ties to the number of positive instances instead of the full data size, one can keep all the positive instances and signiﬁcantly subsmaple the negative instances to reduce the computational cost. For better estimation efﬁciency, we consider nonuniform sampling. Let ϕ(x) > 0 be an integrable function and ρ be the sampling rate on the negative class. Without loss of generality, assume E{ϕ(x)} = 1 so that π(xi) := ρϕ(xi) is the sampling probability for the i-th data point if yi = 1. We present the nonuniform negative sampling procedure in Algorithm 1.
+Algorithm 1 Negative sampling For i = 1, ..., N : if yi = 1, include {xi, yi, π(xi, yi) = 1} in the sample;
+if yi = 0, calculate ϕ(xi) and generate ui ∼ U(0, 1); if ui ≤ ρϕ(xi), include {xi, yi, π(xi, yi) = ρϕ(xi)} in the sample.
+3
+
+3 Weighted estimation and its optimal negative sampling probability
+
+Let δi = 1 if the i-th data point is selected and δi = 0 otherwise. Given a subsample taken according to π(xi, yi) = yi + (1 − yi)ρϕ(xi), i = 1, ..., N , the IPW estimator of θ is
+
+N
+
+θˆw = arg max δiπ−1(xi, yi) yig(xi; θ) − log 1 + eg(xi;θ) .
+
+(2)
+
+θ
+
+i=1
+
+We need an assumption on the subsampling rate to investigate the subsample estimators.
+Assumption 3. The subsampling rate ρ satisﬁes that cN := eα∗ /ρ → c for a constant c such that 0 ≤ c < ∞.
+
+Note that cN cannot be zero but its limit c can be exactly zero. It can be shown that cN E{ef(x;β∗)} = N1(N0ρ)−1{1 + oP (1)}, so cE{ef(x;β∗)} is the asymptotic positive/negative ratio for the sample. The theorem below shows the asymptotic distribution of θˆw. Theorem 2. Under Assumptions 1-3, if E[{ϕ(x) + ϕ−1(x)}B2(x)] < ∞ then as N → ∞,
+N1(θˆw − θ∗) −→ N(0, Vw), in distribution, where Vw = Vf + Vsub and Vsub = cE{ef(x;β∗)}M−1 f E{ϕ−1(x)e2f(x;β∗)g˙ ⊗2(x; θ∗)}M−1 f .
+
+The subsampled estimator θˆw have the same convergence rate as the full data estimator. However, the asymptotic variance Vw may be inﬂated by the term Vsub from subsampling the negative cases. Here Vsub is zero if c = 0. If we keep much more negative instances than the positive instances in the subsample (c = 0), then there is no asymptotic information loss due to subsampling (Vw = Vf ). In this scenario, the number of negative instances can still be aggressively reduced (ρ → 0) so that the computational efﬁciency is signiﬁcantly improved, and the sampling function ϕ(x) does not play an signiﬁcant role. If we have to reduce the negative instances to the same level of the positive instances (0 < c < ∞), then the variance inﬂation Vsub is not negligible. In this scenario, a well designed sampling function ϕ(x) it is more relevant and critical. Theorem 2 shows that the distribution of the estimation error err := √N1(θˆw − θ∗) is approximated by a normal distribution N(0, Vw). Thus for any > 0 the probability of excess error Pr(err > ) is approximated by Pr{ N(0, Vw) > } = Pr j=1 d λjzj2 > , where λj’s are eigenvalues of Vw and zj’s are independent standard normal random variables. Therefore, a smaller trace of Vw means a smaller probability of excess error of the same level since tr(Vw) = j=1 d λj.
+The following theorem gives the optimal negative sampling function for the IPW estimator.
+Theorem 3. For a given sampling rate ρ, the asymptotically optimal ϕ(x) that minimizes tr(Vw) is
+min{t(x; θ∗), T } ϕos(x) = E[min{t(x; θ∗), T }] , (3)
+where t(x; θ) = p(x; θ) Mf−1g˙(x; θ) and T is the maximum number so that ρ[min{t(x; θ∗), T }] ≤ E[min{t(x; θ∗), T }] with probability one. Remark 1. If ρ → 0 then ρt(x; θ∗) ≤ E{t(x; θ∗)} almost surely, so T can be dropped (i.e., T = ∞). If limN→∞ ρ > 0 then c = 0, so the variance inﬂation due to subsampling is negligible. Thus, the truncation term T can be ignored in practice with imbalanced data; it only plays an role for not very imbalanced data when the sampling ratio is not very small.
+
+In ϕos(x), t(x; θ∗) consists of two components, p(x; θ∗) and Mf−1g˙(x; θ∗) . The term p(x; θ∗) is from the binary response model structure, and it gives a higher preference for a data point with larger p(x; θ∗) in the negative class. The term Mf−1g˙(x; θ∗) corresponds to the A optimality criterion (Pukelsheim, 2006). For computational beneﬁt in optimal sampling, the A optimality is
+often replaced by the L optimality (e.g., Wang et al., 2018; Ting and Brochu, 2018). Under the L optimality, Mf−1g˙(x; θ∗) is replaced by g˙(x; θ∗) , and this minimizes the asymptotic mean squared error (MSE) of Mf θˆw. In case the gradient is difﬁcult to obtain, one could ignore the gradient term and simply use p(x; θ∗) to replace t(x; θ∗). Although this does not give an optimal sampling
+probability, it outperforms the uniform subsampling because it takes into account the information of
+the model structure like the local case-control (LCC) sampling.
+
+4
+
+4 More efﬁcient estimation based on the likelihood with log odds correction
+4.1 Nonuniform log odds correction
+The optimal function ϕos(x) assigns larger probabilities to more informative instances. However, the IPW estimator in (2) assigns smaller weights to more informative instances in estimation, so the resulting estimator can be improved to have higher estimation efﬁciency. A naive unweighted estimator is biased, and the bias correction approach in Fithian and Hastie (2014); Wang (2019) does not work for the sampling procedure in Algorithm 1 even when the underlying model is the logistic regression. We adopted the idea of Han et al. (2020) and seek to deﬁne a more efﬁcient estimator through ﬁnding the corrected likelihood of the sampled data based on any negative sampling probability π(x). For data included in the subsample (where δ = 1), the conditional probability of y = 1 is
+1 pπ(x; θ) := Pr(y = 1 | x, δ = 1) = 1 + e−g(x;θ)−l , (4)
+where l = − log{π(x)}. Please see the detailed derivation of (4) in the supplement. To avoid the IPW, we propose the estimator based on the log odds corrected likelihood in (4), namely,
+N
+θˆlik = arg max lik(θ), where lik(θ) = δi yig(xi; θ) − log 1 + eg(xi;θ)+li . (5)
+θ i=1
+With θˆw in (2), π(xi) is in the inverse. If an instance with much smaller π(xi) is selected in the sample, it dominates the objective function, making the resulting estimator unstable. With θˆlik, this problem is ameliorated because π(xi) is in the logarithm in the log-likelihood of (5) and log(v) goes to inﬁnity much slower than v−1 as v ↓ 0.
+
+4.2 Theoretical analysis of the likelihood-based estimator
+
+The following shows the asymptotic distribution of θˆlik. Theorem 4. Under Assumptions 1-3, if E{ef(x;β∗)ϕ−1(x)B(x)} < ∞, then as N → ∞,
+
+N1(θˆlik − θ) −→ N(0, Vlik) in distribution,
+
+f (x;β∗) −1
+
+ef (x;β∗)g˙ ⊗2(x;θ∗)
+
+where Vlik = E{e
+
+}Λlik and Λlik = E 1+cϕ−1(x)ef(x;β∗) .
+
+Theorem 3 shows that the proposed estimator θˆlik is asymptotic normal with variance Vlik. We compare Vlik with Vw to show that θˆlik has a higher estimation efﬁciency than θˆw.
+Theorem 5. If Vw and Vlik are ﬁnite and positive deﬁnite, then Vlik ≤ Vw, i.e., Vw − Vlik is non-negative deﬁnite. The equality holds when c = 0 and in this case Vlik = Vw = Vf .
+
+Since the estimator θˆlik in Eg. (5) is based on the conditional log-likelihood of the sampled data, it actually has the highest estimation efﬁciency among a class of asymptotically unbiased estimators.
+Theorem 6. Let X = (x1, ..., xN )T be the feature matrix and Dδ denote the sampled data. Let θˆU be a subsample estimator with the following asymptotic representation:
+
+ˆ
+
+∗
+
+−1/2
+
+θU = U(θ ; Dδ) + N1 oP (1),
+
+(6)
+
+where the variance V{U(θ∗; Dδ)} exists, and U(θ∗; Dδ) satisﬁes that E{U(θ∗; Dδ) | X} = θ∗ and E{U˙ (θ∗; Dδ) | X} = 0 with U˙ (θ∗; Dδ) = ∂U(θ∗; Dδ)/∂θ∗T. If N1V{U(θ∗; Dδ)} → VU in probability, then VU ≥ Vlik.
+
+Remark 2. Theorem 6 tells us that θˆlik is statistically the most efﬁcient among a class of estimators, which includes both θˆw and θˆlik as special cases. The condition E{U(θ∗; Dδ) | X} = θ∗ ensures that the estimator is asymptotically unbiased. The condition E{U˙ (θ∗; Dδ) | X} = 0 can be intuitively interpreted as the requirement that the derivative of the oP (1) term in (6) is also negligible. Clearly,
+this is satisﬁed by all unbiased estimators for which the oP (1) term in (6) is 0.
+
+5
+
+5 Practical considerations
+
+In this section, we ﬁrst show how we design a more practical estimator based on the previous results and then present the theoretical analysis behind these improvements.
+
+5.1 Making estimators more practical
+
+Like the LCC sampling (Fithian and Hastie, 2014) and the A-optimal sampling (Wang, 2019), the ϕos(x) in (3) depends on θ, and thus a pilot value of θ, say θ˜, is required in practice. Here, θ˜ can be constructed from a pilot sample, say (x˜i, y˜i), i = 1, ..., n˜, taken by uniform sampling from both classes with equal expected sample sizes. With θ˜ obtained, calculate t˜i = p(x˜i; θ˜) M˜ −f 1g˙(x˜i; θ˜) for i = 1, ..., n˜, where M˜ f is the Hessian matrix of the pilot sample objective function. In case
+that the Hessian matrix and gradients are hard to record, the gradient term can be dropped, i.e., use t˜i = p(x˜; θ˜). As mentioned in Remark 1, T can be ignored for very imbalanced data. The
+expectation in the denominator of (3) can be approximated by mimicking the method of moment
+estimator, namely by
+
+ω˜ = 2N1(n˜N )−1 y˜i=1 t˜i + 2N0(n˜N )−1 y˜i=0 t˜i.
+
+(7)
+
+In practice, it is common to set a lower threshold, say , on sampling probabilities, to ensure that all instances have positive probabilities to be selected. This is more critical for the IPW estimator while the likelihood estimator is not very sensitive to very small sampling probabilities.
+Denote the pilot value as ϑ˜ = (θ˜, ω˜). The following probabilities can be practically implemented
+
+πos(x; ϑ˜) = min[max{ρϕ˜os(x), }, 1], where ϕ˜os(x) = ω˜−1t(x; θ˜),
+
+(8)
+
+and we use this in our experiments in Section 6. The ω˜ in (7) is essentially a normalizing term so that the expected subsample size is ρ. For some practical systems such as online models, ω˜ is often treated as a tuning parameter. We will illustrated this in our real data example in Section 6.2.
+
+5.2 Theoretical analysis of practical estimators
+
+Denote
+
+θˆϑ˜
+w
+
+and
+
+θˆϑ˜
+lik
+
+the
+
+IPW
+
+estimator
+
+and
+
+the
+
+likelihood
+
+estimator,
+
+respectively,
+
+with
+
+practically
+
+estimated optimal probability in (8). We have the following results.
+
+Theorem 7. Assume that the pilot estimator ϑ˜ is independent of the data, ϕ˜os(x) → ϕplt(x) in
+
+probability, and ρ−1
+
+→
+
+cl
+
+>
+
+0.
+
+Under
+
+Assumptions
+
+1-3,
+
+as
+
+N
+
+→
+
+∞,
+
+the
+
+θˆϑ˜
+w
+
+satisﬁes
+
+that,
+
+N1(θˆwϑ˜ − θ) → N(0, Vwplt) in distribution,
+
+where
+
+Vplt
+w
+
+has
+
+the
+
+same
+
+expression
+
+of
+
+Vw
+
+except
+
+that
+
+ϕ(x)
+
+is
+
+replaced
+
+by
+
+max{ϕplt(x), cl}.
+
+If
+
+Pr{ϕplt(x)
+
+≥
+
+cl}
+
+=
+
+1
+
+and
+
+the
+
+pilot
+
+estimator
+
+is
+
+consistent,
+
+then
+
+Vplt
+w
+
+achieves
+
+the
+
+optimal
+
+variance.
+
+Theorem 8. Assume that the pilot estimator ϑ˜ is independent of the data, ϕ˜os(x) → ϕplt(x) in
+
+probability, and
+
+=
+
+o(ρ).
+
+Under
+
+Assumptions
+
+1-3,
+
+as
+
+N
+
+→
+
+∞,
+
+θˆϑ˜
+lik
+
+satisﬁes
+
+that,
+
+ˆϑ˜
+
+plt
+
+N1(θlik − θ) → N 0, Vlik
+
+in distribution,
+
+where Vlik plt has the same expression of Vlik except that ϕ(x) is replaced by ϕplt(x). If the pilot estimator is consistent, then Vlik plt achieves the variance with the optimal probability.
+
+Remark 3. Theorems 7 and 8 do not require ϑ˜ to be consistent, i.e., the pilot estimator can be
+
+misspeciﬁed. However ϑ˜ has to be consistent in order to achieve the asymptotic variances with the
+
+optimal
+
+probability.
+
+Compared
+
+with
+
+the
+
+likelihood
+
+estimator
+
+θˆϑ˜ ,
+lik
+
+the
+
+IPW
+
+estimator
+
+θˆϑ˜
+w
+
+requires
+
+a
+
+stronger condition on to have asymptotic normality, because πos(x; ϑ˜) is in the denominator of the
+
+objective
+
+function
+
+for
+
+θˆϑ˜
+w
+
+so
+
+the
+
+turbulence
+
+of
+
+ϑ˜
+
+is
+
+ampliﬁed.
+
+The
+
+requirement
+
+cl
+
+>
+
+0
+
+means
+
+that
+
+cannot be too small in practice. The likelihood estimator does not have this constraint.
+
+6
+
+6 Numerical experiments
+
+We present simulated results and report the performance on a CTR dataset with more than 0.3 trillion instances. More experiments with model and pilot misspeciﬁcations are available in the supplement.
+
+6.1 Experiments on simulated data
+
+We implemented the following negative sampling methods for logistic regression. 1) uniW: uniform sampling with the IPW estimator. 2) uniLik: uniform sampling with the likelihood estimator. 3) optW: optimal sampling with the IPW estimator. 4) optLik: optimal sampling with the likelihood estimator. We also implement the full data MLE (Full) and the LCC for comparisons.
+
+In each repetition of the simulation, we generate full data of size N = 5 × 105 from the logistic regression with g(x; θ) = α + xTβ. We set the true β∗ to be a 6 × 1 vector of ones and set different values for α for different feature distributions so that the positive/negative ratio is close to 1:400. We
+consider the following feature distributions: (a) Normal distribution which is symmetric with light tails; the true intercept is α = −7.65. (b) Log-normal distribution which is asymmetric and positively skewed; the true intercept is α = −0.5. (c) t3 distribution which is symmetric with heavier tails; the true intercept is α = −7.
+
+We set the sampling rate as ρ = 0.002, 0.004, 0.006, 0.01, and 0.02 for all sampling methods. In each
+
+repetition, uniform samples of average size 100 are selected from each class to calculate the pilot
+
+estimates, so the uncertainty due to the pilot estimates are taken into account. We also consider pilot
+
+misspeciﬁcation by adding a uniform random number from U(0, 1.5) to the pilot so that the pilot is systematically different from the true parameter. We repeat the simulation for R = 1000 times to
+
+calculate the MSE as R−1
+
+R r=1
+
+θˆ(r) − θ
+
+2, where θ(r) is the estimate at the r-th repetition.
+
+(a). x’s are normal
+
+(b) x’s are lognormal
+
+(c) x’s are t3
+
+Figure 1: Log(MSEs) for different estimators (the smaller the better). The top row uses consistent pilot estimators; the bottom uses misspeciﬁed pilot estimators.
+
+Results are presented in Figure 1. The MSEs of all estimators decrease as the sampling rate ρ increases. The optLik outperforms other sampling methods in general, and its performance is close to the full data MLE when ρ = 0.02, especially if the pilot is consistent. The advantage of optLik over optW is more evident for smaller ρ. If the pilot is misspeciﬁed, optLik is quite robust but optLik and LCC signiﬁcantly deteriorate. Since uniLik and uniW do not require a pilot, they are not affected by pilot misspeciﬁcation, but they have much larger MSE than optLik and optW when the pilot is consistent, especially uniW. Different feature distributions also affect the performances of different sampling methods.
+
+To verify Theorem 1 numerically, we let the full data size N increase at a faster rate than the average
+
+number
+
+of
+
+positive
+
+instances
+
+Na
+1
+
+=
+
+E(N1)
+
+so
+
+that
+
+the
+
+probability
+
+Pr(y
+
+=
+
+1)
+
+decreases
+
+towards
+
+zero.
+
+As N increases, we ﬁxed the value of β∗ and set decreasing values to α∗ to mimic our scaling regime.
+
+We considered two covariate distributions: 1) a multivariate normal distribution for which a logistic
+
+7
+
+regression model is a correct model; and 2) a multivariate log-normal distribution for which a logistic
+regression model is misspeciﬁed. We simulated for 100 times to calculate the empirical variance Vˆ f of the full data MLE, and report the results in Table 1. It is seen that tr(Vˆ f ) is decreasing towards zero. According to Theorem 1, tr(Vˆ f ) should converge in a rate of 1/N1, so N1atr(Vˆ f ) should be relatively stable as N increases. This is indeed the case as seen in the third and sixth columns of Table 1. On the other hand, N tr(Vˆ f ) gets large dramatically as N increases. The aforementioned observations conﬁrm the theoretical result in Theorem 1. Furthermore, Table 1 shows
+that the convergence rate in Theorem 1 may also be true for some misspeciﬁed models.
+
+Table 1: Empirical variances of the full data MLE for different full data size and average number of positive instances combinations.
+
+(N , N1a) (103, 32) (104, 64) (105, 128) (106, 256)
+
+tr(Vˆ f ) 0.169 0.097 0.045 0.018
+
+Correct model
+
+N1atr(Vˆ f ) N tr(Vˆ f )
+
+5.41
+
+169.17
+
+6.20
+
+969.29
+
+5.76
+
+4497.24
+
+4.62
+
+18048.40
+
+Mis-sprciﬁed model
+
+tr(Vˆ f ) N1atr(Vˆ f ) N tr(Vˆ f )
+
+0.969
+
+30.99
+
+968.70
+
+0.322
+
+20.59
+
+3217.12
+
+0.135
+
+17.32 13527.60
+
+0.046
+
+11.74 45847.40
+
+6.2 Experiments on real data
+We conduct experiments on an internal CTR dataset from our products with more than 0.3 trillion instances. There are 299 input features, including user and ad proﬁles together with rich context features. We concatenate all features as a single high-dimensional vector x, whose length is greater than 5, 000. We use a 3-layer fully connected deep neural network as a feature extractor that maps x into a 256-dimensional dense features h(x). The downstream model is a linear logistic regression model taking h(x) as input to predict the binary output whether the user clicks the ad or not.
+The positive/negative ratio is around 1:80. Due to limited storage, we ﬁrst uniformly drop 80% negative instances and try various negative sampling algorithms on the rest 60 billion instances. On this pre-processed dataset, we then split out 1 percent of the data for testing, and do negative sampling on the rest data. The entire training procedure scans the subsampled data set from begin to end in one-pass according to the timestamp. The testing is done all the way through training. We calculate the area under the ROC curve (AUC) for testing instances. The entire model is trained on a distributed machine learning platform using 1,200 CPU cores and can ﬁnish within two days.
+We adopt the sampling probability πos(x; ϑ˜) as demonstrated in (8) and use the empirical sampling rate to calibrate the normalizing term ω˜. As mentioned before, we remove the gradient term for implementation tractability so t(x; θ˜) = p(x; θ˜). As the result will show, this approximate score produces consistent results with the simulation experiments. We compare four methods: 1) uniW and 2) uniLik are the same as in simulated experiments; and 3) optW and 4) optLik represent nonuniform sampling probability using πos(x; ϑ˜) with the IPW estimator and with the likelihood estimator. We use “opt" to refer to both optW and optLik when focusing on the sampling.
+We study two sets of negative sample rates (w.r.t. the original 0.3 trillion data): (i) [0.01, 0.05]. In this case, negative instances still outnumber positive instances. (ii) [0.001, 0.008]. In this case, negative subsampling is too aggressive that positive instances dominates negative instances. We demonstrate the result in Figure 2. When the sample rate is moderate (Figure 2.(b)), opt is nearly optimal and can signiﬁcantly outperform uniform subsampling. There is still a small gap between the IPW estimator and the likelihood estimator. When the sample rate is extremely small (Figure 2.(a)), opt becomes sub-optimal and its gap w.r.t. uniform sampling is closer. Still we see a clear difference between the IPW estimator and the likelihood estimator. This is due to a larger asymptotic variance for uniform sampling when the sampling rate goes to zero. Note that on this huge data set, a small relative AUC gain (e.g., 0.0005) usually could bring about signiﬁcant revenue gain in products.
+6.3 Sensitivity analysis
+In practice, we ﬁnd it necessary to use cross-validation to ﬁnd the optimal in (8) given a ﬁxed sample rate. As demonstrated in Figure 3, for each sampling rate we tune from a very small value (in this
+8
+
+(a). Extremely small sampling rates.
+
+(b) Moderate sampling rates.
+
+Figure 2: Empirical testing AUC of subsample estimators for different sample sizes (the larger the better).
+
+case, 10−6) all the way to its largest value. When achieves its largest value, ρω˜−1 = 0 and πos(x; ϑ˜)
+reduces to uniform negative sampling. We observe that πos(x; ϑ˜) with a moderate achieves the
+best results for various sampling rates. Note that is the lower truncation level for negative sampling probabilities. Thus, a larger means more “simple" negative instances (ρω˜−1p(xi; θ˜) is smaller than
+) will have better chances to be selected. This coincides with recent empirical results for negative subsampling in large search systems (Huang et al., 2020), where they mix “simple" (smaller p(xi; θ˜)) and “hard" (larger p(xi; θ˜)) negative instances. We also observe an empirical variance of around 0.0001 for each setup, demonstrating that the relative improvement is consistent.
+
+uniW
+
+uniLik
+
+optW
+
+optLik
+
+1.0 Sample Rate = 0.05
+
+Sample Rate = 0.04
+
+Sample Rate = 0.03
+
+Sample Rate = 0.02
+
+Sample Rate = 0.01
+
+8154 150 0.8148 0.8146 6 144 1350 8
+
+015.8 0 2 148 . 0. 0.818 41 4 .8142 0.813 4 0.8 0.8 25
+
+15 0 0 6 0.8 . 1 8 0.8 0. 4 .8 2 10 40 0.813 500
+
+0.8 0.814 8
+
+0.8138 .8 4 1 0 0 38 0.812507
+
+0.8 0 1 . 4 81 1 4 3 4 0.81 6 .810 36 0.8 21 22 5
+
+0.8 .81 014.6 42 0..818 34 .810 34 0.8121 00
+
+0.00 0.05 0.10 0.15 0.20 0.25 0 0.00 0.05 0.10 0.15 0.20 0 0.000 0.025 0.050 0.075 0.100 0.125 0.150 0 0.00 0.02 0.04 0.06 0.08 0.10 0.8 0.00 0.01 0.02 0.03 0.04 0.05
+
+Sample Rate = 0.008
+0.4 25 813
+
+Sample Rate = 0.006
+5
+
+Sample Rate = 0.004
+0.8120
+
+Sample Rate = 0.002
+
+Sample Rate = 0.001
+
+0.80 1. 3005 0.812
+
+.8115 0.810 0 0 .8080
+
+0.81252 0 0.8 7 120 8110 0 0 .8090 0 5 .80750
+
+0.810.25
+
+0.
+
+.809
+
+.807
+
+8122
+
+115
+
+105
+
+05
+
+0 65
+
+.
+
+8
+
+8
+
+0
+
+0.80 1275 10 10 0 0 0 0. 0.8 0 08. 0 .80 8 6 0 0.8 0
+
+0.8111 51 0 0.81
+
+95 0 0 7 . 5 0.80 8 0.8 0 55
+
+0.8 0.0
+
+05
+
+.80
+
+0.8
+
+0.00.00 0.01 0.02 0.03 0.04 .810.20.000 0.005 0.010 0.015 0.020 0.025 0.030 00.4 0.000 0.005 0.010 0.015 0.020 0.6 0.000 0.002 0.004 0.006 0.008 0.0100.8 0.000 0.001 0.002 0.003 0.004 0.0015.0
+
+0
+
+Figure 3: AUC for IPW and likelihood estimators when tuning the truncation lower bound .
+
+AUC
+
+7 Conclusions, discussion, and limitations
+In this paper, we have derived asymptotic distributions for full data and subsample estimators with rare events data. We have also found the optimal sampling probability that minimizes the unconditional asymptotic variance of the IPW estimator, and proposed the likelihood estimator through nonuniform log odds correction to further improve the estimation efﬁciency. The optimal probability depends on unknown parameters so we have discussed practical implementations and investigated the convergences of the resultant estimators. Experiments on both simulated and real big online streaming data conﬁrm our theoretical ﬁndings. Heuristically, our nonuniform negative sampling method gives preference to data points that are harder to observe, so it would give preference to sub-populations that are difﬁcult to observe. We do not think this would bring any negative societal impacts. We have also examined our real data application and did not notice discrimination against any sub-populations.
+This paper has the following limitations: 1) We assume that the model is correctly speciﬁed. Theoretical properties with model misspeciﬁcation is not considered, and this important question requires
+9
+
+future studies. 2) Oversampling the rare positive instances is another common practice to deal with imbalanced data. Its application together with negative sampling is not considered. 3) The assumption of a ﬁxed β∗ means that both the marginal and conditional probabilities for a positive instance to occur are small. If the proportion of the positive instances for a given feature in a dataset is large, this assumption may not be appropriate. Further investigation is need to see if our results is still applicable. In the following, we present three scenarios that the scaling regime may or may not ﬁt in:
+
+Scenario 1 (phone call while driving) Car crashes occur with small probabilities, and making phone calls while driving signiﬁcantly increases the probability of a car crash. However, the probability of car crashes among people making phone calls while driving is still small, so for these types of features, our scaling regime is appropriate to model the rare events.
+
+Scenario 2 (anti-causal learning) Anti-causal learning Schölkopf et al. (2012); Kilbertus et al. (2018) assumes that label (y) causes observations (x). Thus Pr(x|y) represents the causal mechanism and is ﬁxed. One standard example is that diseases (y) cause symptoms (x). Our scaling regime ﬁts the framework of anti-causal learning. To see this, using Bayes Theorem we write the log odds as
+
+Pr(y = 1)
+
+Pr(x | y = 1)
+
+α + f (x; β) = log
+
++ log
+
+.
+
+Pr(y = 0)
+
+Pr(x | y = 0)
+
+In anti-causal learning, the marginal distribution of y changes while the conditional distribution of x given y is ﬁxed. Thus only the scale factor α changes, and f (x; β) is ﬁxed.
+
+Scenario 3 (local transmission of the COVID-19) Our scaling regime has some limitations and does not apply to all types of rare events data. For example, although the COVID-19 infection rate for the whole population is low, the infection rate for people whose family members are in the same house with positive test results is high. This means the change of a family member’s test result converts a small-probability-event to a large-probability-event, and our scaling regime would not be appropriate.
+
+Acknowledgments and Disclosure of Funding
+HaiYing Wang’s research was partially supported by NSF grant CCF 2105571.
+
+10
+
+Proofs and Additional Numerical Experiments
+
+Before presenting the proof, we point out that Assumption 2 implies that E{v(x)g˙⊗2(x; θ)} is positive deﬁnite for a positive function v(x) > 0 almost surely. This is because Assumption 2 means
+that Pr{lTg˙(x; θ) = 0} > 0 for any l = 0, and therefore Pr{v1/2(x)lTg˙(x; θ) = 0} > 0 for any l = 0, implying that E{v(x)g˙⊗2(x; θ)} is positive deﬁnite. We also point out that if a sequence is oP (1) conditionally then it is also oP (1) unconditionally and vice versa (Xiong and Li, 2008; Cheng
+et al., 2010). To facilitate the presentation, deﬁne aN = √N eα∗ . We notice that
+
+N1 = N E
+
+eα∗+f (x;β∗) 1 + eα∗+f (x;β∗)
+
+{1 + oP (1)} = aN2 E{ef(x;β∗)}{1 + oP (1)},
+
+(S.1)
+
+√ from the dominated convergence theorem. Thus the normalizing term N1 for the asymptotic normality in the paper can be replaced by aN E1/2{ef(x;β∗)}.
+
+S.1 Proof of Theorem 1
+
+The estimator θˆf is the maximizer of
+
+N
+
+(θ) =
+
+yig(xi; θ) − log{1 + eg(xi;θ)} ,
+
+i=1
+
+so aN (θˆ − θ∗) is the maximizer of
+
+γ(u) = (θ∗ + aN−1u) − (θ∗).
+
+By Taylor’s expansion,
+
+N
+γ(u) = aN−1uT ˙(θ∗) + 0.5a−2 N φ(xi; θ∗){uTg˙(xi; θ∗)}2 + ∆ + R,
+i=1
+
+where
+
+∂ (θ) N
+
+˙(θ) =
+
+=
+
+yi − p(xi; θ) g˙(xi; θ),
+
+∂θ i=1
+
+1N
+
+∗T
+
+∗
+
+∆= 2
+
+yi − p(xi; θ ) u g¨(xi; θ )u,
+
+2aN i=1
+
+and R is the remainder term. By direct calculation,
+
+N
+
+1 R= 3
+
+φ(xi; θ∗ + a−1 N u´) 1 − 2p(xi; θ∗ + a−1 N u´) {uTg˙(xi; θ∗ + a−1 N u´)}3
+
+6aN i=1
+
+N
+
+1 +3
+
+φ(xi; θ∗ + a−N1u´){uTg˙(xi; θ∗ + a−N1u´)}{uTg¨(xi; θ∗ + a−N1u´)u}
+
+6aN i=1
+
+1N + 6aN i=1 3
+
+yi − p(xi; θ∗ + a−1 N u´)
+
+d
+
+...
+
+∗
+
+−1
+
+uj1 uj2 g j1j2 (xi; θ + aN u´)u ,
+
+j1 ,j2 =1
+
+... where g j1j2 (x; θ) is the gradient of g¨j1j2 (x, θ) and u´ lies between 0 and u. We see that
+
+|R| ≤ ≤
+
+u3 N
+
+∗
+
+−1
+
+∗
+
+−1
+
+du3 N
+
+p(xi; θ + aN u´)C(xi, θ + aN u´) + 3
+
+yiB(xi)
+
+6a3N i=1
+
+6aN i=1
+
+u 3eaN −1 u 6N aN
+
+−1 ∗ −1 N d u 3 exp{f (xi; β + aN u´(−1))}C(xi, θ + aN u´) + 3
+
+i=1
+
+6aN
+
+N
+yiB(xi)
+i=1
+
+11
+
+d3 u 3ea− N1 u ≤
+6N aN
+
+N du3 N i=1 B(xi) + 6aN i=1 3 yiB(xi) ≡ ∆R1 + ∆R2,
+
+(S.2)
+
+3
+
+d ...
+
+where C(x, θ) = g˙(x, θ) + g˙(x, θ) g¨(x, θ) + j1j2 g j1j2 (x, θ) and u´(−1) is u´ with the
+
+ﬁrst element removed. From Assumption 1, E(∆R1) → 0 and
+
+E(∆ d u 3 N R2) ≤ E ef(xi;β∗)B(x d u 3 i)} = E ef(x;β∗)B(x) 6N aN i=1 6aN
+
+→ 0.
+
+Since ∆R1 and ∆R2 are both positive, Markov’s inequality shows that they are both oP (1) so R = oP (1). For ∆ , the mean E(∆ ) = 0 and the variance satisﬁes that
+
+V(∆ ) ≤ u E{p(xi; θ∗) g¨(xi; θ∗) 2 4 N } ≤ u E[ef(xi;β 4 ∗) g¨(xi; θ∗) 2 N ]
+
+4a4N i=1
+
+4N a2N i=1
+
+u 4 f (x;β∗)
+
+∗2
+
+= 2 E[e
+
+g¨(x, θ ) ] → 0,
+
+4aN
+
+so ∆ = oP (1).
+
+If we can show that
+
+aN−1 ˙(θ∗) −→ N 0, Mf ,
+
+(S.3)
+
+in distribution, and
+
+N
+aN−2 φ(xi; θ∗)g˙ ⊗2(xi; θ∗) −→ Mf ,
+i=1
+
+(S.4)
+
+in probability, then from the Basic Corollary in page 2 of Hjort and Pollard (2011), we know that aN (θˆ − θ∗), the maximizer of γ(u), satisﬁes that
+
+aN (θˆ − θ∗) = Mf−1 × aN−1 ˙(θ∗) + oP (1).
+
+(S.5)
+
+Slutsky’s theorem together with (S.3) and (S.5) implies the result in Theorem 1. We prove (S.3) and (S.4) in the following.
+
+Note that
+
+N
+
+˙(θ∗) =
+
+yi − p(xi; θ∗) g˙(xi; θ∗)
+
+i=1
+
+is a summation of i.i.d. quantities. Since the distribution of {y − p(x; θ∗)}g˙(x; θ∗) depends on N because α∗ → −∞ as N → ∞, we need to use the Lindeberg-Feller central limit theorem for triangular arrays (see, Section ∗2.8 of van der Vaart, 1998).
+
+We examine the mean and variance of aN−1 ˙(θ∗). For the mean, from the fact that
+
+E[{yi − p(xi; θ∗)}g˙(xi; θ∗)] = E E yi − p(xi; θ∗) xi g˙(xi; θ∗)xi = 0,
+
+we know that E{aN−1 ˙(θ∗)} = 0. For the variance,
+
+N
+
+V{a−1 N ˙(θ∗)} = a−2 N V[{y − p(x; θ∗)}g˙(xi; θ∗)] = aN−2N E{φ(θ∗)g˙⊗(x; θ∗)}
+
+i=1
+
+= a−2 N N E
+
+eα∗+f(x;β∗) g˙ ⊗(x; θ∗) {1 + eα∗+f (x;β∗)}2
+
+=E
+
+ef (x;β∗)
+
+g˙⊗(x; θ∗) .
+
+{1 + eα∗+f (x;β∗)}2
+
+We have
+
+ef (x;β∗)
+
+⊗
+
+∗
+
+f (x;β∗) ⊗
+
+∗
+
+{1 + eα∗+f(x;β∗)}2 g˙ (x; θ ) −→ e
+
+g˙ (x; θ )
+
+almost surely,
+
+12
+
+and ef (x;β∗)
+{1 + eα∗+f (x;β∗)}2
+
+g˙ (x; θ∗) 2 ≤ ef(x;β∗)
+
+g˙(x; θ∗) 2
+
+with
+
+E{ef(x;β∗) g˙ (x; θ∗) 2} ≤ ∞.
+
+Note that g˙(x; θ∗) = {1, f˙T(xi; β∗)}T does not depend on N . Thus, from the dominated convergence theorem,
+
+V{a−1 N ˙(θ∗)} −→ E ef(x;β∗)g˙ ⊗(x; θ∗) .
+
+Now we check the Lindeberg-Feller condition. For any > 0,
+
+N
+E
+i=1
+
+{yi − p(xi; θ∗)}g˙(xi; θ∗) 2I( {yi − p(xi; θ∗)}g˙(xi; θ∗) > aN )
+
+= N E {y − p(x; θ∗)}g˙(x; θ∗) 2I( {y − p(x; θ∗)}g˙(x; θ∗) > aN )
+
+= N E p(x; θ∗){1 − p(x; θ∗)}2 g˙(x; θ∗) 2I( {1 − p(x; θ∗)}g˙(x; θ∗) > aN ) + N E {1 − p(x; θ∗)}{p(x; θ∗)}2 g˙(x; θ∗) 2I( p(x; θ∗)g˙(x; θ∗) > aN )
+≤ N E p(x; θ∗) g˙(x; θ∗) 2I( g˙(x; θ∗) > aN ) + N E {p(x; θ∗)}2 g˙(x; θ∗) 2I( p(x; θ∗)g˙(x; θ∗) > aN )
+≤ aN2 E{ef(x;β∗) g˙ (x; θ∗) 2I( g˙ (x; θ∗) > aN )} + aN2 E{ef(x;β∗) g˙ (x; θ∗) 2I( g˙ (x; θ∗) > aN )}
+= o(a2N ),
+
+where the last step is from the dominated convergence theorem. Thus, applying the Lindeberg-Feller central limit theorem (Section ∗2.8 of van der Vaart, 1998), we ﬁnish the proof of (S.3).
+
+Now we prove (S.4). This is done by noting that
+
+N
+aN−2 φ(xi; θ∗)g˙ ⊗2(xi; θ∗)
+i=1
+
+1N = α∗
+
+e ⊗2 ∗ α∗+f (xi;β∗) α∗+f (xi;β∗) 2 g˙ (xi; θ )
+
+Ne
+
+(1 + e
+
+)
+
+i=1
+
+1N
+
+ef (xi;β∗)
+
+⊗2
+
+∗
+
+f (x;β∗) ⊗2
+
+∗
+
+= N
+
+(1 + eα∗+f(xi;β∗))2 g˙ (xi; θ ) = E{e
+
+g˙ (x; θ )} + oP (1),
+
+i=1
+
+where the last step is from Lemma 28 of Wang (2019).
+
+S.2 Proof of Theorem 2
+
+First, note that Vw can be written as
+
+Vw = E(ef(x;β∗))Mf−1MwMf−1,
+
+where
+
+Mw = E
+
+cef (x;β∗) 1+
+ϕ(x)
+
+ef(x;β∗)g˙ ⊗2(x; θ∗) .
+
+We then point out that under assumptions 1 and 2 the condition E[{ϕ(x) + ϕ−1(x)}B2(x)] < ∞ implies the following:
+
+E ϕ(x)ef(x;β∗) g˙ (x; θ∗) 2 < ∞, E 1 + ϕ−1(x) e2f(x;β∗) g˙ (x; θ∗) 4 < ∞,
+
+(S.6) (S.7)
+
+13
+
+E ϕ−1(x)e2f(x;β∗) g¨(x; θ∗) 2 < ∞.
+
+(S.8)
+
+The estimator θˆw is the maximizer of
+
+N δi
+
+g (xi ;θ)
+
+w(θ) = π(xi, yi) yig(xi; θ) − log{1 + e } ,
+
+i=1
+
+so aN (θˆw − θ∗) is the maximizer of γw(u) = w(θ∗ + aN−1u) − w(θ∗). By Taylor’s expansion,
+
+1 T˙ ∗
+
+1 N δi
+
+∗ T2
+
+γw(u) = u w(θ ) + 2
+
+φ(xi; θ )(zi u) + ∆ w + Rw,
+
+aN 2aN i=1 π(xi, yi)
+
+where
+
+∂ w(θ) N δi
+
+˙w(θ) =
+
+=
+
+yi − p(xi; θ) g˙(xi, θ),
+
+∂θ i=1 π(xi, yi)
+
+1 N δi
+
+∗T
+
+∗
+
+∆w= 2
+
+yi − p(xi; θ ) u g¨(xi, θ )u,
+
+2aN i=1 π(xi, yi)
+
+and Rw is the remainder. Similarly to the proof of Theorem 1, we only need to show that
+
+a−1 N ˙w(θ∗) −→ N(0, Mw),
+
+(S.9)
+
+in distribution,
+
+N δi
+
+∗ ⊗2
+
+∗
+
+a−N2 π(x φ(xi; θ )g˙ (xi; θ ) −→ Mf , i, yi)
+
+i=1
+
+(S.10)
+
+in probability for any u, and ∆ w = oP (1) and Rw = oP (1).
+
+We prove (S.9) ﬁrst. Let ηi = π(xi,yi) δi {yi − p(xi; θ∗)}g˙(xi; θ∗), we know that ηi, i = 1, ..., N , are i.i.d., with the underlying distribution of ηi being dependent on N . From direct calculation, we have that E(ηi | xi) = 0 and
+
+V(ηi | xi) = E {yi − p(xi; θ∗)}2 xi g˙⊗2(xi; θ∗) {yi + (1 − yi)ρϕ(xi)}
+
+= p(xi; θ∗){1 − p(xi; θ∗)}2g˙⊗2(xi; θ∗) + {1 − p(xi; θ∗)} p2(xi; θ∗) g˙⊗2(xi; θ∗) ρϕ(xi)
+
+α∗ f (xi;β∗) ⊗2 ∗ −1 2α∗ e ⊗2 ∗ 2f (xi;β∗)
+
+≤e e
+
+g˙ (xi; θ ) + ρ e
+
+g˙ (xi; θ ).
+
+ϕ(xi)
+
+Thus, by the dominated convergence theorem, we obtain that
+
+V(ηi) = E{V(ηi | xi)} = eα∗ E
+
+cef (xi;β∗) 1+
+ϕ(xi)
+
+ef(xi;β∗)g˙ ⊗2(xi; θ∗) {1 + o(1)}.
+
+Now we check the Lindeberg-Feller condition (Section ∗2.8 of van der Vaart, 1998). Denote δ = y + (1 − y)I{u ≤ ρϕ(x)} where u ∼ U(0, 1). For any > 0,
+
+N
+E
+i=1
+= NE
+
+ηi 2I( ηi > aN ) π−1(x, y)δ{y − p(x; θ∗)}g˙(x; θ∗) 2I( π−1(x, y)δ{y − p(x; θ∗)}g˙(x; θ∗)
+
+> aN )
+
+= ρN E ϕ(x) π−1(x, y){y − p(x; θ∗)}g˙(x; θ∗) 2I( π−1(x, y){y − p(x; θ∗)}g˙(x; θ∗) > aN )
+
++ N E {1 − ρϕ(x)} π−1(x, y)y{y − p(x; θ∗)}g˙(x; θ∗) 2
+
+14
+
+× I( π−1(x, y)y{y − p(x; θ∗)}g˙(x; θ∗) > aN )
+
+= ρN E ϕ(x)p(x; θ∗) {1 − p(x; θ∗)}g˙(x; θ∗) 2I( {1 − p(x; θ∗)}g˙(x; θ∗) > aN )
+
++ N E {1 − p(x; θ∗)}ρ−1ϕ−1(x) p(x; θ∗)g˙(x; θ∗) 2
+
+× I( ρ−1ϕ−1(x){y − p(x; θ∗)}g˙(x; θ∗) > aN )
+
++ N E {1 − ρϕ(x)}p(x; θ∗) {1 − p(x; θ∗)}g˙(x; θ∗) 2I( {1 − p(x; θ∗)}g˙(x; θ∗) > aN )
+
+≤ ρN eα∗ E ϕ(x)ef(x;β∗) g˙ (x; θ∗) 2I( g˙(x; θ∗) > aN )
+
++ N e2α∗ ρ−1E ϕ−1(x) ef(x;β∗)g˙ (x; θ∗) 2I( ρ−1ϕ−1(x){y − p(x; θ∗)}g˙ (x; θ∗) > aN )
+
++ N eα∗ E ef(x;β∗) g˙ (x; θ∗) 2I( g˙ (x; θ∗) = o(N eα∗ ),
+
+> aN )
+
+where the last step is due to Assumptions 1, (S.6)-(S.8), the dominated convergence theorem, and the facts that aN → ∞ and limN→∞ eα/ρ = c < ∞. Thus, applying the Lindeberg-Feller central limit theorem (Section ∗2.8 of van der Vaart, 1998) ﬁnishes the proof of (S.9).
+Now we prove (S.10). Let
+
+N δi
+
+∗ ⊗2
+
+∗
+
+Hw ≡ aN−2 π(xi, yi) φ(xi; θ )g˙ (xi; θ )
+
+i=1
+
+1 N δi =
+
+ef (xi;β∗)
+
+⊗2
+
+∗
+
+α∗+f (xi;β∗) 2 g˙ (xi; θ )
+
+n i=1 π(xi, yi) (1 + e )
+
+1 N yi + (1 − yi)I{ui ≤ ρϕ(xi)} =
+
+ef (xi;β∗)
+
+⊗2
+
+∗
+
+α∗+f(xi;β∗) 2 g˙ (xi; θ ).
+
+n i=1 yi + (1 − yi)ρϕ(xi) (1 + e )
+
+We notice that E(Hw) =E
+
+ef (x;β∗)
+
+g˙⊗2(x; θ∗)
+
+(1 + eα∗+f (x;β∗))2
+
+= E ef(x;β∗)g˙ ⊗2(x; θ∗) + o(1),
+
+(S.11)
+
+where the last step is by the dominated convergence theorem. In addition, the variance of each component of Hw is bounded by
+
+1N E π2 δ(x, y) e2f(x;β∗) g˙ (x; θ∗) 4
+
+1 ≤E
+
+1 e2f(x;β∗) g˙ (x; θ∗) 4
+
+N π(x, y)
+
+1 ≤ NρE
+
+1 ρ+
+
+e2f(x;β∗) g˙ (x; θ∗) 4
+
+ϕ(x)
+
+= o(1).
+
+(S.12)
+
+where the last step is because of (S.7) and the fact that N eα∗ → ∞ and eα∗ /ρ → c < ∞ imply that N ρ → ∞. From (S.11) and (S.12), Chebyshev’s inequality implies that Hw → E ef(x;β∗)g˙⊗2(x; θ∗) in probability.
+
+In the following we ﬁnish the proof by showing that ∆ w = oP (1) and Rw = oP (1). For ∆ w , the mean E(∆ w ) = 0 and the variance satisﬁes that
+
+V(∆ w ) ≤ ≤
+
+u 4N {y − p(x; θ∗)}2 g¨(x; θ∗) 2
+
+4aN4 E
+
+y + (1 − y)ρϕ(x)
+
+u 4N 4aN4 E
+
+1 + p(x; θ∗) p(x; θ∗) g¨(x; θ∗) 2 ρϕ(x)
+
+15
+
+u4 ≤ 4aN2 E
+
+eα∗ ef (x;β∗) 1+
+ρϕ(x)
+
+ef(x;β∗) g¨(x; θ∗) 2
+
+= oP (1),
+
+so ∆ w = oP (1). For the remainder term Rw. By direct calculation,
+
+1 N δi
+
+∗
+
+−1
+
+∗
+
+−1
+
+T
+
+∗
+
+−1 3
+
+Rw = 3
+
+φ(xi; θ + aN u´) 1 − 2p(xi; θ + aN u´) {u g˙(xi; θ + aN u´)}
+
+6aN i=1 π(xi, yi)
+
+1 N δi
+
+∗
+
+−1
+
+T
+
+∗
+
+−1
+
+T
+
+∗
+
+−1
+
++3
+
+φ(xi; θ + aN u´){u g˙(xi; θ + aN u´)}{u g¨(xi; θ + aN u´)u}
+
+6aN i=1 π(xi, yi)
+
+1 N δi + 6aN3 π(xi, yi)
+i=1
+
+yi − p(xi; θ∗ + a−1 N u´)
+
+d ...
+
+∗
+
+−1
+
+uj1 uj2 g j1j2 (xi; θ + aN u´)u ,
+
+j1 j2
+
+where u´ lies between 0 and u. We see that
+
+u3 N |Rw| ≤ 3
+
+δi ∗ −1 ∗ −1 d u 3 N p(xi; θ + aN u´)C(xi, θ + aN u´) + 3
+
+δi yiB(xi)
+
+6aN i=1 π(xi, yi)
+
+6aN i=1 π(xi, yi)
+
+u 3eaN −1 u N ≤
+
+δi exp{f (xi; β + aN−1u´(−1))}C(xi, θ∗ + aN−1u´)
+
+6N aN i=1 π(xi, yi)
+
+d u 3 N δi
+
++ 6aN3
+
+π(xi, yi) yiB(xi)
+
+i=1
+
+d3 u 3ea− N1 u ≤
+6N aN
+
+N δi
+
+d u 3 N δi
+
+π(xi, yi) B(xi) + 6aN3
+
+π(xi, yi) yiB(xi)
+
+i=1
+
+i=1
+
+≡ ∆Rw1 + ∆Rw2,
+
+where C(x, θ) is deﬁned in (S.2) and u´(−1) is u´ with the ﬁrst element removed. From Assumption 1, E(∆Rw1) → 0 and
+
+d u 3 f (x;β∗)
+
+E(∆Rw2) ≤
+
+Ee
+
+B(x) → 0.
+
+6aN
+
+Since ∆Rw1 and ∆Rw2 are both positive, Markov’s inequality shows that they are both oP (1) so Rw = oP (1).
+
+S.3 Proof of Theorem 3
+
+Since only Vsub in Vw is affect by subsampling, the probability that minimizes tr(Vsub) also minimizes tr(Vw). Let Λsub = E{ϕ−1(x)e2f(x;β∗)g˙⊗2(x; θ∗)}. We notice that
+Vsub = cE(ef(x;β∗))Mf−1ΛsubMf−1 = cE(ef(x;β∗))e−2α∗ {1 + oP (1)}Mf−1E{ϕ−1(x)p2(x; θ∗)g˙ ⊗2(x; θ∗)}Mf−1,
+where the term cE(ef(x;β∗))e−2α∗ does not depend on ϕ(x). Thus we can focus on minimizing the term M−f 1E{ϕ−1(x)p2(x; θ∗)g˙⊗2(x; θ∗)}M−1 f .
+
+Note that tr[p2(x; θ∗)M−1 f g˙ ⊗2(x; θ∗)M−1 f ] =
+Thus the problem is to ﬁnd ϕ(x) that minimizes
+
+p(x; θ)Mf−1g˙(x; θ) 2 = t2(x; θ∗).
+
+E t2(x; θ∗) , subject to 0 < ϕ(x) ≤ ρ−1 and E{ϕ(x)} = 1. ϕ(x)
+
+To facilitate the presentation, denote
+
+1 ζ = E[min{t(x; θ∗), T }] ,
+
+16
+
+which is non-random. We notice that
+
+ζ2t2(x; θ∗) E ϕ(x)
+
+= E ζ2[min{t(x; θ∗), T }]2 + E ζ2{t2(x; θ∗) − T 2} I{t(x; θ∗) > T }
+
+ϕ(x)
+
+ϕ(x)
+
+= E ϕ(x) − ζ min{t(x; θ∗), T } 2 − E{ϕ(x)} + 2E ζ min{t(x; θ∗), T } ϕ(x)
+
++ E ζ2{t2(x; θ∗) − T 2} I{t(x; θ∗) > T } ϕ(x)
+
+= E ϕ(x) − ζ min{t(x; θ∗), T } 2 + E ζ2{t2(x; θ∗) − T 2} I{t(x; θ∗) > T } + 1
+
+ϕ(x)
+
+ϕ(x)
+
+≡ E1 + E2 + 1,
+
+where I(·) is the indicator function. Note that Ei’s are non-negative and E1 = 0 if and only if
+
+∗
+
+min{t(x; θ∗), T }
+
+ϕ(x) = ζ min{t(x; θ ), T } =
+
+∗
+
+,
+
+E[min{t(x; θ ), T }]
+
+which is attainable because
+
+ρ min{t(x; θ∗), T } ≤ E[min{t(x; θ∗), T }], almost surely.
+
+(S.13)
+
+If t(x; θ∗) ≤ T almost surely, then E2 = 0 and the proof ﬁnishes. If Pr{t(x; θ∗) > T } > 0 then
+
+ρT E[min{t(x; θ∗), T }] = 1,
+
+because if this is not true then we can ﬁnd a larger T that satisﬁes (S.13). t(x; θ∗) > T , then
+
+min{t(x; θ∗), T }
+
+−1
+
+ϕ(x) =
+
+∗
+
+=ρ ,
+
+E[min{t(x; θ ), T }]
+
+This means that if
+
+which minimizes E2 as well since ϕ(x) is in the denominator. This ﬁnishes the proof.
+
+S.4 Derivation of corrected model (4)
+Note that π(x, 1) = 1 and π(x, 0) = π(x). By direct calculation, we have
+Pr(y = 1 | x, δ = 1) Pr(y = 1, δ = 1 | x)
+= Pr(δ = 1 | x) Pr(y = 1, δ = 1 | x)
+= Pr(y = 1, δ = 1 | x) + Pr(y = 0, δ = 1 | x) Pr(y = 1 | x) Pr(δ = 1 | x, y = 1)
+= Pr(y = 1 | x) Pr(δ = 1 | x, y = 1) + Pr(y = 0 | x) Pr(δ = 1 | x, y = 0) p(x; θ∗)π(x, 1)
+= p(x; θ∗)π(x, 1) + {1 − p(x; θ∗)}π(x, 0) eg (x;θ∗ )
+= eg(x;θ∗) + π(x) eg (x;θ∗ )+l
+= 1 + eg(x;θ∗)+l .
+17
+
+S.5 Proof of Theorem 4
+
+The estimator θˆlik is the maximizer of lik(θ), so uN = aN (θˆlik − θ) is the maximizer of
+
+By Taylor’s expansion,
+
+γlik(u) = lik(θ + aN−1u) − lik(θ).
+
+N
+γlik(u) = aN−1uT ˙lik(θ∗) + 0.5a−2 N φπ(xi; θ∗){uTg˙ (xi; θ∗)}2 + ∆ lik + Rlik,
+i=1
+
+where φπ(x; θ) = pπ(x; θ){1 − pπ(x; θ)},
+
+eg(x;θ)+l pπ(x; θ) = 1 + eg(x;θ)+l with l = − log{ρϕ(x)},
+
+(S.14)
+
+∂ lik(θ) N
+
+˙lik(θ) =
+
+= δi yi − pπ(xi; θ) g˙(xi; θ),
+
+∂θ i=1
+
+1N
+
+∗T
+
+∗
+
+∆ lik = 2
+
+δi yi − pπ(xi; θ ) u g¨(xi; θ )u,
+
+2aN i=1
+
+and Rlik is the remainder term. By direct calculation,
+
+N
+
+1 Rlik = 3
+
+δiφπ(xi; θ∗ + a−1 N u´) 1 − 2pπ(xi; θ∗ + a−1 N u´) {uTg˙ (xi; θ∗ + a−1 N u´)}3
+
+6aN i=1
+
+N
+
+1 +3
+
+δiφπ(xi; θ∗ + a−N1u´){uTg˙(xi; θ∗ + a−N1u´)}{uTg¨(xi; θ∗ + a−N1u´)u}
+
+6aN i=1
+
+1N + 6aN i=1 3 δi
+
+yi − pπ(xi; θ∗ + a−1 N u´)
+
+d
+
+...
+
+∗
+
+−1
+
+uj1 uj2 g j1j2 (xi; θ + aN u´)u ,
+
+j1 ,j2 =1
+
+where u´ lies between 0 and u. We see that
+
+u3 N
+
+∗
+
+−1
+
+∗
+
+−1
+
+du3 N
+
+|Rlik| ≤ 3
+
+δipπ(xi; θ + aN u´)C(xi, θ + aN u´) + 3
+
+δiyiB(xi)
+
+6aN i=1
+
+6aN i=1
+
+u 3eaN −1 u ≤
+
+N
+δi exp[f (xi; β + aN−1u´(−1)) − log{ρϕ(xi)}]C(xi, θ∗ + a−1 N u´)
+
+6N aN i=1
+
+du3 N + 6aN i=1 3 δiyiB(xi)
+
+u 3eaN −1 u =
+
+N
+δiϕ−1(xi) exp[f (xi; β + a−N1u´(−1))]C(xi, θ∗ + a−1 N u´)
+
+6N aN ρ i=1
+
+du3 N + 6aN i=1 3 δiyiB(xi)
+
+d3 u 3ea− N1 u ≤
+6N aN ρ
+
+N −1
+
+du3 N
+
+δiϕ (xi)B(xi) + 3
+
+yiB(xi)
+
+i=1 6aN i=1
+
+≡ ∆Rlik1 + ∆R2 = ∆Rlik1 + oP (1),
+
+where u´(−1) is u´ with the ﬁrst element removed, C(x, θ) and ∆R2 = oP (1) are deﬁned in (S.2). For ∆Rlik1, we see that
+
+N
+E (N ρ)−1 δiϕ−1(xi)B(xi)
+i=1
+
+= ρ−1E [{p(xi; θ∗)ϕ−1(x) + ρ{1 − p(xi; θ∗)}]B(x)
+
+18
+
+≤ eα∗ ρ−1E{ef(x;β∗)ϕ−1(x)B(x)} + E{B(x)}.
+
+Therefore, E(∆Rlik1) → 0. Since ∆Rlik1 is positive, Markov’s inequality shows that ∆Rlik1 = oP (1) and thus Rlik = oP (1).
+
+For ∆ lik , the mean E(∆ lik ) = 0 and the variance satisﬁes that
+
+u4 N
+
+u4
+
+∗
+
+V(∆ lik ) ≤ 4
+
+E{δipπ(xi; θ∗) g¨(xi; θ∗) 2} ≤ 2 E[ef(x;β ) g¨(x, θ∗) 2] → 0,
+
+4aN i=1
+
+4aN
+
+where the last step is because Assumption 1 implies that ef(x;β∗) g¨(x, θ∗) 2 is integrable, so ∆ lik = oP (1).
+
+If we can show that
+
+aN−1 ˙lik(θ∗) −→ N 0, Λlik ,
+
+(S.15)
+
+in distribution, and
+
+N
+aN−2 δiφπ(xi; θ∗)g˙ ⊗2(xi; θ∗) −→ Λlik,
+i=1
+
+(S.16)
+
+in probability, then from the Basic Corollary in page 2 of Hjort and Pollard (2011), we know that aN (θˆlik − θ∗), the maximizer of γlik(u), satisﬁes that
+
+aN (θˆlik − θ∗) = Λlik −1 × aN−1 ˙lik(θ∗) + oP (1).
+
+(S.17)
+
+Slutsky’s theorem together with (S.15) and (S.17) implies the result in Theorem 1. We prove (S.15) and (S.16) in the following.
+
+Note that ˙lik(θ∗) is a summation of i.i.d. quantities, δi yi − pπ(xi; θ∗) g˙(xi; θ∗)’s, whose distribution depends on N . Note that
+
+E[δ{y − pπ(x; θ∗)}g˙(x; θ∗)] = E[π(x, y){y − pπ(x; θ∗)}g˙(x; θ∗)]
+= E p(x; θ∗){1 − pπ(x; θ∗)} − {1 − p(x; θ∗)}ρϕ(x)pπ(x; θ∗) g˙(x; θ∗) = 0,
+
+(S.18)
+
+where the last step is by a direct calculation from (S.14) to obtain the following equality p(x; θ∗){1 − pπ(x; θ∗)} = {1 − p(x; θ∗)}ρϕ(x)pπ(x; θ∗).
+Thus we know that E{aN−1 ˙lik(θ∗)} = 0. The variance of aN−1 ˙lik(θ∗) satisﬁes that V{aN−1 ˙lik(θ∗)} = aN−2N E δ{y − pπ(x; θ∗)}2g˙⊗2(x; θ∗) = e−α∗ E {y + (1 − y)ρϕ(x)}{y − pπ(x; θ∗)}2g˙⊗2(x; θ∗) = e−α∗ E p(x; θ∗){1 − pπ(x; θ∗)}2 + {1 − p(x; θ∗)}ρϕ(x)p2π(x; θ∗) g˙⊗2(x; θ∗) = e−α∗ E p(x; θ∗){1 − pπ(x; θ∗)}2 + p(x; θ∗){1 − pπ(x; θ∗)}pπ(x; θ∗) g˙⊗2(x; θ∗) = e−α∗ E {1 − pπ(x; θ∗)}2 + {1 − pπ(x; θ∗)}pπ(x; θ∗) p(x; θ∗)g˙⊗2(x; θ∗) = e−α∗ E {1 − pπ(x; θ∗)}2 + φπ(x; θ∗) p(x; θ∗)g˙⊗2(x; θ∗) = E {1 − pπ(x; θ∗)}2 + φπ(x; θ∗) {1 − p(x; θ∗)}ef(x;β∗)g˙⊗2(x; θ∗)
+
+(S.19)
+(S.20) (S.21) (S.22) (S.23) (S.24)
+
+where the forth equality uses (S.19). Note that elements of the term in the expectation of (S.24) are all bounded by integrable random variable ef(x;β∗) g˙(x; θ∗) 2. Thus, from the dominated convergence theorem and the fact that
+{1 − pπ(x; θ∗)}2 + φπ(x; θ∗) {1 − p(x; θ∗)}
+
+19
+
+we have
+
+= 1 − pπ(x; θ∗) + oP (1) = 1 + cϕ−1(x)ef(x;β∗) 1 + oP (1),
+
+V{aN−1 ˙lik(θ∗)} −→E
+
+ef(x;β∗)g˙ ⊗2(x; θ∗)
+∗
+
+1 + cϕ−1(x)ef(x;β )
+
+= Λlik.
+
+(S.25)
+
+Now we check the Lindeberg-Feller condition. For any > 0,
+
+N
+E
+i=1
+
+δi{yi − pπ(xi; θ∗)}g˙(xi; θ∗) 2I( δi{yi − pπ(xi; θ∗)}g˙(xi; θ∗) > aN )
+
+= N E δ {y − pπ(x; θ∗)}g˙(x; θ∗) 2I(δ {y − pπ(x; θ∗)}g˙(x; θ∗) > aN )
+
+= N E p(x; θ∗){1 − pπ(x; θ∗)}2 g˙(x; θ∗) 2I({1 − pπ(x; θ∗)} g˙(x; θ∗) + N E {1 − p(x; θ∗)}ρϕ(x){pπ(x; θ∗)}2 g˙(x; θ∗) 2I(ρϕ(x)pπ(x; θ∗)
+≤ N E eα∗+f(x;β∗) g˙ (x; θ∗) 2I( g˙ (x; θ∗) > aN ) + N E eα∗+f(x;β∗)pπ(x; θ∗) g˙ (x; θ∗) 2I(eα∗+f(x;β∗) g˙ (x; θ∗) > aN
+≤ aN2 E ef(x;β∗) g˙ (x; θ∗) 2I( g˙ (x; θ∗) > aN ) + aN2 E ef(x;β∗) g˙ (x; θ∗) 2I(eα∗+f(x;β∗) g˙ (x; θ∗) > aN )
+= o(a2N ),
+
+> aN ) g˙(x; θ∗)
+)
+
+> aN )
+
+where the inequality in the third step uses the following fact derived from (S.14) ρϕ(x)pπ(x; θ∗) = eα∗+f(x;β∗){1 − pπ(x; θ∗)} ≤ eα∗+f(x;β∗),
+
+(S.26)
+
+and the last step is from the dominated convergence theorem. Thus, applying the Lindeberg-Feller central limit theorem (Section ∗2.8 of van der Vaart, 1998), we ﬁnish the proof of (S.15).
+
+Now we prove (S.16). Denote
+
+N
+Hlik = aN−2 δiφπ(xi; θ∗)g˙ ⊗2(xi; θ∗).
+i=1
+
+We notice that
+
+E(Hlik) = N a−N2E[{y + (1 − y)ρϕ(x)}φπ(x; θ∗)g˙⊗2(x; θ∗)] = e−α∗ E[{1 − p(x; θ∗)}ρϕ(x)pπ(x; θ∗){1 − pπ(x; θ∗)}g˙⊗2(x; θ∗)] + e−α∗ E[p(x; θ∗)pπ(x; θ∗){1 − pπ(x; θ∗)}g˙⊗2(x; θ∗)] = e−α∗ E[p(x; θ∗){1 − pπ(x; θ∗)}2g˙⊗2(x; θ∗)] + e−α∗ E[{1 − p(x; θ∗)}ρϕ(x)p2π(x; θ∗)g˙⊗2(x; θ∗)]
+= V{aN−1 ˙lik(θ∗)} = Λlik + o(1),
+
+(S.27)
+
+where the third equality is obtained by applying (S.19) and the forth equality is from (S.20). In addition, the variance of each component of Hlik is bounded by
+
+aN−4N E{δφπ2 (xi; θ∗) g˙ (xi; θ∗) 4} ≤ aN−4N E[{y + (1 − y)ρϕ(x)}pπ(xi; θ∗) g˙(xi; θ∗) 4] ≤ aN−4N E[{p(x; θ∗) + ρϕ(x)}pπ(xi; θ∗) g˙(xi; θ∗) 4] ≤ 2aN−4N eα∗ E{ef(x;β∗) g˙ (xi; θ∗) 4} = o(1),
+
+(S.28)
+
+where the last inequality is because of (S.26) and the last step if because Assumption 1 implies that ef(x;β∗) g˙(xi; θ∗) 4 is integrable. From (S.27) and (S.28), Chebyshev’s inequality implies that Hlik → Λlik in probability.
+
+20
+
+S.6 Proof of Theorem 5
+
+Let κ(x) = 1 + cϕ−1(x)ef(x;β∗). We ﬁrst notice that
+
+[E{ef(x;β∗)}]−1Vw = Mf−1Mf Mf−1 + Mf−1cΛsubMf−1 = Mf−1E[κ(x)ef(x;β∗)g˙ ⊗2(x; θ∗)]Mf−1,
+
+[E{e and f(x;β∗)}]−1Vlik = Λ−1 lik = E κ−1(x)ef(x;β∗)g˙ ⊗2(x; θ∗) −1
+
+We only need to show that
+
+[E{ef(x;β∗)}]−1Vw ≥ Λlik −1.
+
+This is proved by the following calculation
+
+0 ≤E {κ1/2(x)Mf−1 − κ−1/2(x)Λlik −1}ef(x;β∗)/2g˙ (x; θ∗) ⊗2
+
+=E Mf−1κ(x)ef(x;β∗)g˙ ⊗2(x; θ∗)Mf−1 + E Λlik −1κ−1(x)ef(x;β∗)g˙ ⊗2(x; θ∗)Λlik −1
+
+− 2E Mf−1ef(x;β∗)g˙ ⊗2(x; θ∗)Λlik −1 =[E{ef(x;β∗)}]−1Vw + Λlik −1 − 2Λlik −1 = [E{ef(x;β∗)}]−1Vw − Λlik −1. If c = 0 then κ(x) = 1, and we can directly verify that
+
+[E{ef(x;β∗)}]−1Vw = Λlik −1 = Mf−1.
+
+(S.29)
+
+S.7 Proof of Theorem 6
+
+For sampled data, (5) tell us that the joint density w.r.t. the product counting measure of the responses
+given the features is exp lik(θ) + i=1 N δiyili , whose support has a ﬁnite number of possible values. Thus the expectation E{U(θ; Dδ) | X} is a sum of ﬁnite number of elements, and therefore the partial derivatives w.r.t. θ can be passed under the integration sign in E{U(θ; Dδ) | X}. Therefore we have
+
+∂ I = ∂θT E{U(θ; Dδ) | X}
+
+∂ = ∂θT
+
+U(θ; Dδ) exp
+
+N
+lik(θ) + δiyili dy
+i=1
+
+N
+= U˙ (θ; Dδ) exp lik(θ) + δiyili dy
+
+i=1
+
+N
++ U(θ; Dδ) exp lik(θ) + δiyili ˙Tlik(θ)dy
+
+i=1
+
+= E{U˙ (θ; Dδ) | X} + E{U(θ; Dδ) ˙Tlik(θ) | X},
+
+where dy = dy × dy × ...dy is a product measure and dy is the counting measure. This gives us that
+
+E{U(θ; Dδ) ˙Tlik(θ) | X} = I
+
+(S.30)
+
+Hence we have
+
+V U(θ; Dδ) − aN−2Λlik −1 ˙lik(θ) X ≥ 0 = V{U(θ; Dδ) | X} + V a−2 N Λ−1 lik ˙lik(θ) X = V{U(θ; Dδ) | X} + aN−2Λlik −1V{aN−1 ˙lik(θ)
+
+− 2a−N2E{U(θ; Dδ) ˙Tlik(θ) | X}Λlik −1 X}Λlik −1 − 2aN−2Λlik −1.
+
+Taking expectation of the above conditional variance and using (S.25), we have
+
+E[V{U(θ; Dδ) | X}] + aN−2Λlik −1E[aN−1V{ ˙lik(θ) X}]Λlik −1 − 2aN−2Λlik −1
+
+21
+
+= V{U(θ; Dδ)} + aN−2Λlik −1{1 + oP (1)} − 2aN−2Λlik −1 = V{U(θ; Dδ)} − aN−2Λlik −1{1 + oP (1)} = V{U(θ; Dδ)} − N1−1Vlik{1 + oP (1)} ≥ 0,
+where the last equality is because (S.1) implies that aN−2 = N1−1E{ef(x;β∗)}{1 + oP (1)}. This ﬁnishes the proof.
+
+S.8 Proof of Theorem 7
+
+The outline of the proof is similar to that of the proof of Theorem 2. Write πos(x, y; ϑ˜) = y + (1 −
+
+y)πos(x; ϑ˜)
+
+and
+
+δϑ˜
+
+=
+
+y
+
++
+
+(1
+
+−
+
+y)I {u
+
+≤
+
+πos(x; ϑ˜)}
+
+where
+
+u
+
+∼
+
+U(0, 1).
+
+The
+
+estimator
+
+θˆϑ˜
+w
+
+is
+
+the
+
+maximizer of
+
+ϑ˜ N δi g(x w(θ) = yig(xi; θ) − log{1 + e i;θ) ϑ˜ } , i=1 πos(x, y; ϑ˜)
+
+so
+
+aN
+
+(θˆϑ˜
+w
+
+−
+
+θ∗)
+
+is
+
+the
+
+maximizer
+
+of
+
+ϑ˜
+γw (u)
+
+=
+
+ϑ˜ ∗
+
+−1
+
+w(θ + aN u) −
+
+ϑ˜ (θ∗).
+w
+
+By
+
+Taylor’s
+
+expansion,
+
+1 T ˙ϑ˜ ∗
+
+1N
+
+γwϑ˜(u) = u w(θ ) + 2
+
+δi ∗ T 2 ϑ ϑ ˜ ϑ˜ ˜ φ(xi; θ )(zi u) + ∆ w + Rw,
+
+aN
+
+2aN i=1 πos(x, y; ϑ˜)
+
+where
+
+˙ϑ˜ N δiϑ˜
+
+w(θ) =
+
+yi − p(xi; θ) g˙(xi, θ),
+
+i=1 πos(x, y; ϑ˜)
+
+ϑ˜ 1 N δiϑ˜
+
+∗T
+
+∗
+
+∆w= 2
+
+yi − p(xi; θ ) u g¨(xi, θ )u,
+
+2aN i=1 πos(x, y; ϑ˜)
+
+and
+
+ϑ˜
+Rw
+
+is
+
+the
+
+remainder.
+
+Similarly
+
+to
+
+the
+
+proof
+
+of
+
+Theorem
+
+2,
+
+we
+
+only
+
+need
+
+to
+
+show
+
+that
+
+aN w −1 ˙ϑ˜ (θ∗) −→ N(0, Λplt w ),
+
+in distribution with Λwplt = E ef(xi;β∗)g˙ ⊗2(xi; θ∗) + ce2f(xi;β∗) g˙ ⊗2(xi; θ∗) , max{ϕplt(x), cl}
+
+(S.31)
+
+and for any u,
+
+N
+Hwϑ˜ := aN−2
+
+δi φ(xi; θ∗)g˙ ⊗2(xi; θ∗ ϑ˜ ) −→ Mf ,
+
+i=1 πos(x, y; ϑ˜)
+
+(S.32)
+
+in
+
+probability,
+
+and
+
+∆ϑ˜
+w
+
+=
+
+oP (1)
+
+and
+
+ϑ˜
+Rw
+
+=
+
+oP (1).
+
+ϑ˜ δiϑ˜
+
+∗
+
+∗
+
+˜ ϑ˜
+
+We prove (S.31) ﬁrst. Let ηi = πos(x,y;ϑ˜) {yi − p(xi; θ )}g˙(xi; θ ). Given ϑ, ηi , i = 1, ..., N , are
+
+i.i.d. with mean zero, and the variance satisﬁes that
+
+V(ηiϑ˜ | ϑ˜)
+
+{yi − p(xi; θ∗)}2
+
+⊗2
+
+∗˜
+
+=E
+
+g˙ (xi; θ ) ϑ
+
+{yi + (1 − yi)πos(xi; ϑ˜)}
+
+∗
+
+∗ 2 ⊗2
+
+∗
+
+∗ p2(xi; θ∗) ⊗2
+
+∗˜
+
+= E p(xi; θ ){1 − p(xi; θ )} g˙ (xi; θ ) + {1 − p(xi; θ )}
+
+g˙ (xi; θ ) ϑ
+
+πos(xi; ϑ˜)
+
+≤ E p(xi; θ∗)g˙⊗2(xi; θ∗) + −1p2(xi; θ∗)g˙⊗2(xi; θ∗) ϑ˜ ≤ eα∗ E ef(xi;β∗)g˙ ⊗2(xi; θ∗) + ( −1eα∗ )e2f(xi;β∗)g˙ ⊗2(xi; θ∗)
+
+22
+
+Since ρ−1 → cl > 0, for large enough N ,
+
+−1 ˙ϑ˜ ∗ ˜
+
+f (xi;β∗) ⊗2
+
+∗
+
+−1 2f (xi;β∗) ⊗2
+
+∗
+
+V{aN w(θ ) | ϑ} ≤ E e
+
+g˙ (xi; θ ) + (1 + cl c)e
+
+g˙ (xi; θ ) .
+
+Thus, we know that
+
+V{a−1 ˙ϑ˜ (θ∗)} → Λplt
+
+Nw
+
+w
+
+Now we check the Lindeberg-Feller condition (Section ∗2.8 of van der Vaart, 1998) given ϑ˜. For any > 0,
+
+N
+E
+
+ϑ˜ 2
+
+ϑ˜
+
+˜
+
+ηi I( ηi > aN ) ϑ
+
+i=1
+
+= N E {πos(x, y; ϑ˜)}−1δϑ˜{y − p(x; θ∗)}g˙(x; θ∗) 2
+
+× I( {πos(x, y; ϑ˜)}−1δϑ˜{y − p(x; θ∗)}g˙(x; θ∗) > aN ) ϑ˜
+
+= N E {πos(x, y; ϑ˜)}−1 {y − p(x; θ∗)}g˙(x; θ∗) 2
+
+× I( {πos(x, y; ϑ˜)}−1{y − p(x; θ∗)}g˙(x; θ∗) > aN ) ϑ˜
+
++ N E {1 − πos(x, y; ϑ˜)} {πos(x, y; ϑ˜)}−1y{y − p(x; θ∗)}g˙(x; θ∗) 2 × I( {πos(x, y; ϑ˜)}−1y{y − p(x; θ∗)}g˙(x; θ∗) > aN ) ϑ˜
+
+≤ N E p(x; θ∗) g˙(x; θ∗) 2I( g˙(x; θ∗) > aN )
+
++ N E −1 p(x; θ∗)g˙(x; θ∗) 2I( −1p(x; θ∗)g˙(x; θ∗) > aN )
+
++ N E p(x; θ∗) g˙(x; θ∗) 2I( g˙(x; θ∗) > aN )
+
+≤ 2a2N E ef(xi;β∗) g˙ (x; θ∗) 2I( g˙ (x; θ∗) > aN )
+
++ aN2 eα∗ −1E e2f(xi;β∗) g˙ (x; θ∗) 2I( −1eα∗ ef(xi;β∗)g˙ (x; θ∗) > aN )
+= o(a2N ),
+where the last step is due to Assumptions 1, the dominated convergence theorem, and the facts that aN → ∞ and limN→∞ eα/ = c/cl < ∞. Thus, applying the Lindeberg-Feller central limit theorem (Section ∗2.8 of van der Vaart, 1998) ﬁnishes the proof of (S.31).
+
+Now we prove (S.32). We notice that
+
+E(Hwϑ˜ | ϑ˜) =E
+
+ef (x;β∗)
+
+g˙⊗2(x; θ∗)
+
+(1 + eα∗+f (x;β∗))2
+
+= Mf + o(1),
+
+(S.33)
+
+where the last step is by the dominated convergence theorem. In addition, the conditional variance of
+
+each
+
+component
+
+of
+
+ϑ˜
+Hw
+
+is
+
+bounded
+
+by
+
+1 E e2f(x;β∗) g˙ (x; θ∗) 4 ϑ˜ ≤ 1 E{e2f(x;β∗) g˙ (x; θ∗) 4} = o(1).
+
+N
+
+πos(x, y; ϑ˜)
+
+N
+
+(S.34)
+
+where the last step is because of Assumption 1 and the fact that N eα∗ → ∞, eα∗ /ρ → c < ∞, and ρ−1 → cl > 0 imply that N → ∞. From (S.33) and (S.34), applying Chebyshev’s inequality
+ﬁnishes the proof of (S.32).
+
+In
+
+the
+
+following
+
+we
+
+ﬁnish
+
+the
+
+proof
+
+by
+
+showing
+
+that
+
+given
+
+ϑ˜,
+
+∆ϑ˜
+w
+
+=
+
+oP (1)
+
+and
+
+ϑ˜
+Rw
+
+=
+
+oP (1).
+
+For ∆ w ϑ˜ , the conditional mean E(∆ w ϑ˜ | ϑ˜) = 0 and the conditional variance satisﬁes that
+
+V(∆ w ϑ˜ | ϑ˜) ≤ 4 u E ϑ 4N {y − p(x; θ∗)}2 g¨(x; θ∗) 2 ˜
+
+4aN
+
+y + (1 − y)πos(x, y; ϑ˜)
+
+23
+
+u 4N
+
+−1
+
+∗
+
+∗
+
+∗2
+
+≤ 4 E {1 + p(x; θ )}p(x; θ ) g¨(x; θ )
+
+4aN
+
+u4
+
+−1 α∗ f (x;β∗) f (x;β∗)
+
+∗2
+
+≤ 2 E {1 + e e
+
+}e
+
+g¨(x; θ )
+
+4aN
+
+= o(1),
+
+so ∆ w ϑ˜ = oP (1).
+
+For
+
+the
+
+remainder
+
+term
+
+ϑ˜
+Rw .
+
+By
+
+direct
+
+calculations
+
+similar
+
+to
+
+those
+
+used
+
+for
+
+the
+
+proof
+
+of
+
+Theorem
+
+2,
+
+we know that
+
+ϑ˜ d3 u 3ea− N1 u |Rw| ≤
+6N aN
+
+N δiϑ˜
+
+d u 3 N δiϑ˜
+
+B(xi) + 3
+
+yiB(xi)
+
+i=1 πos(x, y; ϑ˜)
+
+6aN i=1 πos(x, y; ϑ˜)
+
+≡ ∆Rw1 ϑ˜ + ∆Rw2 ϑ˜ .
+
+From Assumption 1, E(∆Rw1 ϑ˜ ) → 0 and E(∆Rw2 ϑ˜ ) → 0. Since ∆Rw1 ϑ˜ and ∆Rw2 ϑ˜ are both positive,
+
+Markov’s
+
+inequality
+
+shows
+
+that
+
+they
+
+are
+
+both
+
+oP
+
+(1)
+
+so
+
+ϑ˜
+Rw
+
+=
+
+oP
+
+(1).
+
+S.9 Proof of Theorem 8
+
+The outline of the proof is similar to that of the proof of Theorem 4.
+
+The
+
+estimator
+
+θˆϑ˜
+lik
+
+is
+
+the
+
+maximizer of
+
+lik ϑ˜ (θ),
+
+so
+
+uNϑ˜
+
+=
+
+−1 ˆϑ˜ aN (θlik
+
+− θ)
+
+is
+
+the
+
+maximizer
+
+of
+
+γlik ϑ˜ (u) = lik ϑ˜ (θ + aN−1u) − lik ϑ˜ (θ).
+
+By Taylor’s expansion,
+
+N
+γlik ϑ˜ (u) = aN−1u lik T ˙ϑ˜ (θ∗) + 0.5aN−2 φπ(xi; θ∗){uTg˙ (xi; θ∗)}2 + ∆ lik ϑ˜ + Rlik ϑ˜ ,
+i=1
+
+(S.35)
+
+where
+
+ϑ˜
+φπ (x;
+
+θ)
+
+=
+
+ϑ˜
+pπ (x;
+
+θ){1
+
+−
+
+ϑ˜
+pπ (x;
+
+θ)},
+
+ϑ˜ eg(x;θ)+˜l
+
+pπ (x; θ) =
+
+˜,
+
+1 + eg(x;θ)+l
+
+with
+
+˜li = − log{πos(x; ϑ˜)},
+
+(S.36)
+
+N
+
+˙ϑ˜ (θ) =
+lik
+
+δiϑ˜ yi − pπϑ˜(xi; θ) g˙ (xi; θ),
+
+i=1
+
+N
+
+1
+
+ϑ˜
+
+ϑ˜
+
+∗T
+
+∗
+
+∆ lik ϑ˜ = 2
+
+δi yi − pπ (xi; θ ) u g¨(xi; θ )u,
+
+2aN i=1
+
+(S.37)
+
+and Rlik ϑ˜ is the remainder term. By direct calculations similar to those used for the proof of Theorem 4, we know that
+
+ϑ˜ u ϑ 3 ˜ N
+
+∗
+
+−1
+
+d u ϑ 3 ˜ N
+
+(d + 1) u ϑ 3 ˜ N
+
+|Rlik| ≤ 3
+
+δi C(xi, θ + aN u´) + 3
+
+δi yiB(xi) ≤
+
+3
+
+δi B(xi),
+
+6aN i=1
+
+6aN i=1
+
+6aN
+
+i=1
+
+where u´ lies between 0 and u.
+
+Since = o(ρ), we know that for large enough N ,
+
+N
+E aN−3 δiϑ˜B(xi) ϑ˜
+i=1
+= N a−3 N E [y + (1 − y)πos(x; ϑ˜)]B(x) ϑ˜
+
+≤ N a−3 N E [eα∗ ef(x;β∗) + ω˜−1ρt(x; θ˜)]B(x) ϑ˜
+
+24
+
+≤ a−1 N E ef(x;β∗)B(x) + a−1 N λ˜−1 min(e−α∗ ρ)(eα˜ ω˜)−1E ef(x;θ˜) g˙ (x; θ˜) B(x) ϑ˜
+
+−1
+
+f (x;β∗)
+
+−1 ˜−1 −α∗
+
+α˜ −1
+
+2
+
+≤ aN E e
+
+B(x) + aN λmin(e ρ)(e ω˜) E{B (x)} = oP (1),
+
+where λ˜min is the minimum eigenvalue of M˜ f . Thus, Markov’s inequality shows that Rlik ϑ˜ = oP (1).
+
+For
+
+∆ϑ˜ ,
+lik
+
+the
+
+conditional
+
+mean
+
+E(∆ϑ˜lik
+
+|
+
+ϑ˜)
+
+=
+
+0
+
+and
+
+the
+
+conditional
+
+variance
+
+satisﬁes
+
+that
+
+V(∆ lik ϑ˜
+
+| ϑ˜) ≤ ≤
+
+u ϑ 4 ˜ ϑ˜ ∗ ∗ N E{δi pπ (xi; θ ) g¨(xi; θ )
+4a4N i=1 u 4 E[ef(x;β∗) g¨(x, θ∗) 2] → 0, 4a2N
+
+2 | ϑ˜}
+
+so ∆ lik ϑ˜ = oP (1). Now we need to show that given ϑ˜
+
+aN lik −1 ˙ϑ˜ (θ∗) −→ N 0, Λlik plt ,
+
+(S.38)
+
+in distribution, with
+
+plt ef(x;β∗)g˙ ⊗2(x; θ∗) Λlik = E 1 + cϕplt −1(x)ef(x;β∗) ,
+
+and
+
+N
+Hlik ϑ˜ := aN−2 δiϑ˜φπϑ˜(xi; θ∗)g˙ ⊗2(xi; θ∗) −→ Λlik plt,
+i=1
+
+(S.39)
+
+in probability, then from the Basic Corollary in page 2 of Hjort and Pollard (2011), we know that
+
+aN
+
+(θˆϑ˜
+lik
+
+−
+
+θ∗),
+
+the
+
+maximizer
+
+of
+
+γlik ϑ˜ (u),
+
+satisﬁes
+
+that
+
+ˆϑ˜
+
+∗
+
+plt −1 −1 ˙ϑ˜ ∗
+
+aN (θlik − θ ) = (Λlik ) × aN lik(θ ) + oP (1).
+
+(S.40)
+
+Slutsky’s theorem together with (S.38) and (S.40) implies the result in Theorem 1. We prove (S.38) and (S.39) in the following.
+
+Given ϑ˜,
+
+˙ϑ˜ (θ∗)
+lik
+
+is
+
+a
+
+summation
+
+of
+
+i.i.d.
+
+quantities, δiϑ˜
+
+yi
+
+−
+
+ϑ˜
+pπ (xi;
+
+θ∗)
+
+g˙(xi; θ∗)’s.
+
+Using a
+
+similar
+
+approach
+
+to
+
+obtain
+
+(S.18)
+
+we
+
+know
+
+that
+
+E{aN−1
+
+˙ϑ˜ (θ∗)
+lik
+
+|
+
+ϑ˜}
+
+=
+
+0.
+
+The
+
+conditional
+
+variance
+
+of
+
+aN−1
+
+˙ϑ˜ (θ∗)
+lik
+
+satisﬁes
+
+that
+
+V{aN−1 ˙lik ϑ˜ (θ∗) | ϑ˜} = e−α∗ E {y + (1 − y)πos(x; ϑ˜)}{y − pπϑ˜(x; θ∗)}2g˙⊗2(x; θ∗) ϑ˜ = e−α∗ E [p(x; θ∗){1 − pπϑ˜(x; θ∗)}2 + πos(x; ϑ˜){1 − p(x; θ∗)}p2π(x; θ∗)]g˙⊗2(x; θ∗) ϑ˜
+= e−α∗ E [{1 − pπϑ˜(x; θ∗)}2 + φπϑ˜(x; θ∗){1 − p(x; θ∗)}2]p(x; θ∗)g˙⊗2(x; θ∗) ϑ˜ = E [{1 − pπϑ˜(x; θ∗)}2 + φπϑ˜(x; θ∗){1 − p(x; θ∗)}2]{1 − p(x; θ∗)}ef(x;β∗)g˙⊗2(x; θ∗) ϑ˜ .
+
+The elements of the term on the right hand side of the above equation are bounded by an integrable random variable ef(x;β∗) g˙(x; θ∗) 2, so if = o(ρ) then
+
+V{aN lik −1 ˙ϑ˜ (θ∗)} −→ Λlik plt.
+
+(S.41)
+
+Using an similar approach as in checking the Lindeberg-Feller condition in the proof of Theorem 4, we obtain that for any > 0,
+
+N
+
+ϑ˜
+
+ϑ˜
+
+∗
+
+∗2
+
+ϑ˜
+
+ϑ˜
+
+∗
+
+∗
+
+˜
+
+E δi {yi − pπ (xi; θ )}g˙(xi; θ ) I( δi {yi − pπ (xi; θ )}g˙(xi; θ ) > aN ) ϑ
+
+i=1
+
+25
+
+= N E δϑ˜ {y − pπϑ˜(x; θ∗)}g˙(x; θ∗) 2I(δϑ˜ {y − pπϑ˜(x; θ∗)}g˙(x; θ∗) > aN ) ϑ˜
+
+= N E p(x; θ∗){1 − pπϑ˜(x; θ∗)}2 g˙(x; θ∗) 2I({1 − pπϑ˜(x; θ∗)} g˙(x; θ∗) > aN ) ϑ˜ + N E {1 − p(x; θ∗)}πos(x; ϑ˜){pϑπ˜(x; θ∗)}2 g˙(x; θ∗) 2
+
+× I(πos(x; ϑ˜)pϑ˜π (x; θ∗) g˙(x; θ∗) > aN ) ϑ˜
+
+≤ N E p(x; θ∗) g˙(x; θ∗) 2I( g˙(x; θ∗) > aN ) ϑ˜
+
+α∗+f (x;β∗) ϑ˜
+
+∗
+
+∗ 2 α∗+f (x;β∗)
+
+∗
+
+˜
+
++ NE e
+
+pπ (x; θ ) g˙(x; θ ) I(e
+
+g˙(x; θ ) > aN ) ϑ
+
+≤ aN2 E{ef(x;β∗) g˙ (x; θ∗) 2I( g˙ (x; θ∗) > aN )}
+
++ aN2 E ef(x;β∗) g˙ (x; θ∗) 2I(eα∗+f(x;β∗) g˙ (x; θ∗) > aN )
+
+= o(a2N ),
+
+where the last step is from the dominated convergence theorem. Thus, applying the Lindeberg-Feller central limit theorem (Section ∗2.8 of van der Vaart, 1998), we ﬁnish the proof of (S.38).
+
+Now we prove (S.39). By similar derivations in (S.27), we know that
+
+E(Hlik ϑ˜ | ϑ˜) = V{aN−1 ˙lik ϑ˜ (θ∗) | ϑ˜} = Λlik plt + oP (1).
+
+(S.42)
+
+where the second equality is from (S.41). In addition, the conditional variance of each component of Hlik ϑ˜ is bounded by
+
+aN−4N E{δϑ˜{φπϑ˜(xi; θ∗)}2 g˙ (xi; θ∗) 4 | ϑ˜}
+
+≤ aN−4N E[{y + (1 − y)πos(x; ϑ˜)}pϑπ˜(xi; θ∗) g˙(xi; θ∗) 4 | ϑ˜]
+
+≤ aN−4N E[{p(x; θ∗) + πos(x; ϑ˜)}pϑπ˜(xi; θ∗) g˙(xi; θ∗) 4 | ϑ˜]
+
+≤ 2aN−4N eα∗ E{ef(x;β∗) g˙ (xi; θ∗) 4} = 2aN−2E{ef(x;β∗) g˙ (xi; θ∗) 4} = o(1).
+
+(S.43)
+
+From (S.42) and (S.43), Chebyshev’s inequality implies that Hlik ϑ˜ → Λlik plt in probability.
+
+S.10 Experiments on Pilot Mis-speciﬁcation
+
+This section complements Section 6.1 in the main text. We generate all data with a logistic regression model with g(x; θ) = α + xTβ. The total number of data is N = 5 × 105 with N0 negative samples
+and N1 positive samples. When generating data, we tune the bias α to force N0/N1 ≈ 400. In
+
+order to test the robustness of our methods, we add an artiﬁcial biased to the pilot model, which will
+
+produce skewed sampling probabilities through the equation
+
+πos(x; ϑ˜) = min[max{ρϕ˜os(x), }, 1], where ϕ˜os(x) = ω˜−1t(x; θ˜).
+
+(S.44)
+
+We try two types of biases: one on the intercept term α and the other on weights β.
+
+S.10.1 Perturb the pilot intercept α˜.
+We perturb α˜ ← α˜ + ξ × U(0, 1) × log(N0/N1), where ξ is a hyperparameter controlling the degree of perturbation. We try ξ = {0.1, 0.5, 1.0}. As the result will show, perturbing the intercept will not affect the relative performance for various types of sampling algorithms.
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.4: Degree of perturbation ξ = 0.1. Log (MSEs) of subsample estimators for different sample sizes (the smaller the better).
+
+26
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.5: Degree of perturbation ξ = 0.5. Log (MSEs) of subsample estimators for different sample sizes (the smaller the better).
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.6: Degree of perturbation ξ = 1.0. Log (MSEs) of subsample estimators for different sample sizes (the smaller the better).
+
+S.10.2 Perturb the pilot weights β.
+We perturb β˜ ← β˜ + ξ × N (0, I), where ξ is a hyperparameter to control the degree of perturbation. We try ξ = {0.1, 0.5, 1.0}. As the result shows, the IPW estimator is pretty sensitive to the perturbation, and optW can be even worse than uniLik when the perturbation is signiﬁcant (Figure S.9). uniLik may exceed optLik when the perturbation is too large such that the optimal sampling probability is signiﬁcatly mis-calculated (Figure S.9(d)).
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.7: Degree of perturbation ξ = 0.1. Log (MSEs) of subsample estimators for different sample sizes (the smaller the better).
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.8: Degree of perturbation ξ = 0.5. Log (MSEs) of subsample estimators for different sample sizes (the smaller the better).
+
+27
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.9: Degree of perturbation ξ = 1.0. Log (MSEs) of subsample estimators for different sample sizes (the smaller the better).
+
+S.11 Experiments on Model Mis-speciﬁcation
+
+This section studies the case when model is mis-speciﬁed. That is, the ground truth model fall out of the domain of linear logistic regression model. We design the ground truth model as a two-layer neural network with non-linear activations:
+
+g(x; θ) = α + 1 tanh(ξ · xTW)β, ξ
+
+(S.45)
+
+where ξ is a constant to control the “cut-off" threshold of the non-linear activation tanh. Note that as
+
+ξ
+
+→
+
+0,
+
+the
+
+scaled
+
+tanh
+
+function
+
+1 ξ
+
+·
+
+tanh(ξ
+
+·
+
+x)
+
+≈
+
+x
+
+as
+
+shown
+
+in
+
+Figure
+
+S.10.
+
+Thus,
+
+by
+
+tuning
+
+ξ
+
+we
+
+have the control of the deviation of scaled tanh function from a linear, identity transformation.
+
+8
+
+=1
+
+= 0.5
+
+6
+
+= 0.3
+
+= 0.1
+
+4
+
+1tanh( x)
+
+2
+
+0
+
+2
+
+4
+
+6
+
+8 10.0 7.5 5.0 2.5 0.0 2.5 5.0 7.5 10.0
+x
+
+Figure S.10: Scaled tanh function approximates identity transformation when ξ → 0.
+
+We also generate W to be an approximately identity matrix, by setting the diagonal elements of W to be 1, and draw off diagonal terms to be i.i.d. Normal distribution scaled by a factor ξw. Clearly, the operator norm W − I 2→2 is controlled by ξw. When ξw = 0, W = I. When perturbing the ground-truth model by setting ξ and ξw (thus W), we need to reset the intercept α to match the pos/neg proportion to be 1/400. For each experiment setup, we record the tuned α in the caption for reproducible research.
+S.11.1 Ablation study.
+When ξ and ξw are extremely small, g(x; θ) ≈ α + xTβ. Empirical results shown in Figure S.11 match results without model mis-speciﬁcation.
+28
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.11: Degree of non-linearity ξ = 10−3, ξw = 10−3. Ground-truth intercepts: (a) α = −7.65, (b) α = −0.5, (c) α = −7, (d) α = −1.8. Log (MSEs) of subsample estimators for different sample
+sizes (the smaller the better).
+
+S.11.2 Tune the degree of activation function non-linearity by trying different ξ.
+
+We ﬁx ξw = 10−3 and tune ξ to study the effect of non-linear activation. Note that when ξ → 0,
+
+1 ξ
+
+tanh(ξx)
+
+≈
+
+x
+
+and
+
+when
+
+ξ
+
+→
+
+∞,
+
+1 ξ
+
+tanh(ξx)
+
+≈
+
+0.
+
+As
+
+we
+
+shall
+
+see,
+
+the
+
+value
+
+ξ
+
+signiﬁcantly
+
+affect
+
+the non-linearity of the model. In Figure S.12, we choose a relatively small ξ = 0.1 and observe an
+
+almost indistinguishable loss in log(MSE). In Figure S.13 we study the case when ξ = 0.5 and ﬁnd
+
+that it signiﬁcantly affect the model estimation when x has long tails (Figure S.13(b), (d)). When
+
+ξ = 1, all method crash since the true (non-linear) model deviate from the tractable domain (linear).
+
+In order to avoid this happen, we suggest to re-scale and centering the data before feeding them to
+
+the model. Note that when models are not crashed, optLik still achieves best performance among all
+
+methods.
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.12: Degree of non-linearity ξ = 10−1, ξw = 10−3. Ground-truth intercepts: (a) α = −7.7, (b) α = −0.6, (c) α = −6.9, (d) α = −1.9. Log (MSEs) of subsample estimators for different
+sample sizes (the smaller the better).
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.13: Degree of non-linearity ξ = 5·10−1, ξw = 10−3. Ground-truth intercepts: (a) α = −7.4, (b) α = −0.95, (c) α = −6.7, (d) α = −2.15. Log (MSEs) of subsample estimators for different
+sample sizes (the smaller the better).
+
+29
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.14: Degree of non-linearity ξ = 1.0, ξw = 10−3. Ground-truth intercepts: (a) α = −7.05, (b) α = −1.75, (c) α = −6.4, (d) α = −2.85. Log (MSEs) of subsample estimators for different
+sample sizes (the smaller the better).
+
+S.11.3 Tune W − I 2→2 by trying different ξw.
+We ﬁx ξ = 10−3 and focus on studying the effect of generative process of W to the estimation error. In Figure S.15, we set ξw = 2·10−2 to be a relatively small number such that W −I 2→2 ≈ 0.20 < 1. In this case, each sampling method suffers from model mis-speciﬁcation with higher log(MSE). Still optLik is the best among all generative processes of x. In Figure S.16, we set ξw = 10−1 and W − I 2→2 ≈ 1. In this case, the noise level is comparable to the ground-truth. All sampling models crash such that the estimated models deviate signiﬁcantly from the ground-truth.
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.15: Degree of non-linearity ξ = 10−3, ξw = 2·10−2. Ground-truth intercepts: (a) α = −7.7, (b) α = −0.5, (c) α = −6.9, (d) α = −1.9. Log (MSEs) of subsample estimators for different
+sample sizes (the smaller the better).
+
+(a). x’s are normal (b) x’s are lognormal
+
+(c) x’s are t3 (d) x’s are exponential
+
+Figure S.16: Degree of non-linearity ξ = 10−3, ξw = 10−1. Ground-truth intercepts: (a) α = −8.25, (b) α = −0.25, (c) α = −6.6, (d) α = −2.4. Log (MSEs) of subsample estimators for different
+sample sizes (the smaller the better).
+
+References
+Chawla, N. V. (2009). Data mining for imbalanced datasets: An overview. In Data Mining and Knowledge Discovery Handbook, 875–886. Springer.
+Chawla, N. V., Bowyer, K. W., Hall, L. O., and Kegelmeyer, W. P. (2002). Smote: synthetic minority over-sampling technique. Journal of Artiﬁcial Intelligence Research 16, 321–357.
+Chawla, N. V., Japkowicz, N., and Kotcz, A. (2004). Editorial: special issue on learning from imbalanced data sets. ACM SIGKDD Explorations Newsletter 6, 1, 1–6.
+Chen, J., Sun, B., Li, H., Lu, H., and Hua, X.-S. (2016). Deep ctr prediction in display advertising. In Proceedings of the 24th ACM International Conference on Multimedia (MM), 811–820.
+
+30
+
+Cheng, G., Huang, J. Z., et al. (2010). Bootstrap consistency for general semiparametric m-estimation. The Annals of Statistics 38, 5, 2884–2915.
+Douzas, G. and Bacao, F. (2017). Self-organizing map oversampling (somo) for imbalanced data set learning. Expert Systems with Applications 82, 40–52.
+Drummond, C., Holte, R. C., et al. (2003). C4. 5, class imbalance, and cost sensitivity: why undersampling beats over-sampling. In Workshop on Learning from Imbalanced Datasets II, vol. 11, 1–8. Citeseer.
+Estabrooks, A., Jo, T., and Japkowicz, N. (2004). A multiple resampling method for learning from imbalanced data sets. Computational intelligence 20, 1, 18–36.
+Fithian, W. and Hastie, T. (2014). Local case-control sampling: Efﬁcient subsampling in imbalanced data sets. Annals of statistics 42, 5, 1693.
+Guo, H., Tang, R., Ye, Y., Li, Z., and He, X. (2017). Deepfm: a factorization-machine based neural network for ctr prediction. arXiv preprint arXiv:1703.04247 .
+Han, H., Wang, W.-Y., and Mao, B.-H. (2005). Borderline-smote: A new over-sampling method in imbalanced data sets learning. In D.-S. Huang, X.-P. Zhang, and G.-B. Huang, eds., Advances in Intelligent Computing, 878–887, Berlin, Heidelberg. Springer Berlin Heidelberg.
+Han, L., Tan, K. M., Yang, T., Zhang, T., et al. (2020). Local uncertainty sampling for large-scale multiclass logistic regression. Annals of Statistics 48, 3, 1770–1788.
+He, X., Pan, J., Jin, O., Xu, T., Liu, B., Xu, T., Shi, Y., Atallah, A., Herbrich, R., Bowers, S., et al. (2014). Practical lessons from predicting clicks on ads at facebook. In Proceedings of the Eighth International Workshop on Data Mining for Online Advertising, 1–9.
+Hesterberg, T. (1995). Weighted average importance sampling and defensive mixture distributions. Technometrics 37, 2, 185–194.
+Hjort, N. L. and Pollard, D. (2011). Asymptotics for minimisers of convex processes. arXiv preprint arXiv:1107.3806 .
+Huang, J.-T., Sharma, A., Sun, S., Xia, L., Zhang, D., Pronin, P., Padmanabhan, J., Ottaviano, G., and Yang, L. (2020). Embedding-based retrieval in facebook search. In Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining, 2553–2561.
+Japkowicz, N. (2000). Learning from imbalanced data sets: Papers from the AAAI workshop, AAAI, 2000. Technical Report WS-00-05.
+Kilbertus, N., Parascandolo, G., and Schölkopf, B. (2018). Generalization in anti-causal learning. arXiv preprint arXiv:1812.00524 .
+King, G. and Zeng, L. (2001). Logistic regression in rare events data. Political analysis 9, 2, 137–163.
+Lemaître, G., Nogueira, F., and Aridas, C. K. (2017). Imbalanced-learn: A python toolbox to tackle the curse of imbalanced datasets in machine learning. The Journal of Machine Learning Research 18, 1, 559–563.
+Liu, X., Wu, J., and Zhou, Z. (2009). Exploratory undersampling for class-imbalance learning. IEEE Transactions on Systems, Man, and Cybernetics, Part B (Cybernetics) 39, 2, 539–550.
+Mathew, J., Pang, C. K., Luo, M., and Leong, W. H. (2017). Classiﬁcation of imbalanced data by oversampling in kernel space of support vector machines. IEEE Transactions on Neural Networks and Learning Systems 29, 9, 4065–4076.
+McMahan, H. B., Holt, G., Sculley, D., Young, M., Ebner, D., Grady, J., Nie, L., Phillips, T., Davydov, E., Golovin, D., et al. (2013). Ad click prediction: a view from the trenches. In Proceedings of the 19th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 1222–1230.
+31
+
+Owen, A. and Zhou, Y. (2000). Safe and effective importance sampling. Journal of the American Statistical Association 95, 449, 135–143.
+Owen, A. B. (2007). Inﬁnitely imbalanced logistic regression. The Journal of Machine Learning Research 8, 761–773.
+Pukelsheim, F. (2006). Optimal design of experiments. SIAM. Rahman, M. M. and Davis, D. (2013). Addressing the class imbalance problem in medical datasets.
+International Journal of Machine Learning and Computing 3, 2, 224. Schölkopf, B., Janzing, D., Peters, J., Sgouritsa, E., Zhang, K., and Mooij, J. (2012). On causal and
+anticausal learning. In ICML 2012: Proceedings of the 29th International Conference on Machine Learning, Edinburgh, Scotland, June 26-July 1, 2012, 1255–1262. Sun, Y., Kamel, M. S., Wong, A. K., and Wang, Y. (2007). Cost-sensitive boosting for classiﬁcation of imbalanced data. Pattern Recognition 40, 12, 3358–3378. Ting, D. and Brochu, E. (2018). Optimal subsampling with inﬂuence functions. In Advances in neural information processing systems, 3650–3659. van der Vaart, A. (1998). Asymptotic Statistics. Cambridge University Press, London. Wang, H. (2019). More efﬁcient estimation for logistic regression with optimal subsamples. Journal of Machine Learning Research 20, 132, 1–59. Wang, H. (2020). Logistic regression for massive data with rare events. In H. D. III and A. Singh, eds., Proceedings of the 37th International Conference on Machine Learning, vol. 119 of Proceedings of Machine Learning Research, 9829–9836. PMLR. Wang, H. and Ma, Y. (2021). Optimal subsampling for quantile regression in big data. Biometrika 108, 1, 99–112. Wang, H., Zhu, R., and Ma, P. (2018). Optimal subsampling for large sample logistic regression. Journal of the American Statistical Association 113, 522, 829–844. Xiong, S. and Li, G. (2008). Some results on the convergence of conditional distributions. Statistics & Probability Letters 78, 18, 3249–3253. Yu, J., Wang, H., Ai, M., and Zhang, H. (2020). Optimal distributed subsampling for maximum quasi-likelihood estimators with massive data. Journal of the American Statistical Association 0, 0, 1–12.
+32
+

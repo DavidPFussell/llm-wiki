@@ -1,0 +1,732 @@
+Exploring the Space of Topic Coherence Measures
+
+Michael Röder
+Leipzig University R&D, Unister GmbH
+Leipzig, Germany
+roeder@informatik.unileipzig.de
+
+Andreas Both
+R&D, Unister GmbH Leipzig, Germany
+andreas.both@unister.de
+
+Alexander Hinneburg
+Martin-Luther-University Halle-Wittenberg, Germany
+hinneburg@informatik.unihalle.de
+
+ABSTRACT
+Quantifying the coherence of a set of statements is a long standing problem with many potential applications that has attracted researchers from diﬀerent sciences. The special case of measuring coherence of topics has been recently studied to remedy the problem that topic models give no guaranty on the interpretablity of their output. Several benchmark datasets were produced that record human judgements of the interpretability of topics. We are the ﬁrst to propose a framework that allows to construct existing word based coherence measures as well as new ones by combining elementary components. We conduct a systematic search of the space of coherence measures using all publicly available topic relevance data for the evaluation. Our results show that new combinations of components outperform existing measures with respect to correlation to human ratings. Finally, we outline how our results can be transferred to further applications in the context of text mining, information retrieval and the world wide web.
+Categories and Subject Descriptors
+[Document representation]: Document topic models
+General Terms
+Measurement
+Keywords
+topic evaluation; topic coherence; topic model
+1. INTRODUCTION
+A set of statements or facts is said to be coherent, if they support each other. Thus, a coherent fact set can be interpreted in a context that covers all or most of the facts. An example of a coherent fact set is “the game is a team sport”, “the game is played with a ball”, “the game demands great physical eﬀorts”. A long standing open question is how to
+Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for proﬁt or commercial advantage and that copies bear this notice and the full citation on the ﬁrst page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior speciﬁc permission and/or a fee. Request permissions from permissions@acm.org. WSDM’15, February 2–6, 2015, Shanghai, China. Copyright is held by the owner/author(s). Publication rights licensed to ACM. ACM 978-1-4503-3317-7/15/02 ...$15.00. http://dx.doi.org/10.1145/2684822.2685324.
+
+quantify the coherence of a fact set [5]. Approaches proposed in scientiﬁc philosophy have formalized such measures as functions of joint and marginal probabilities associated with the facts. Bovens and Hartmann [5] discuss many examples that lead to a demanding set of complex properties such a measure needs to fulﬁll. An example is the non-monotonic behavior of coherence in case of growing fact sets. The coherence of the two fact sets “the animal is a bird” and “the animal cannot ﬂy” can be increased by adding the fact “the animal is a penguin”. The non-monotonicity becomes apparent when the coherence is lowered again by adding nonrelated facts [5]. The discussion of coherence measures in that community deals mainly with schemes that estimate the hanging and ﬁtting together of the individual facts of a larger set. Examples of such schemes are (i) to compare each fact against the rest of all other fact, (ii) compare all pairs against each other, and (iii) compare disjoints subsets of facts against each other. Such theoretical work on coherence from scientiﬁc philosophy—see [7] for an overview— has potential to be adapted in computer science, e.g., coherence of word sets.
+Interest into coherence measures has arisen in text mining, as unsupervised learning methods like topic models give no guarantees on the interpreteability of their output. Topic models learn topics—typically represented as sets of important words—automatically from unlabeled documents in an unsupervised way. This is an attractive method to bring structure to otherwise unstructured text data. The seminal work of [13] proposed automatic coherence measures that rate topics regarding to their understandability. The proposed measures treat words as facts. This important restriction will apply to all analyses presented in this paper. An example of such set is {game, sport, ball, team}, which we will use throughout the paper to illustrate the methods. Furthermore, [13] restricts coherence to be always based on comparing word pairs. Our analyses will go beyond this point.
+Evaluations in [13] based on human generated topic rankings showed that measures based on word co-occurrence statistics estimated on Wikipedia outperform measures based on WordNet and similar semantic resources. Subsequent empirical works on topic coherence [12, 18, 10] proposed a number of measures based on word statistics that diﬀer in several details: deﬁnition, normalization and aggregation of word statistics and reference corpus. In addition, a new method based on word context vectors has been proposed recently [1].
+
+Looking at the two lines of research on coherence, scientiﬁc philosophy and topic modelling, we note that the contributions are mainly complementary. While the former proposed a good number of schemes for comparing facts or words, the latter proposed useful methods for estimating word probabilities and normalizing numeric comparisons. However, a systematic, empirical evaluation of the methods of both worlds and their yet unexplored combinations is still missing.
+Human topic rankings serve as the gold standard for coherence evaluation. However, they are expensive to produce. There are three publicly available sources of such rankings: ﬁrst, Chang et al. [6] that have been prepared by Lau et al. [10] for topic coherence evaluation, second, Aletras and Stevenson [1] and third, Rosner et al. [16]. A systematic, empirical evaluation should take all these sources into account. For this reason, we choose the concept of a framework providing an objective platform for comparing the diﬀerent approaches. Following our research agenda, this will lead to completely new insights of the behavior of diﬀerent algorithms with regard to the available benchmarks. Hence, it will be possible to ﬁnally evaluate the reasons for speciﬁc behavior of topic coherences on a comparable basis.
+Our contributions are these: First, we propose a unifying framework that spans a conﬁguration space of coherence definitions. Second, we exhaustively search this space for the coherence deﬁnition with the best overall correlation with respect to all available human topic ranking data. This search empirically evaluates published coherence measures as well as unpublished ones based on combinations of known approaches. Our results reveal a coherence measure based on a new combination of known approaches that approximates human ratings better than the state of the art.1 Finally, we note that coherence measures are useful beyond topic modelling. We discuss applications to search, advertising and automatic translation.
+The rest of the paper is structured as follows: In section 2, we brieﬂy review related work. Our unifying framework is introduced in section 3. Section 4 describes data preparation and evaluation results and section 5 discusses our ﬁndings. In section 6 the runtimes of the measures ar analyzed. Section 7 explains how coherence measures can be applied beyond topic modelling. Our conclusions are stated in section 8.
+2. RELATED WORK
+The evaluation of topic models needs next to holdout perplexity an additional measure that can rate topics with respect to understandability and interpretability by humans [6]. Measures based on evaluation of topic model distributions can produce useful results [2, 11]. However, they are diﬃcult to link with human generated gold standards.
+Newman et al. [13] represented topics by sets of top words and asked humans to rate these sets as good, neutral or bad. Several automatic topic ranking methods that measure topic coherence are evaluated by comparison to these human ratings. The evaluated topic coherence measures take the set of N top words of a topic and sum a conﬁrmation measure over all word pairs. A conﬁrmation measure depends on a single pair of top words. Several conﬁrmation measures were
+1Data and tools for replicating our coherence calculations are available at https://github.com/AKSW/Palmetto .
+
+evaluated. The coherence based on pointwise mutual infor-
+mation (PMI) gave largest correlations with human ratings. UCI coherence is calculated by2:
+
+2 N−1 N
+
+CUCI = N · (N − 1)
+
+PMI(wi, wj) (1)
+
+i=1 j=i+1
+
+PMI(wi, wj) = log P (wi, wj) + (2) P (wi) · P (wj )
+
+Probabilities are estimated based on word co-occurrence counts. Those counts are derived from documents that are constructed by a sliding window that moves over the Wikipedia, which is used as external reference corpus. Each window position deﬁnes such a document. For our example topic from section 1 we would calculate:
+
+1 CUCI = · PMI(game, sport) + PMI(game, ball )
+6
+
++ PMI(game, team) + PMI(sport, ball )
+
+(3)
+
++ PMI(sport, team) + PMI(ball , team)
+
+Mimno et al. [12] proposed to use an asymmetrical con-
+ﬁrmation measure between top word pairs (smoothed con-
+ditional probability). The summation of UMass coherence accounts for the ordering among the top words of a topic.2
+
+N i−1
+
+2
+
+P (wi, wj ) +
+
+CUMass = N · (N − 1)
+
+log
+
+(4)
+
+P (wj )
+
+i=2 j=1
+
+Word probabilities are estimated based on document frequencies of the original documents used for learning the topics. The calculation for our example would be:
+1 CUMass = log(P (sport|game)) + log(P (ball |game))
+6 + log(P (ball |sport)) + log(P (team|game)) (5)
+
++ log(P (team|sport)) + log(P (team|ball ))
+
+Stevens et al. [18] found that both—UCI and UMass coherence—perform better if parameter is chosen to be rather small instead of = 1 as in respective original publications.
+Aletras and Stevenson [1] introduced topic coherence based on context vectors for every topic top word. A context vector of a word w is created using word co-occurrence counts determined using context windows that contain all words located ±5 tokens around the ocurrences of the word w. Largest correlation to human topic coherence ratings were found when deﬁning the elements of these vectors as normalized PMI (NPMI) [4]. Additionally, they showed that restricting the word co-occurrences to those words that are part of the same topic performs best (top word space). Thus, the j-th element of the context vector vi of word wi has NPMI:
+ P (wi,wj )+ γ vij = NPMI(wi, wj )γ =  log P (wi)·P (wj )  (6)
+− log(P (wi, wj) + )
+
+2 is added to avoid logarithm of zero. CUCI as well as CUMass can be used with the arithmetic mean or only with the sum of the single elements, because the mean calculation doesn’t inﬂuence the order of evaluated topics that have the same number of top words.
+
+For our example topic, the vector of its top word game would be calculated as:
+vgame = NPMI(game, game)γ , NPMI(game, sport)γ , NPMI(game, ball )γ , NPMI(game, team)γ (7)
+
+An increase of γ gives higher NPMI values more weight. Conﬁrmation measures between pairs of context vectors are vector similarities like cosine, Dice or Jaccard that are averaged over all pairs of a topics top words like in [13].
+
+1 Ccos = · cos(vgame , vsport ) + cos(vgame , vball )
+6
+
++ cos(vgame , vteam ) + cos(vsport , vball )
+
+(8)
+
++ cos(vsport , vteam ) + cos(vball , vteam )
+
+Alternatively, topic coherence is computed as average similarity between top word context vectors and their centroid vc.
+
+vc = vgame + vsport + vball + vteam 1
+Ccen = · cos(vgame , vc) + cos(vsport , vc) 4 + cos(vball , vc) + cos(vteam , vc)
+
+(9) (10)
+
+Additionally, [1] showed that the UCI coherence performs better if the PMI is replaced by the NPMI.
+Lau et al. [10] structured the topic evaluation in two different tasks—word intrusion and observed coherence. In the ﬁrst task, an intruder word has to be identiﬁed among the top words of a topic. For the second task, topics have to be rated regarding their coherence, while ratings are compared to human ratings. Both tasks can be done for single topics or the whole topic model. [10] conﬁrmed that the UCI coherence performs better with the NPMI.
+Theoretical work on coherence of sets of statements in a broader sense are reviewed in [7]. We follow their notation but adapt presentation of measures to word coherence. Shogenji’s [17] and Olsson’s [14] coherences are deﬁned as:
+
+P (w1, . . . , wN ) CS = N
+i=1 P (wi)
+
+(11)
+
+CO = P (w1, . . . , wN ) (12) P (w1 ∨ . . . ∨ wN )
+
+The usage of these coherences for our example is straight forward:
+
+P (game, sport, ball , team)
+
+CS =
+
+(13)
+
+P (game) · P (sport) · P (ball ) · P (team)
+
+P (game, sport, ball , team)
+
+CO =
+
+(14)
+
+P (game ∨ sport ∨ ball ∨ team)
+
+Fitelson [8] evaluated a single word in the context of all subsets that can be constructed from the remaining words. The set of all subsets without word wi is denoted by S(i). Fitelson’s coherence is deﬁned by comparing the probability of the i-th word with every single set in S(i):
+
+CF =
+
+i=1 j=1 N 2N−1−1 mf (wi, S(i)j ) N · (2N−1 − 1)
+
+(15)
+
+mf (wi, S(i)j) = P (Wi|S(i)j) − P (Wi|¬S(i)j) (16) P (Wi|S(i)j) + P (Wi|¬S(i)j)
+
+Note that this approach takes relationships between word sets into account and goes beyond averaging conﬁrmations between word pairs.3
+Douven and Meijs [7] took this approach further by creating pairs of word subsets Si = (W , W ∗). These pairs are tested whether the existence of the subset W ∗ supports the occurrence of the subset W . This is done using several conﬁrmation measures and has been adapted to the evaluation of topics by Rosner et al. [16]. The authors found that using larger subsets W and W ∗ can lead to better performing coherence measures.
+3. FRAMEWORK OF COHERENCE MEASURES
+Our new unifying framework represents a coherence measure as composition of parts that can be freely combined. Hence, existing measures as well as yet unexplored measures can be constructed. The parts are grouped into dimensions that span the conﬁguration space of coherence measures. Each dimension is characterized by a set of exchangeable components.
+Coherence of a set of words measures the hanging and ﬁtting together of single words or subsets of them. Thus, the ﬁrst dimension is the kind of segmentation that is used to divide a word set into smaller pieces. These pieces are compared against each other, e.g., segmentation into word pairs. The set of diﬀerent kinds of segmentation is S. The second dimension is the conﬁrmation measure that scores the agreement of a given pair, e.g., NPMI of two words. The set of conﬁrmation measures is M. Conﬁrmation measures use word probabilities that can be computed in diﬀerent ways, which forms the third dimension of the conﬁguration space. The set of methods to estimate word probabilities is P. Last, the methods of how to aggregate scalar values computed by the conﬁrmation measure forms the fourth dimension. The set of aggregation functions is Σ.
+The workﬂow of our framework as shown in ﬁgure 1 comprises four steps. First, the word set t is segmentated into a set of pairs of word subsets S. Second, word probabilities P are computed based on a given reference corpus. Both, the set of word subsets S as well as the computed probabilities P are consumed by the conﬁrmation measure to calculate the agreements ϕ of pairs of S. Last, those values are aggregated to a single coherence value c.
+In summary, the framework deﬁnes a conﬁgurations space that is the cross product of the four sets C = S × M × P × Σ. In the following subsections, these four dimensions are explained in more detail.
+3.1 Segmentation of word subsets
+Following [7], coherence of a word set measures the degree that a subset is supported by another subset. The result of the segmentation of a given word set W is a set of pairs of subsets of W . The deﬁnition of a subset pair consists of two parts that are diﬀerently used by the following conﬁrmation mearsures. The ﬁrst part of a pair is the subset for which the support by the second part of the pair is determined. Most proposed coherence measures for topic evaluation compare pairs of single words, e.g., the UCI coherence. Every single
+3In section 3.1, we will give an example for Sany one which is the equivalent to the (wi, S(i)j) pairs of Fitelson’s coherence.
+
+Segmentation
+
+t
+
+S
+
+Probability Calculation
+
+Confirmation Measure
+
+Aggregation
+
+P
+
+φ
+
+c
+
+Reference Corpus
+Figure 1: Overview over the unifying coherence framework—its four parts and their intermediate results.
+
+word is paired with every other single word. Those segementations are called one-one and are deﬁned as follows:
+
+Sone one = (W , W ∗)|W = {wi}; W ∗ = {wj }; wi, wj ∈ W ; i = j
+
+(17)
+
+Spre one = (W , W ∗)|W = {wi}; W ∗ = {wj }; wi, wj ∈ W ; i > j
+
+(18)
+
+Ssuc one = (W , W ∗)|W = {wi}; W ∗ = {wj }; wi, wj ∈ W ; i < j
+
+(19)
+
+The latter two are variations of the ﬁrst one that require an ordered word set. They compare a word only to the preceding and succeeding words respectively, as done by the UMass coherence.
+Douven and Meijs [7] proposed several other segmentations that have been adapted to topic evaluation by [16]. These deﬁnitions allow one or both subsets to contain more than one single word.
+
+Sall one = (W , W ∗)|W = {wi}; wi ∈ W ; W ∗ = W \ {wi}
+Sany one = (W , W ∗)|W = {wi}; wi ∈ W ; W ∗ ⊆ W \ {wi}
+Sany any = (W , W ∗)|W , W ∗ ⊂ W ; W ∩ W ∗ = ∅
+
+(20) (21) (22)
+
+Sall one compares every single word to all other words of the word set. Sany one extends Sall one by using every subset as condition. Sany any is another extension that compares every subset with every other disjoint subset. Figure 2 shows the diﬀerent sets of subset pairs produced by applying the diﬀerent segmentations to the running example.
+The approach in [1] compares words to the total word set W using words context vectors. Therefore, we deﬁne another segmentation
+
+Sset one = (W , W ∗)|W = {wi}; wi ∈ W ; W ∗ = W (23)
+
+Figure 2: Sone one, Sall one, Sany one and Sany any segmentations of the word set {game, ball, sport, team} and their hierarchy.
+3.2 Probability Estimation
+The method of probability estimation deﬁnes the way how the probabilities are derived from the underlying data source. Boolean document (Pbd) estimates the probability of a single word as the number of documents in which the word occurs divided by the total number of documents. In the same way, the joint probability of two words is estimated by the number of documents containing both words divided by the total number of documents. This estimation method is called boolean as the number of occurrences of words in a single document as well as distances between the occurrences are not considered. UMass coherence is based on an equivalent kind of estimation [12]. Text documents with some formatting allow simple variations, namely the boolean paragraph (Pbp) and boolean sentence (Pbs). These estimation methods are similar to boolean document except instead of documents paragraphs or sentences are used respectively.
+Boolean sliding window (Psw) determines word counts using a sliding window.4 The window moves over the documents one word token per step. Each step deﬁnes a new virtual document by copying the window content. Boolean document is applied to these virtual documents to compute
+
+Note that this segmentation does not obey the requirement W ∩W ∗ = ∅ stated in [7]. Therefore, it is only used together
+with coherence measures based on the ideas in [1].
+
+4The window size is added to the name, e.g., Psw(10) for a sliding window of size s = 10.
+
+word probabilities. Note that boolean sliding window captures to some degree proximity between word tokens.
+
+3.3 Conﬁrmation Measure
+A conﬁrmation measure takes a single pair Si = (W , W ∗) of words or word subsets as well as the corresponding probabilities to compute how strong the conditioning word set W ∗ supports W . This could be done either directly as proposed in [7, 12, 13] or indirectly as done in [1].
+
+3.3.1 Direct conﬁrmation measures
+Measures to directly compute the conﬁrmation of a single pair Si of words or word subsets are:
+
+md(Si) = P (W |W ∗) − P (W ) (24)
+
+P (W , W ∗) mr(Si) = P (W ) ∗ P (W ∗) (25)
+
+P (W , W ∗) + mlr(Si) = log P (W ) ∗ P (W ∗) (26)
+
+mnlr(Si) =
+
+mlr (Si )
+∗
+
+(27)
+
+− log (P (W , W ) + )
+
+P (W |W ∗) ml(Si) = P (W |¬W ∗) + (28)
+
+P (W |W ∗) + mll(Si) = log P (W |¬W ∗) + (29)
+
+P (W , W ∗) mc(Si) = P (W ∗) (30)
+
+P (W , W ∗) + mlc(Si) = log P (W ∗) (31)
+
+P (W , W ∗) mj(Si) = P (W ∨ W ∗) (32)
+
+P (W , W ∗) + mlj (Si) = log P (W ∨ W ∗) (33)
+
+In [7], the conﬁrmation measures md, mr and ml are called diﬀerence-, ratio- and likelihood-measure. There, log-likelihood (mll) and log-ratio measure (mlr) are also deﬁned— the last is the PMI, the central element of the UCI coherence. Normalized log-ratio measure (mnlr) is the NPMI. The log-conditional-probability measure (mlc) is equivalent to the calculation used by UMass coherence [12]. The last two conﬁrmation measures are the Jaccard and log-Jaccard measures.
+A small constant is added to prevent logarithm of zero. Following [18], we set it to a small value ( = 10−12).5 Olsson’s and Fitelson’s coherences as well as a logarithmic variant of Shogenji’s coherence (formulas 12, 16 and 11) are denoted by mo, mf and mls.
+
+3.3.2 Indirect conﬁrmation measures
+Instead of directly computing the conﬁrmation of Si = (W , W ∗), indirect computation of conﬁrmation assumes that given some word of W , direct conﬁrmations of words in W are close to direct conﬁrmations of words in W ∗ with respect to this given word. Thus, indirect conﬁrmation computes similarity of words in W and W ∗ with respect to direct conﬁrmations to all words.
+
+5Additionally is used in ml and mll for preventing division by 0.
+
+Why is this an advantage? For example, assume word x
+
+semantically supports word z but they do not appear fre-
+
+quently together in the reference corpus and have therefore
+
+low joint probability. Thus, their direct conﬁrmation would
+
+be low as well. However, the conﬁrmations of x and z corre-
+
+late with respect to many other words y in W. An example
+
+is that x and z are both competing brands of cars, which
+
+semantically support each other. However, both brands are
+
+seldom mentioned together in documents in the reference
+
+corpus. But their conﬁrmations to other words like “road”
+
+or “speed” do strongly correlate. This would be reﬂected
+
+by an indirect conﬁrmation measure. Thus, indirect conﬁr-
+
+mation measures may capture semantic support that direct
+
+measures would miss.
+
+This idea can be formalized by representing the word sets
+
+W and W ∗ as vectors with dimension of the total size of
+
+the word set W . Such vector can be computed with respect
+
+to any direct conﬁrmation measure m. In case W and W ∗
+
+consist of single words, the vector elements are just the direct
+
+conﬁrmations as suggested in [1]. In case W and W ∗ are
+
+sets of more than one word, the vector elements are the sum
+
+of the direct conﬁrmations of the single words. Following
+
+[1], the vector elements can be non-linearly distorted.
+
+
+
+
+
+
+
+
+
+vm,γ (W ) =  m(wi, wj )γ  (34)
+
+wi ∈W
+
+j=1,...,|W |
+
+Given context vectors u = v(W ) and w = v(W ∗) for the word sets of a pair Si = (W , W ∗), indirect conﬁrmation is computed as vector similarity. Following [1], we equip
+our framework with the vector similarities cosine, dice and
+jaccard:
+
+scos(u, w) = sdice(u, w) = sjac(u, w) =
+
+i=1 |W | ui · wi u 2· w 2
+i=1 |W | min(ui, wi) i=1 |W | vi + wi
+i=1 |W | min(ui, wi) i=1 |W | max(ui, wi)
+
+(35) (36) (37)
+
+Thus, given a similarity measure sim, a direct conﬁrmation measure m and a value for γ, an indirect conﬁrmation measure m˜ is
+
+m˜ sim(m,γ)(W , W ∗) = ssim(vm,γ (W ), vm,γ (W ∗)) (38)
+
+3.4 Aggregation
+Finally, all conﬁrmations ϕ = {ϕ1, . . . ϕ|S|} of all subset pairs Si are aggregated to a single coherence score. Arithmetic mean (σa) and median (σm) have been used in the literature. Additionally, we evaluate geometric mean (σg), harmonic mean (σh), quadratic mean (σq), minimum (σn) and maximum (σx).
+
+3.5 Representation of existing measures
+
+Now we are ready to describe all coherence measures from section 2 as instances within the new framework. The coherences of [12, 13, 1] can be written as:
+
+CUMass = CUCI =
+CNPMI =
+
+Pbd, Spre one, mlc, σa Psw(10), Sone one, mlr, σa Psw(10), Sone one, mnlr , σa
+
+(39) (40) (41)
+
+Name
+Topics Top words
+Documents Paragraphs Sentences Tokens Vocabulary
+
+20NG
+100 10
+19 952 155 429 341 583 2 785 319 109 610
+
+Genomics
+100 10
+29 833 2 678 088 9 744 966 114 065 923 1 640 456
+
+NYT
+100 10
+— — — — —
+
+RTL-NYT
+1095 5
+— — — — —
+
+RTL-Wiki
+1096 5
+7 838 319 859 1 035 265 13 679 052 591 957
+
+Movie
+100 5
+108 952 2 136 811 6 583 202 86 256 415 1 625 124
+
+Table 1: Datasets used for evaluation.
+
+The coherences deﬁned in [7] and transformed in [16] can be written as:
+
+Cone-all = (Pbd, Sall one, md, σa) Cone-any = Pbd, Sany one , md, σa Cany-any = Pbd, Sany any , md, σa
+
+(42) (43) (44)
+
+Shogenji’s [17], Olsson’s [14] and Fitelson’s [8] coherences
+do not deﬁne how the probabilities are computed. There-
+fore, these measure deﬁnitions can be combined with every method of probability estimation6:
+
+CS = CO = CF =
+
+·, Sone all , mls, σa
+·, Sset set, mo, σi ·, Sany one , mf , σa
+
+(45) (46) (47)
+
+Using the context-window-based probability estimation
+Pcw described in section 2, we are able to formulate the context-vector-based coherences deﬁned in [1] within our framework7:
+
+Ccos = Cdice = Cjac = Ccen =
+
+Pcw(5), Sone one, m˜ cos(nlr,γ), σa Pcw(5), Sone one, m˜ dice(nlr,γ), σa Pcw(5), Sone one, m˜ jac(nlr,γ), σa Pcw(5), Sset one, m˜ cos(nlr,γ), σa
+
+(48) (49) (50) (51)
+
+This shows that the framework can cover all existing measures. However, it allows to construct new measures that combine the ideas of existing measures.
+
+4. EVALUATION AND DATA SETS
+The evaluation follows a common scheme that has already been used in [1, 10, 13, 16]. Coherence measures are computed for topics given as word sets that have been rated by humans with respect to understandability. Each measure produces a ranking of the topics that is compared to the ranking induced by human ratings. Following [10], both
+6Sone all is used to formulate Shogenji’s coherence and is deﬁned like Sall one but with W and W ∗ swapped. Sset set = {(W , W ∗)|W , W ∗ = W } is used for Olsson’s coherence. Note that Sset set contains only one single pair. Therefore, the aggregation function is the identity function σi. These special segmentation schemas are used only for these two coherences. 7We added window size to the model name, e.g., Pcw(5) for the window size s = ±5. The context window is only used for indirect coherence measures. For represent all measures mentioned in [1] instead of mnlr the measures mlr or mP = P (W , W ∗) could be used respectively.
+
+rankings are correlated using Pearson’s r. Thus, good quality of a coherence measure is indicated by a large correlation to human ratings.
+Word counts and probabilities are derived from Wikipedia. In case the corpus, which was used as training data for topic learning, was available, we computed coherence measures a second time using counts derived from that corpus.
+During evaluation, we tested a wide range of diﬀerent parameter settings. Window sizes varied between [10, 300] for the sliding and [5, 150] for the context window. The parameter γ varied in {1, 2, 3}. Overall, our evaluation comprises a total of 237 912 diﬀerent coherences and parameterizations.
+In literature, other evaluation methods has been used as well, e.g., humans were asked to classify word sets using diﬀerent given error types [12]. However, since the data is not freely available, we can not use such methods for our evaluation.
+A dataset comprises a corpus, topics and human ratings. Topics had been computed using the corpus and are given by word sets consisting of the topics top words. Human ratings for topics had been created by presenting these word sets to human raters. Topics are rated regarding interpretability and understandability using three categories—good, neutral or bad [13].
+The generation of such a dataset is expensive due to the necessary manual work to create human topic ratings. Recently, several datasets have been published [1, 6, 10, 16]. Additionally, the creation of such a dataset is separated from the topic model used to compute the topics, since the humans rate just plain word sets without any information about the topic model [1, 6, 10, 15, 16]. This opens the possibility to reuse them for evaluation.
+The 20NG dataset contains the well known 20 Newsgroups corpus that consists of Usenet messages of 20 different groups. The Genomics corpus comprises scientiﬁc articles of 49 MEDLINE journals and is part of the TRECGenomics Track8. Aletras and Stevenson [1] published 100 rated topics for both dataset, each represented by a set of 10 top words. Further, they published 100 rated topics that have been computed using 47 229 New York Times articles (NYT ). Unfortunately, this corpus is not available to us.
+Chang et al. [6] used two corpora, one comprising New York Times articles (RTL-NYT ) and the other is a Wikipedia subset (RTL-Wiki). A number of 900 topics were created for each of these corpora. [10] published human ratings for these topics. Human raters evaluated word subsets of size ﬁve randomly selected from the top words of each topic. We aggregated the ratings for each word set. Word sets with
+8http://ir.ohsu.edu/genomics
+
+using corpus coherences
+
+N =5
+
+N = 10
+
+Name S P M Σ
+20NG Genomics RTL-Wiki Movie
+average
+20NG Genomics NYT
+average
+RTL-NYT RTL-Wiki Movie
+average
+average
+
+CV Sset one Psw(110) m˜ cos(nlr,1) σa
+0.665 0.671 0.627 0.548
+0.628
+0.859 0.773 0.803
+0.812
+0.728 0.679 0.544
+0.650
+0.731
+
+CP Spre one Psw(70) mf σa
+0.756 0.652 0.615 0.549
+0.643
+0.825 0.721 0.757
+0.768
+0.720 0.645 0.533
+0.633
+0.700
+
+CUMass Spre one Pbd mlc σa
+0.395 0.514 0.272 0.093
+0.319
+0.562 0.442 0.543
+0.516
+0.106 0.350 0.143
+0.200
+0.358
+
+Cone-any Sany one Pbd md σa
+0.563 0.549 0.545 0.453
+0.528
+0.822 0.452 0.612
+0.629
+0.438 0.499 0.454
+0.464
+0.546
+
+CUCI Sone one Psw(10) mlr σa
+0.312 0.624 0.527 0.473
+0.484
+0.696 0.478 0.783
+0.652
+0.631 0.558 0.447
+0.545
+0.599
+
+CNPMI Sone one Psw(10) mnlr σa
+0.486 0.630 0.573 0.438
+0.532
+0.780 0.594 0.806
+0.727
+0.678 0.606 0.452
+0.579
+0.653
+
+CA Sone one Pcw(5) m˜ cos(nlr,1) σa
+0.563 0.632 0.542 0.431
+0.542
+0.739 0.530 0.747
+0.672
+0.687 0.602 0.465
+0.585
+0.628
+
+Table 2: Coherence measures with strongest correlations with human ratings.
+
+using the Wikipedia
+
+less than three ratings or words with encoding errors are removed.9
+The RTL-Wiki corpus is published in bag-of-words format that is unsuitable for paragraph-, sentence- or windowbased probability estimations. Therefore, we have retrieved the articles in version of May 2009 from Wikipedia history records. Not all articles of the original corpus were available anymore. Therefore, the recreated corpus is slightly smaller than the original one.
+Rosner et al. [16] published the Movie corpus—a Wikipedia subset—and 100 rated topics. Topics are given as sets of ﬁve top words. Like the RTL-Wiki corpus this corpus was recreated and is slightly smaller than the original one.
+Table 1 shows an overview of sizes of the diﬀerent datasets used for evaluation. All corpora as well as the complete Wikipedia used as reference corpus are preprocessed using lemmatization and stop word removal. Additionally, we removed portal and category articles, redirection and disambiguation pages as well as articles about single years.
+5. RESULTS AND DISCUSSION
+Table 2 shows the best performing coherence measures with respect to the diﬀerent datasets.10
+The largest correlations for all datasets (except for the Movie dataset) were reached, when the coherence measures relied on probabilities derived from the Wikipedia instead of the corpus used for topic learning. We focus our discussion on these calculations.
+Most correlations computed for topics with 10 top words are higher than those of topics with 5 top words. Thus,
+9The RTL-Wiki dataset contains 23 word sets with 6 words and more than 3 ratings that were removed as well to ensure comparability of ratings 10Further results can be found in the supplementary material. Results diﬀering to Aletras and Stevenson [1] might be caused by a diﬀerent preprocessing and diﬀerent versions of the Wikipedia.
+
+correlation
+
+0.74 0.72
+0.7 0.68 0.66 0.64 0.62
+0.6 0.58
+0
+
+50 100 150 200 250 300 window size
+
+variants of CV variants of CP
+
+variants of CUCI variants of CNPMI
+
+Figure 3: The inﬂuence of the sliding window’s size on the correlation of variants of diﬀerent coherences and human ratings.
+
+evaluation of the topic quality is harder, if the number of top words N is small.
+Looking at already proposed coherence measures (ﬁve most right columns of table 2), our results conﬁrm that on average UCI coherence performs better with NPMI. Among already proposed coherence measures, the NPMI showed best overall performance. Slightly lower correlations are obtained by the best performing vector-based coherence of those proposed in [1]. UMass coherence has lower correlations—especially in cases of small word sets. Shogenji’s (0.034) and Olsson’s (0.218) coherences (not shown in table 2) have low correlations, while Fitelson’s coherence (0.541) is comparable to Cone−any proposed in [16].
+The best performing coherence measure (the most left column) is a new combination found by systematic study of the conﬁguration space of coherence measures. This measure (CV ) combines the indirect cosine measure with the NPMI and the boolean sliding window. This combination has been overlooked so far in the literature. Also, the best direct coherence measure (CP ) found by our study is a new combination. It combines Fitelson’s conﬁrmation measure
+
+Name direct indirect
+
+Pbd Pbp Pbs Psw(70) Psw(110) Pcw(50)
+Sany any Sall one Sany one Sone one Spre one Ssuc one Sset one
+σa σg σh σm σn σq σx
+
+0.648 0.679 0.664 0.700 0.668
+—
+0.617 0.456 0.648 0.699 0.700 0.695
+—
+0.700 0.468 0.457 0.659 0.482 0.648 0.513
+
+0.664 0.698 0.691 0.731 0.731 0.695
+0.730 0.728 0.730 0.711 0.711 0.711 0.731
+0.731 0.606 0.590 0.730 0.573 0.716 0.670
+
+Table 3: Best correlations for the probability estimations, segmentations and aggregations if they were combined with a direct or indirect conﬁrmation measure.
+
+with the boolean sliding window. This one is still better than published measures.
+Among probability estimation methods, the boolean paragraph, boolean sentence and context window methods performed better than the boolean document (see table 3). The boolean sliding window performed best, but the window size should be larger than proposed in [13]. Figure 3 shows the correlation to human ratings achieved by variants of CV , CP , UCI and NPMI with diﬀerent window sizes. It shows that only the CP coherence has a very high correlation with a small window (s = 10). The correlation of CV and NPMI remains on a high level, when the window size is larger than 50. The UCI coherence beneﬁts from a larger window size, too, and reaches its best correlation at s = 70. An explanation for the good performance of the boolean sliding window is that it implicitly represents distances between word tokens within large documents. Further, large documents that are known to have good quality in Wikipedia, are implicitly up weighted because they contain more windows than smaller documents.
+Among the segmentation methods, if a direct conﬁrmation measure is used the single-word-based segmentation methods (Sone one, Spre one and Ssuc one) have the highest and Sall one has the worst correlations. This changes when an indirect conﬁrmation measure is used. While all segmentation methods reach a very high correlation, the single-word-based segmentations have slightly lower correlations than those that take larger subsets into account (Sany any, Sany one , Sall one, Sset one).
+The arithmetic mean is the aggregation with the highest correlations. Combined with indirect conﬁrmation measures the median and the quadratic mean created high correlations, too.
+Among the direct conﬁrmation measures, only mf , mnlr, mlr and md reach higher correlations (see table 4). The last
+
+Name
+mc md mf mj ml mlc mlj mll mlr mls mnlr mo mP mr
+
+direct
+0.581 0.623 0.700 0.478 0.381 0.493 0.574 0.582 0.632 0.172 0.693 0.478
+— 0.378
+
+indirect m˜ cos m˜ dice m˜ jac
+
+0.619 0.675 0.685 0.582 0.388 0.374 0.249 0.563 0.714 0.714 0.731 0.582 0.575 0.605
+
+0.628 0.676 0.453 0.592 0.380 0.238 0.210 0.472 0.672 0.672 0.689 0.592 0.605 0.577
+
+0.626 0.664 0.539 0.576 0.380 0.238 0.205 0.507 0.670 0.670 0.691 0.576 0.590 0.557
+
+Table 4: Best correlations for the conﬁrmation measures used directly or combined with an inderect conﬁrmation measure.
+
+corpus left out
+
+coherence
+
+average
+
+P
+
+S
+
+M Σ correlation
+
+20NG Genomics NYT RTL-NYT RTL-Wiki Movie
+
+(Psw110, Sany any , m˜ cos(nlr,1), σm) (Psw70, Sset one, m˜ cos(nlr,1), σa) (Psw110, Sset one, m˜ cos(nlr,1), σa) (Psw110, Sset one, m˜ cos(nlr,1), σa) (Psw110, Sset one, m˜ cos(nlr,1), σa) (Psw70, Sset one, m˜ cos(nlr,1), σa)
+
+0.708 0.724 0.717 0.732 0.741 0.769
+
+Table 5: Coherence measures with the highest average correlations if one dataset has been left out.
+
+three beneﬁt from a combination with an indirect measure, while the correlation of mf drops.
+The small diﬀerences in correlation of coherences with a) diﬀerent window sizes and b) segmenation methods that are very similar to each other, leads to a large number of coherences having a high average correlation that is only slightly lower than the best performing coherence CV . Thus, there are many variants of CV that are performing very good as long as they use
+
+• a sliding window with a window size s ≥ 50, • a segmentation method that takes larger subsets into
+account and • σa or σm as summarization method.
+We conﬁrm this by generating leave one out averages by calculating the average using only ﬁve of the six datasets. Table 5 shows that independently from the dataset left out, CV or one of its variants fullﬁlling the points above achieves the highest average correlation. For every coherence in table 2, ﬁgure 4 shows the six averages. It can be seen that the set of averages of CV only overlap with the averages of CP and are clearly higher than those of the other coherences.
+
+6. RUNTIMES
+Next to the quality it is important to know the costs of a certain coherence measure. Therefore, we have analyzed the runtimes of all coherence measures. For this experiment, we used the 100 topics of the NYT dataset and the Wikipedia
+
+Figure 4: The leave one out averages of the coherence measures.
+
+Name runtime in s
+
+CV CP CUMass Cone-any CUCI CNPMI CA
+
+315.2 317.7
+13.7 13.7 356.1 356.1 301.8
+
+Table 6: Runtimes on the NYT dataset and the Wikipedia as reference corpus.
+
+as reference corpus. Table 6 shows the overall runtimes of the coherence measures to compute the results presented in table 2.
+For the runtime of a coherence measure, the most important component is the probability estimation. The fastest one is the boolean document that needed only 13.7s to retrieve all neccessary probabilities. The boolean paragraph and the boolean sentence based estimation methods needed 34.4s and 138.8s. Both suﬀer from the fact that there are much more paragraphs and sentences than single documents. But they are still faster than the window based approaches since the reference corpus can be divided into paragraphs or sentences while preprocessing the corpus. In contrast, both window based estimation methods had the highest runtimes. This is caused by the need of retrieving the single positions of the words inside the documents to check whether these positions are inside the same window. As parameters for the runtime of all probability calculation we can identify a) the number of topics, b) the number of top words per topic (N ) and c) the size of the reference corpus. On the other hand, the size of the window does not have an inﬂuence on the runtimes.
+Another important component is the segmentation. While the segmentation of a speciﬁc topic is very fast, it controls the number of conﬁrmation values that have to be calculated. Thus, it has a high impact on the time needed by the conﬁrmation measure and the aggregation component. Table 7 shows the number of subset pairs Si that the diﬀerent segmentations create and two examples of the inﬂuence of this number on the runtime of conﬁrmation measures and aggregations. It can be seen that Sany one and Sany any have an exponential complexity.
+
+7. APPLICATIONS
+Coherence measures can be applied to automatically rate quality of topics computed by topic models. This can be
+
+Name
+Sall one Sset one Spre one Ssuc one Sone one Sany one
+Sany any
+
+|S|
+
+N
+
+N
+
+N ·(N −1) 2
+N ·(N −1) 2
+N · (N − 1)
+
+N · (2(N−1) − 1)
+
+N −1 i=1
+
+Ni · (2i − 1)
+
+runtimes in s
+
+mcos(mnlr ,1)
+
+σm
+
+0.002
+
+<0.001
+
+0.002
+
+—
+
+0.002
+
+<0.001
+
+0.002
+
+<0.001
+
+0.002
+
+0.001
+
+0.140
+
+0.023
+
+1.436
+
+0.322
+
+Table 7: Diﬀerent segmentation schemes, the number of subset pairs Si they contain (|S|) and examples of their inﬂuence on runtimes of conﬁrmation measures and aggregations.
+
+used in data exploration systems like TopicExplorer11 [9] that use word representations of topics to show the user an overview of large document collections. Topics that cannot be interpreted are ﬁltered out using coherence measures. Thus, usability of the system is increased by hiding topics that would confuse users.
+As example table 8 shows the ﬁve topics with highest and lowest coherence respectively of a total of 200 topics that are computed by Latent Dirichlet Allocation [3] using English Wikipedia. It clearly shows the diﬀerence between the quality of the topic representations as best topics allow to guess a general topic while the worst topics are not interpretable.
+However, coherence measures have applications beyond topic models. First, precision of key word search in document collections can proﬁt by ﬁltering out documents that contain the query key words in some proximity but the words are located in nearby but thematically diﬀerent passages. The approach would extract a word set for each document that covers the query words as well as the main words of the documents passage that contains the query words. Low quality hits for the query are ﬁltered out by setting a minimum threshold for the coherence of the extracted word set.
+Second, coherence can be used to select advertising links that ﬁts a web page. The approach is similar as above. A word set is extracted from a web page that contains the most describing words of the pages content. Advertising links are selected that maximize coherence of the union of the web page’s word set with descriptive words of the respective ad.
+Third, coherence can be used to improve automatic translations of web pages. When using a dictionary to translate a sentence from a web page into another language, usually ambiguous translations of single words remain. Coherence measures can be used select the most coherent combination among the ambiguous translations.
+
+8. CONCLUSION
+We proposed a unifying framework that span the space of all known coherence measures and allows to combine all main ideas in the context of coherence quantiﬁcation. We evaluated 237 912 coherence measures on six diﬀerent benchmarks for topic coherence—to the best of our knowledge, this is the largest number of benchmarks used for topic coherences so far. We introduced coherence measures from
+11http://topicexplorer.informatik.uni-halle.de
+
+coherence
+0.94 0.91 0.86 0.85 0.83 ... 0.35 0.34 0.34 0.29 0.27
+
+topic
+company sell corporation own acquire purchase buy business sale owner age population household female family census live average median income jewish israel jew israeli jerusalem rabbi hebrew palestinian palestine holocaust ship navy naval ﬂeet sail vessel crew sink sea submarine guitar album track bass drum vocal vocals release personnel list
+number code type section key table block set example oth group oﬃcial website member site base oth form consist proﬁle part form become history change present create merge forme separate know call name several refer oth hunter hunt thompson include mark paul heart take read harrison follow become know include
+
+Table 8: The ﬁve Wikipedia topics with highest and lowest coherences using best preforming measure CV .
+
+scientiﬁc philosophy that have been not used in the area of topic evaluation and—in the case of Fitelson’s coherence— showed a good performance. Using our framework, we identiﬁed measures that clearly outperform all coherences proposed so far.
+In the future, a next step will be a more detailed investigation on the sliding window and could bring up new probability estimation methods. Future work will include transfer of coherence to other applications beyond topic models, which can be done in a systematic way using the new unifying framework. Hence, our research agenda may lead to completely new insights of the behavior of topic models. Finally, our open framework enables researchers to measure the impact on a comparable basis for ﬁelds of application like text mining, information retrieval and the world wide web. Additionally, it will be possible to ﬁnally evaluate the reasons for speciﬁc behavior of statistics-driven models and uncover distinguishing properties of benchmarks.
+9. ACKNOWLEDGMENTS
+We want to thank Jey Han Lau and Jordan Boyd-Graber for making their data available. A special thanks goes to Nikos Aletras for publishing his data and several discussions about his approach. The work of the ﬁrst author has been supported by the ESF and the Free State of Saxony. The work of the last author has been partially supported by the Klaus Tschira Foundation.
+10. REFERENCES
+[1] N. Aletras and M. Stevenson. Evaluating topic coherence using distributional semantics. In Proc. of the 10th Int. Conf. on Computational Semantics (IWCS’13), pages 13–22, 2013.
+[2] L. Alsumait, D. Barbara´, J. Gentle, and C. Domeniconi. Topic signiﬁcance ranking of lda generative models. In Proc. of the Europ. Conf. on Machine Learning and Knowledge Disc. in Databases: Part I, ECML PKDD ’09, pages 67–82, 2009.
+[3] D. M. Blei, A. Y. Ng, and M. I. Jordan. Latent dirichlet allocation. Journal of Machine Learning Research, 3:993–1022, 2003.
+[4] G. Bouma. Normalized (pointwise) mutual information in collocation extraction. In From Form to Meaning: Processing Texts Automatically, Proc. of the Biennial GSCL Conference 2009, pages 31–40, Tu¨bingen, 2009.
+
+[5] L. Bovens and S. Hartmann. Bayesian Epistemology. Oxford University Press, 2003.
+[6] J. Chang, S. Gerrish, C. Wang, J. L. Boyd-graber, and D. M. Blei. Reading tea leaves: How humans interpret topic models. In Advances in Neural Information Processing Systems 22, pages 288–296. 2009.
+[7] I. Douven and W. Meijs. Measuring coherence. Synthese, 156(3):405–425, 2007.
+[8] B. Fitelson. A probabilistic theory of coherence. Analysis, 63(279):194–199, 2003.
+[9] A. Hinneburg, R. Preiss, and R. Schr¨oder. Topicexplorer: Exploring document collections with topic models. In ECML/PKDD (2), pages 838–841, 2012.
+[10] J. H. Lau, D. Newman, and T. Baldwin. Machine reading tea leaves: Automatically evaluating topic coherence and topic model quality. In Proc. of the Europ. Chap. of the Assoc. for Comp. Ling., 2014.
+[11] D. Mimno and D. Blei. Bayesian checking for topic models. In Proc. of the Conf. on Empirical Methods in Natural Language Processing, pages 227–237. 2011.
+[12] D. Mimno, H. M. Wallach, E. Talley, M. Leenders, and A. McCallum. Optimizing semantic coherence in topic models. In Proc. of the Conf. on Empirical Methods in Natural Language Processing, pages 262–272. 2011.
+[13] D. Newman, J. H. Lau, K. Grieser, and T. Baldwin. Automatic evaluation of topic coherence. In Human Language Technologies: The 2010 Annual Conference of the North American Chapter of the Association for Computational Linguistics, pages 100–108. 2010.
+[14] E. Olsson. What is the problem of coherence and truth? The Jour. of Philosophy, 99(5):246–272, 2002.
+[15] M. R¨oder, M. Speicher, and R. Usbeck. Investigating quality raters’ performance using interface evaluation methods. In Informatik 2013, pages 137–139. GI, 2013.
+[16] F. Rosner, A. Hinneburg, M. R¨oder, M. Nettling, and A. Both. Evaluating topic coherence measures. CoRR, abs/1403.6397, 2014.
+[17] T. Shogenji. Is coherence truth conducive? Analysis, 59(264):338–345, 1999.
+[18] K. Stevens, P. Kegelmeyer, D. Andrzejewski, and D. Buttler. Exploring topic coherence over many models and many topics. In Proc. of the 2012 Joint Conf. on Empirical Methods in Natural Language Processing and Computational Natural Language Learning, EMNLP-CoNLL ’12, pages 952–961, 2012.
+

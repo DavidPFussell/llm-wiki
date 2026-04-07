@@ -1,0 +1,1197 @@
+678
+
+IEEE TRANSACTIONS ON PATTERN ANALYSIS AND MACHINE INTELLIGENCE, VOL. 32, NO. 4, APRIL 2010
+
+An Experimental Study of Graph Connectivity for Unsupervised Word Sense Disambiguation
+Roberto Navigli and Mirella Lapata
+
+Abstract—Word sense disambiguation (WSD), the task of identifying the intended meanings (senses) of words in context, has been a long-standing research objective for natural language processing. In this paper, we are concerned with graph-based algorithms for large-scale WSD. Under this framework, finding the right sense for a given word amounts to identifying the most “important” node among the set of graph nodes representing its senses. We introduce a graph-based WSD algorithm which has few parameters and does not require sense-annotated data for training. Using this algorithm, we investigate several measures of graph connectivity with the aim of identifying those best suited for WSD. We also examine how the chosen lexicon and its connectivity influences WSD performance. We report results on standard data sets and show that our graph-based approach performs comparably to the state of the art.
+Index Terms—Word sense disambiguation, graph connectivity, semantic networks, social network analysis.
+Ç
+
+1 INTRODUCTION
+WORD sense disambiguation (WSD), the ability to identify the intended meanings of words (word senses) in context, is a central research topic in Natural Language Processing (NLP). Sense disambiguation is often characterized as an intermediate task, which is not an end in itself, but essential for many applications requiring broad-coverage language understanding. Examples include machine translation [1], information retrieval [2], question answering [3], and summarization [4].
+Recent advances in WSD have benefited greatly from the availability of corpora annotated with word senses. Most accurate WSD systems to date exploit supervised methods which automatically learn cues useful for disambiguation from hand-labeled data. Although supervised approaches outperform their unsupervised alternatives (see [5], [6] for overviews), they often require large amounts of training data to yield reliable results [7], and their coverage is typically limited to the words for which sense-labeled data exist. Unfortunately, creating sense-tagged corpora manually is an expensive and labor-intensive endeavor [8] which must be repeated for new domains, languages, and sense inventories. Given the data requirements for supervised WSD and the current paucity of suitable data for many languages and text genres, unsupervised approaches would seem to offer nearterm hope for large-scale sense disambiguation.
+In the field of WSD, the term unsupervised is commonly used to describe approaches that perform sense disambiguation without resorting to labeled training data
+. R. Navigli is with the Dipartimento di Informatica, Universita` di Roma “La Sapienza,” Via Salaria, 113, 00198 Roma, Italy. E-mail: navigli@di.uniroma1.it.
+. M. Lapata is with the School of Informatics, University of Edinburgh, 10 Crichton Street, Edinburgh EH8 9AB, UK. E-mail: mlap@inf.ed.ac.uk.
+Manuscript received 31 May 2008; revised 3 Dec. 2008; accepted 28 Jan. 2009; published online 4 Feb. 2009. Recommended for acceptance by J. Hu. For information on obtaining reprints of this article, please send e-mail to: tpami@computer.org, and reference IEEECS Log Number TPAMI-2008-05-0317. Digital Object Identifier no. 10.1109/TPAMI.2009.36.
+0162-8828/10/$26.00 ß 2010 IEEE
+
+(see [9], [10]). Importantly, these approaches are not knowledge-free since they are expected to disambiguate instances according to a preexisting sense inventory and often exploit its structure and relations in order to perform the disambiguation task more accurately. A more restrictive view of “unsupervised” applies to methods for sense induction or discrimination, which attempt to automatically identify all possible senses of an ambiguous word without an inventory or labeled training data (see [11], [12]). The induced senses here have no external meaning, they only match natural divisions in the data with respect to the task.
+Throughout this paper, we will use the term unsupervised to refer to knowledge-based WSD methods that employ an existing sense inventory but no labeled data (see also [13], [14] for a more detailed discussion of these issues). Most of these methods can be broadly divided in two categories, namely, graph-based ones and similarity-based ones. Graph-based algorithms often consist of two stages [4], [9], [15]. First, a graph is built from a lexical knowledge base representing all possible interpretations of the word sequence being disambiguated. Graph nodes correspond to word senses, whereas edges represent dependencies between senses (e.g., synonymy and antonymy). Next, the graph structure is assessed to determine the importance of each node. Here, sense disambiguation amounts to finding the most “important” node for each word. Similarity-based algorithms assign a sense to an ambiguous word by comparing each of its senses with those of the words in the surrounding context [10], [16]. The sense whose definition has the highest similarity is assumed to be the correct one. The algorithms differ in the type of similarity measure they employ and the adopted definition of context, which can vary from a few words to the entire corpus. In graph-based methods, word senses are determined collectively by exploiting dependencies across senses, whereas in similarity-based approaches, each sense is determined for each word individually without considering the senses assigned to neighboring words. Experimental comparisons between the two algorithm types (e.g., [9], [17]) indicate that
+Published by the IEEE Computer Society
+
+NAVIGLI AND LAPATA: AN EXPERIMENTAL STUDY OF GRAPH CONNECTIVITY FOR UNSUPERVISED WORD SENSE DISAMBIGUATION
+
+679
+
+graph-based algorithms outperform similarity-based ones, often by a significant margin.
+In this paper, we focus on graph-based methods and investigate in depth the role of graph structure in determining WSD performance. Specifically, we compare and contrast various measures of graph connectivity that assess the relative importance of a node within the graph. Graph theory is abundant with such measures and evaluations have been undertaken in the context of studying the structure of a hyperlinked environment [18] and within social network analysis [19]. Our experiments attempt to establish whether some of these measures are particularly appropriate for graph-based WSD. We also investigate the role of the chosen lexicon and its contribution to WSD. The inventory is of primary importance here as it determines the shape and structure of the smaller subgraphs upon which WSD takes place. Such a comparative study is novel; previous work restricts itself to a single lexicon and measure which is either devised specifically for WSD [4] or adopted from network analysis [9], [15]. Our contributions are threefold: a general framework for graph-based WSD, an empirical comparison of a broad range of graph connectivity measures using standard evaluation data sets, and an investigation of the influence of the WordNet sense inventory and its graph structure on WSD.
+2 RELATED WORK
+Measures of graph connectivity have been studied extensively in the social sciences, especially within the field of Social Network Analysis (SNA) [20]. A social network is a set of people or groups of people with some pattern of contacts or interactions between them. Examples include the patterns of friendship between individuals or the business relationships between companies. One of the fundamental problems in network analysis is to determine which individuals are most central or important in the network (by being most connected or having most influence) and how they are connected to one another. Quantifying centrality and connectivity allows us to characterize the structure and properties of large networks and make predictions about their behavior (e.g., what happens if the network becomes more or less connected).
+Recent years have witnessed great interest in network research, partly due to the expansion of the World Wide Web and the development of link analysis algorithms for information retrieval. Among these, PageRank [21] and HITS [22] have been extremely influential. PageRank assigns a numerical weighting to each element of a hyperlinked set of documents, with the purpose of measuring its relative importance within the set, whereas HITS rates Web pages for their authority and hub values. Hubs and authorities exhibit a mutually reinforcing relationship: A good hub is a document that points to many others, and a good authority is a document that many documents point to (we discuss HITS and PageRank more formally in Section 4). Beyond information retrieval, link analysis algorithms have been applied in a variety of tasks. Examples include spam detection [23], topic-oriented crawling [24], keyword searching in relational databases [25], and measuring citation impact factor [26].
+Graph-based approaches have also enjoyed growing popularity within NLP. This is because, in many cases, one
+
+is faced with the problem of selecting a single best candidate out of many interrelated objects. Word sense disambiguation is a case in point here. Assuming that we have access to a dictionary which lists for each word its different senses, we can work out the multiple meanings of a word sequence (e.g., sentence, paragraph, and document) by looking up the meaning of individual words in our dictionary. These different interpretations can be compactly represented as a graph where nodes correspond to senses and edges to sense relations (e.g., synonymy and hyponymy). Now, our task is to come up with a single sense for each ambiguous word in context. This can be done intuitively by selecting the sense with the most connections (i.e., incoming edges) in the graph [4], [27]. These connections can be weighted according to semantic type (e.g., synonymy relations are more important than hyponymy). In other work [15], senses are scored by taking edge paths into account. The PageRank algorithm has also been used to induce a ranking of the senses of an ambiguous word [9], [28]. Graph algorithms are appealing to WSD since they essentially work in an unsupervised setting without requiring data hand labeled with correct word senses.
+Graph algorithms have also been applied to word sense induction, the task of automatically inferring the senses of a given target word without recourse to a dictionary [29], [30]. For example, in the HyperLex algorithm [29], words are taken as the nodes of the graph and word co-occurrence represents an edge between two nodes. Detecting the different senses of a word thus amounts to isolating the high-density components in this co-occurrence graph. Although we focus here primarily on unsupervised methods, it is worth pointing out that graph algorithms such as Label Propagation [31] have been successfully employed in supervised WSD [32]. Beyond WSD, graph-based methods have been adopted in many NLP tasks such as summarization [33], [34], [35], keyword extraction [34], sentiment analysis [36], sentence retrieval for question answering [37], ontology learning [38], human conversation analysis [39], and for estimating word dependency distributions [40].
+Despite the popularity of graph-based methods in NLP, there have been virtually no studies assessing how graph connectivity and the different ways of measuring it affects different tasks. A large number of graph connectivity metrics have been proposed within social network analysis and applied to different networks. Recent research shows that there is no single universally appropriate metric [41]. Previous work has used almost exclusively two metrics, either variants of degree centrality [4], [27] or PageRank [9], [28]. This is in marked contrast with similarity-based approaches, where several studies have evaluated the effect of similarity measures on WSD performance [42], [43]. Another related issue concerns the dictionary employed for constructing the sense graph. The latter shapes the topology of the graph and determines its connectivity patterns. For instance, a densely connected graph will be created from a dictionary that lists many sense relations. Our own work [44] has explored some of these issues, in a rather restricted setting. Specifically, we used the graph algorithm presented in [15] to build the sentence representations used to assess the performance of graph connectivity measures. The algorithm builds the sense graph by consulting a handconstructed grammar that determines which graph edge sequences are valid. Unfortunately, this casts doubt on the
+
+680
+
+IEEE TRANSACTIONS ON PATTERN ANALYSIS AND MACHINE INTELLIGENCE, VOL. 32, NO. 4, APRIL 2010
+
+generalizability of our results since the connectivity measures are applied to an idealized graph with only meaningful edges. So, it is not clear whether differences in WSD performance are due to a specific connectivity measure, to the graph construction process, or to their interaction.
+In this paper, we analyze the impact of connectivity metrics for unsupervised WSD on a sounder empirical and theoretical footing. We devise a general-purpose graphbased algorithm that does not rely on a hand-constructed grammar. We analyze its computational complexity depending on the connectivity measure of choice and provide a detailed study on how WordNet and its relations (number and type) affect WSD performance. To preview our results, we find that Degree, a relatively simple measure, outperforms more sophisticated alternatives and delivers state-ofthe-art performance. We also find that lexicons with many connections between senses are beneficial for graph-based WSD. In all cases, we present results on benchmark data sets in the context of a competitive baseline algorithm [45] (contrary to [44], where we compare against a naive baseline that selects a sense for each word at random).
+3 GRAPH-BASED WSD
+In order to isolate the impact of graph connectivity measures on WSD, we devised a fairly general disambiguation algorithm that has few parameters and relies almost exclusively on graph structure for inferring word senses. In common with much current work in WSD, we are assuming that meaning distinctions are provided by a reference lexicon which encodes a discrete set of senses for each word. Although our experiments will use the WordNet sense inventory [46], neither our graph-based algorithm nor the proposed connectivity measures are limited to this particular lexicon. Resources with alternative sense distinctions and structure could also serve as input to our method. In the following, we first provide a brief introduction to WordNet. Next, we describe our WSD algorithm and show a working example.
+3.1 The Lexicon WordNet is an online lexical reference system1 whose design is inspired by psycholinguistic theories of human lexical memory [46]. The WordNet lexicon contains nouns, verbs, adjectives, and adverbs. Lexical information is organized in terms of word meanings, rather than word forms. Senses in the WordNet database are represented relationally by synonym sets (henceforth synsets)—the sets of all words sharing a common sense. As an example, consider three senses of the verb drink, “consume liquids,” “consume alcohol,” and “toast.” These are, respectively, represented as:
+(1) a. fdrink1v; imbibe3vg, b. fdrink2v; booze1v; fuddle2vg, c. ftoast2v; drink3v; pledge2v; salute1v; wassail2vg.
+Each word in a synset is associated with a part of speech which we denote with a subscript: n stands for noun, v for verb, a for adjective, and r for adverb. The superscript denotes the sense number associated with each word (e.g., drink2v corresponds to the second sense of the verb drink).
+1. WordNet is available from http://wordnet.princeton.edu.
+
+Each synset is associated with a gloss, i.e., a textual
+
+definition which explains its meaning. For example, the
+
+synset in 1b is defined as “consume alcohol.” Moreover, the
+
+synsets for each word are ranked according to their
+
+frequency of occurrence in the SemCor corpus [47] which
+
+is a subset of the Brown corpus annotated with word senses
+
+(see Section 6.1 for details). Thus, the first sense given for a
+
+word in WordNet is attested more times in SemCor than the
+
+second one, which, in turn, is more frequent than the third
+
+one, etc. The latest WordNet version (3.0) contains approxi-
+
+mately 155,000 words organized in over 117,000 synsets.
+
+WordNet also encodes lexical and semantic relations.
+
+The former connect pairs of word senses, whereas the latter
+
+relate synsets. Lexical relations in WordNet are nominaliza-
+
+tion (e.g., the noun drinking1n is a nominalization of the verb
+
+drink1v), antonymy (e.g., cold1a is an antonym of hot1a),
+
+pertainymy (e.g., dental1a pertains to tooth1n), and so on.
+
+Examples of semantic relations are hypernymy (e.g., {milk1n}
+
+is
+
+a
+
+kind
+
+of
+
+{
+
+beverage1n
+
+;
+
+drink
+
+3 n
+
+;
+
+drinkable
+
+1 n
+
+;
+
+potable1n
+
+})
+
+and
+
+meronymy (e.g., {milk1n} has-part {protein1n}). Notice that we
+
+can transform a lexical relation into a semantic relation by
+
+extending the relation existing between a pair of word
+
+senses to the synsets which contain them. For example, we
+
+can extend the nominalization relation in 2a to the two
+
+synsets containing the senses drinking1n and drink1v (see 2b):
+
+1 NOM
+
+1
+
+(2) a. drinkingn ÀÀ! drinkv,
+
+1
+
+1
+
+2 NOM
+
+b. fdrinkingn; imbibingn; imbibitionng ÀÀ!
+
+fdrink
+
+1 v
+
+;
+
+imbibe
+
+3 v
+
+g,
+
+where NOM denotes the nominalization relation. We can view WordNet as a graph whose nodes are
+synsets and edges lexical and semantic relations between synsets. Even though WordNet does not include a gloss relation, we can induce it heuristically [48]: A pair of synsets S and S0 is connected via a gloss relation if an unambiguous word w 2 S0 occurs in the gloss of S.2 Note that w must be unambiguous; otherwise, S should have been connected with the appropriate sense of w. For example, the first sense of milkn is defined as “a white nutritious liquid secreted by mammals and used as food by human beings.” Here, the words nutritiousa, mammaln, and human beingn have only one sense in WordNet, so we can infer the following gloss relations:
+
+1 GLOSS
+
+1
+
+(3) a. milkn ÀÀÀ! nutritiousa,
+
+1 GLOSS
+
+1
+
+b. milkn ÀÀÀ! mammaln,
+
+1 GLOSS
+
+1
+
+c. milkn ÀÀÀ! human beingn.
+
+In Fig. 1, we show an excerpt of the WordNet graph centered around the synset {drink1v; imbibe3v}. In this graph, nodes correspond to synsets which we abbreviate to a single word in the synset (e.g., drink1v corresponds to {drink1v,imbibe3v}). The node for drink1v is drawn as a dark gray ellipse, whereas adjacent vertices (senses) are shown as white ellipses (e.g., consume2v; beverage1n). In graph theory, an adjacent vertex3 of a graph is a vertex that is connected to
+another vertex with an edge within the graph. In our case,
+adjacent vertices result from relations in WordNet. Senses
+
+2. WordNet has recently released sense disambiguated glosses (http:// wordnet.princeton.edu/glosstag) which we could use instead of the heuristic approach described above. However, these are specific to English, and our aim is to be as language neutral as possible.
+3. Throughout this paper, we use the terms “vertex” and “node” interchangeably.
+
+NAVIGLI AND LAPATA: AN EXPERIMENTAL STUDY OF GRAPH CONNECTIVITY FOR UNSUPERVISED WORD SENSE DISAMBIGUATION
+
+681
+
+Fig. 1. An excerpt of the WordNet graph centered around drink1v.
+which are not directly adjacent to drink1v, but reachable through a sequence of edges are shown in light gray (e.g., toast4n; milk1n). Notice that the graph is undirected and does not explicitly encode different kinds of relations.
+3.2 The WSD Algorithm
+Our disambiguation algorithm proceeds incrementally on a sentence-by-sentence basis. Initially, we build a graph G ¼ ðV ; EÞ for each target sentence  which we induce from the graph of the reference lexicon. We assume sentences are part-of-speech tagged, so our algorithm considers content words only (i.e., nouns, verbs, adjectives, and adverbs). As explained in Section 2, the nodes in the graph are word senses and the edges semantic relations. Given this graph G, we select for each content word wi 2  the most appropriate sense Swi 2 SensesðwiÞ, where SensesðwiÞ is the set of senses of wi listed in WordNet. We accomplish this by ranking each vertex in the graph G according to its importance, which we operationalize in terms of graph connectivity.
+More formally, given a word sequence  ¼ ðw1; w2; . . . ; wnÞ, we perform the following steps to construct G:
+1. Let V :¼ i¼1 Sn SensesðwiÞ denote all possible word senses in . We set V :¼ V and E :¼ ;.
+2. For each node v 2 V, we perform a depth-first search (DFS) of the WordNet graph: Every time we encounter a node v0 2 V (v0 6¼ v) along a path v; v1; . . . ; vk; v0 of length L, we add all intermediate nodes and edges on the path from v to v0: V :¼ V [ fv1; . . . ; vkg and E :¼ E [ ffv; v1g; . . . ; fvk; v0gg.
+In DFS, edges are explored out of the most recently discovered vertex v that still has unexplored edges leaving it. When all of v’s edges have been explored, the search “backtracks” to explore edges leaving the vertex from which v was discovered. This process continues until we have discovered all the vertices that are reachable from the original source vertex. Our use of depth-first search is motivated by computational efficiency. However, there is nothing inherent in our formulation that restricts us to this graph traversal algorithm. For instance, we could have adopted breadth-first search (BFS) which has been previously employed in graph-based WSD [49].
+Let us illustrate our graph construction process with a simple example. Consider the sentence She drank some milk. Here, the content words are drink and milk (i.e.,  ¼ ðdrinkv; milknÞ) for which WordNet lists 5 and 4 senses, respectively (we omit somea from the example for the sake of brevity). Initially, we set V :¼ fdrink1v; . . . ; drink5v; milk1n; . . . ; milk4ng; V :¼ V, and E :¼ ;. Next, we perform a DFS from the vertex
+
+drink1v. In WordNet, this vertex is adjacent to drink1n and drinker2n (via a nominalization relation), and to beverage1n (via a gloss relation). We first follow drink1n, which is, in turn, connected to beverage1n. The latter is adjacent to milk1n, which
+
+is a sense in V. Consequently, we add to the graph all edges
+
+and vertices in the path between drink1v and milk1n: V :¼
+
+V [ fdrink1n; beverage1ng, a n d E :¼ E [ ffdrink1v; drink1ng;
+
+fdrink
+
+1 n
+
+;
+
+beverage1n
+
+g
+
+;
+
+fbeverage
+
+1 n
+
+;
+
+milk1n
+
+gg
+
+(see
+
+Fig.
+
+2a,
+
+new
+
+vertices and edges are highlighted in bold).
+
+When the search backtracks to beverage1n, another path can
+
+be followed leading to milk2n. We therefore set V :¼ V [
+
+ff
+
+ood1n
+
+;
+
+nutriment
+
+1 n
+
+g,
+
+and
+
+set
+
+E
+
+:¼
+
+E
+
+[ ffbeverage1n; food1ng;
+
+ffood1n; nutriment1ng; fnutriment1n; milk2ngg (see Fig. 2b). The
+
+search next backtracks to drink1v, so a new adjacent vertex can
+
+be followed. As mentioned earlier, drink1v is also connected to
+
+beverage1n ( b e s i d e s drink1n) , s o w e a d d t h e e d g e
+
+fdrink
+
+1 v
+
+;
+
+beverage1n
+
+g
+
+to
+
+E
+
+(Fig.
+
+2c).
+
+Analogously,
+
+a
+
+new
+
+path
+
+from drink1v passes through drinker2n and beverage1n, leading
+
+to the following update: V :¼ V [ fdrinker2ng, and E :¼
+
+E [ ffdrink1v; drinker2ng; fdrinker2n; beverage1ngg (Fig. 2d).
+
+At this point, the DFS from drink1v is completed as we
+
+cannot find any more edge paths connecting it to other
+
+senses in V. We next perform a new DFS from drink2v. The
+
+latter is adjacent in WordNet to drinker2n and boozing1n. Since
+
+we have already created a vertex for drinker2n (Fig. 2d), we
+
+simply
+
+add
+
+the
+
+edge
+
+fdrink
+
+2 v
+
+;
+
+drinker
+
+2 n
+
+g
+
+to
+
+E
+
+(Fig.
+
+2e)
+
+and
+
+create a new vertex for boozing1n (Fig. 2f) which, in turn, is
+
+connected to beverage1n (through the gloss relation). The
+
+search now stops, as beverage1n has been visited before, and
+
+the graph is updated: V :¼ V [ fboozing1ng, and E :¼
+
+E [ ffdrink2v; boozing1ng; fboozing1n; beverage1ngg.
+
+The DFS does not find any related senses for drink3v and
+
+drink4v, so we move on to drink5v. This sense is adjacent to
+
+drinker2n and boozing1n in WordNet. As both vertices have
+
+been
+
+visited
+
+before,
+
+we
+
+add
+
+the
+
+edges
+
+fdrink
+
+5 v
+
+;
+
+drinker
+
+2 n
+
+g,
+
+and fdrink5v; boozing1ng to E (Figs. 2g and 2h). The graph
+
+construction procedure now terminates as there are no
+
+more paths connecting senses in V. The final graph
+
+represents the different meanings of the sentence She drank
+
+some milk (3 Á 2 ¼ 6 interpretations in total). Merely by
+
+inspection, we can see that the graph is relatively dense.
+
+Each vertex added during graph construction is 3 edges
+
+apart from some vertex in the original set V of word senses
+
+(where 3 is half the maximum length of any path). For
+
+instance, beverage1n is at distance one from milk1n, whereas food1n is at distance two from milk1n and milk2n.
+Given this graph, we must next evaluate which one of
+
+the meanings of drinkv and milkn (see the dark gray ellipses
+
+in Fig. 2) is most important. Many measures of graph
+
+connectivity can be used to accomplish this, we provide a
+
+detailed discussion in the following section. Here, we
+
+briefly note that these measures can be either local or global.
+
+Local measures capture the degree of connectivity conveyed
+
+by a single vertex in the graph toward all other vertices,
+
+whereas global measures estimate the overall degree of
+
+connectivity of the entire graph.
+
+Arguably, the choice of connectivity measure influences
+
+the selection process for the highest ranked sense. Given a
+
+local measure l and the set of vertices V, we induce a ranking of the vertices rankl such that ranklðvÞ ranklðv0Þ iff lðvÞ ! lðv0Þ. Then, for each word wi 2 , we select the best
+
+682
+
+IEEE TRANSACTIONS ON PATTERN ANALYSIS AND MACHINE INTELLIGENCE, VOL. 32, NO. 4, APRIL 2010
+
+Fig. 2. Graph construction process for the sentence She drank some milk ( ¼ ðdrinkv; milkn)).
+
+ranking sense in SensesðwiÞ according to rankl. The ranking function here operates on the entire set of vertices V and is thus realized for all the senses of all words at once. Alternatively, we could define the ranking function on the senses for each word. The former formulation represents the gist of the sentence rather than the meaning of isolated words, thus highlighting those concepts that are more likely to convey core meaning. A global measure g characterizes the overall graph structure G with a single number and is thus not particularly helpful in selecting a unique sense for ambiguous words—G collectively represents all interpretations of . We get around this problem, by applying g to each interpretation of  and selecting the highest scoring one. An interpretation is a subgraph G0  G such that G0 includes one and only one sense of each word in sentence  and all their corresponding intermediate nodes. So, if our sentence has six interpretations, we will measure the connectivity of the six resulting subgraphs and choose the best ranking one.
+The disambiguation algorithm presented above has a limited notion of context, and only neighboring words within the same sentence contribute to the meaning of an ambiguous word. It thus differs from [9], [27], who build a disambiguation graph for an entire document and assign the same sense to all occurrences of a word. In our case, the senses of a word can vary across sentences and documents.
+
+There is nothing inherent in our algorithm that restricts us to sentences. We could just as well build and disambiguate a graph for a document. We sacrifice a small amount of accuracy—previous work [50] shows that polysemous words appearing two or three times in the same discourse tend to share the same sense—to gain efficiency (as we shall see below that disambiguating with global connectivity measures is computationally demanding). We also depart from [9], [27] in our use of unweighted unlabeled edges. The reasons for this are twofold. First, there is no agreed upon method for inferring edge weights (these are set by hand in [4], [27] and determined by gloss overlap in [9]). Second, aside from the problem of computing the weight of an edge, which warrants a separate study on its own, we wanted to isolate the influence of graph connectivity metrics on WSD without any potentially confounding factors. Finally, we should point out that our algorithm can be used without resorting to use of the first sense information available in WordNet. The latter is often used (e.g., [27]) to break ties; however, we default to random choice unless otherwise stated. The sense frequencies in WordNet are derived from the hand-labeled SemCor corpus (see Section 3.1). Albeit valuable, these are not typically available in other languages or domains.
+
+NAVIGLI AND LAPATA: AN EXPERIMENTAL STUDY OF GRAPH CONNECTIVITY FOR UNSUPERVISED WORD SENSE DISAMBIGUATION
+
+683
+
+4 CONNECTIVITY MEASURES
+
+In this section, we describe the measures of graph
+
+connectivity that we consider for unsupervised WSD.
+
+Although our measures can be applied to both directed
+
+and undirected graphs, in the context of WSD, we are
+
+assuming that we are dealing with undirected graphs. This
+
+is motivated by the fact that semantic relations often have
+
+an inverse counterpart (e.g., hypernymy is the inverse
+
+relation of hyponymy). Moreover, the assumption enables
+
+the use of knowledge resources which do not explicitly
+
+specify relation directions or provide some connections
+
+without an inverse counterpart.
+
+We first introduce the distance function dðu; vÞ, which is
+
+used by some of the measures discussed below:
+
+&
+
+dðu; vÞ ¼ length of shortest path; if u e> v; ð1Þ
+
+K;
+
+otherwise;
+
+where
+
+u
+
+>
+e
+
+v
+
+indicates
+
+the
+
+existence
+
+of
+
+a
+
+path
+
+from
+
+u
+
+to
+
+v
+
+and K is a conversion constant [18], which replaces the
+
+1 distance with an integer when v is not reachable from
+
+u (we choose K ¼ jV j, as the length of any shortest path
+
+is <jV j). The length of a path is calculated as the number
+
+of edges in the path. For example, in Fig. 2h,
+
+dðdrink1v; milk2nÞ ¼ 4 and dðdrink1v; milk1nÞ ¼ 2.
+
+4.1 Local Measures
+Local measures of graph connectivity determine the degree of relevance of a single vertex v in a graph G. They can thus be viewed as measures of the influence of a node over the network. Formally, we define a local measure l as:
+
+l : V ! ½0; 1:
+
+ð2Þ
+
+A value close to one indicates that a vertex is important, whereas a value close to zero indicates that the vertex is peripheral.
+Several local measures of graph connectivity have been proposed in the literature (see [20] for a comprehensive overview). Many of these rely on the notion of centrality: A node is central if it is maximally connected to all other nodes. In the following, we consider three best known measures of centrality, namely, degree, closeness, and betweenness [51], and variants thereof.
+
+4.1.1 Degree Centrality
+The simplest way to measure vertex importance is by its degree, i.e., the number of edges terminating in a given vertex:
+
+degðvÞ ¼ jffu; vg 2 E : u 2 V gj:
+
+ð3Þ
+
+A vertex is central, if it has a high degree. Conversely, a disconnected vertex has degree zero. Degree centrality is the degree of a vertex normalized by the maximum degree:
+
+CDðvÞ ¼ degðvÞ : ð4Þ jV j À 1
+
+According to the graph in Fig. 2h,
+
+CDÀdrinkv1Á ¼ 3 ; CDÀdrinkv2Á ¼ CDÀdrinkv5Á ¼ 2 ;
+
+14
+
+14
+
+TABLE 1 Values of Local Connectivity Measures for the Nodes in Fig. 2h
+
+The best scores for the senses of drinkv and milkn for each connectivity measure are shown in bold face.
+
+and CDðmilk1nÞ ¼ CDðmilk2nÞ ¼ 114 . So, the sense for drinkv with the highest degree score is drink1v, whereas there is a tie for milkn. As discussed earlier (see Section 3.2), in this
+case, we choose randomly. The degree centrality scores for
+all graph nodes are given in Table 1. We show the best
+scores for the senses of drinkv and milkn in bold face. The score for disconnected nodes is zero (e.g., drink3v).
+
+4.1.2 Eigenvector Centrality
+A more sophisticated version of degree centrality is eigenvector centrality. Whereas the former gives a simple count of the number of connections a vertex has, the latter acknowledges that not all connections are equal. It assigns relative scores to all nodes in the graph based on the recursive principle that connections to nodes having a high score contribute more to the score of the node in question [52]. The term eigenvector centrality stems from the fact that it calculates the dominant eigenvector of a matrix associated with (and possibly equal to) the adjacency matrix of the target graph. PageRank [21] and HITS [22] are variants of the eigenvector centrality measure and have been a popular choice in graph-based WSD (see Section 2).
+PageRank determines the relevance of a node v recursively based on a Markov chain model. All nodes that link to v contribute toward determining its relevance. Each contribution is given by the page rank value of the respective node (P RðuÞ) divided by the number of its neighbors:
+P RðvÞ ¼ ð1 À Þ þ  : X P RðuÞ ð5Þ jV j fu;vg2E outdegreeðuÞ
+
+The overall contribution is weighted with a damping
+
+factor , which implements the so-called random surfer
+
+model: With probability 1 À , the random surfer is
+
+expected to discontinue the chain and select a random
+
+node,
+
+with
+
+relevance
+
+1 jV
+
+j
+
+.
+
+Thus,
+
+if
+
+a
+
+node
+
+is
+
+disconnected,
+
+its
+
+PageRank value is given by the first term in (5) (this value is
+
+small—close to zero—when V is large).
+
+In contrast, Hypertext Induced Topic Selection (HITS)
+
+determines two values for each node v: the authority (aðvÞ)
+
+and the hub value (hðvÞ). In a directed graph, these are
+
+defined in terms of one another in a mutual recursion:
+
+684
+
+IEEE TRANSACTIONS ON PATTERN ANALYSIS AND MACHINE INTELLIGENCE, VOL. 32, NO. 4, APRIL 2010
+
+X
+
+X
+
+hðvÞ ¼
+
+aðuÞ; aðvÞ ¼
+
+hðuÞ:
+
+ð6Þ
+
+u:ðv;uÞ2E
+
+u:ðu;vÞ2E
+
+Intuitively, a good hub is a node that points to many good authorities, whereas a good authority is a node that is pointed to by many good hubs. The hub and authority values of a disconnected node are both zero.
+A major difference between HITS and PageRank is that the former is computed dynamically on a subgraph of relevant pages, whereas the latter takes the entire graph structure into account.
+Both algorithms iteratively calculate their ranking scores
+through increasingly precise approximations. In Fig. 2h,
+the authority values for the nodes representing the senses of drinkv and milkn are aðdrink1vÞ ¼ 0:39, aðdrink2vÞ ¼ aðdrink5vÞ ¼ 0:23, aðmilk1nÞ ¼ 0:17, and aðmilk2nÞ ¼ 0:02. The PageRank values for these nodes are P Rðdrink1vÞ ¼ 0:08, P Rðdrink2vÞ ¼ P Rðdrink5vÞ ¼ 0:05, and P Rðmilk1nÞ ¼ P Rðmilk2nÞ ¼ 0:03. HITS unequivocally selects drink1v and milk1n as the best senses for our sentence. PageRank agrees with HITS on the sense assignment for drinkv, but yields a
+tie for milkn (again to be resolved by random selection).
+Generally, HITS tends to deliver finer-grained sense
+rankings than PageRank. In Fig. 2h, ranking all nodes
+
+where st is the number of the shortest paths from s to t, and stðvÞ the number of the shortest paths from s to t that pass through vertex v. We normalize by dividing betweennessðvÞ by the maximum number of node pairs excluding v:
+
+CBðvÞ ¼ betweennessðvÞ : ð9Þ ðjV j À 1ÞðjV j À 2Þ
+
+The intuition behind betweenness is that a node is
+
+important if it is involved in a large number of paths
+
+compared to the total set of paths. The betweenness of a
+
+disconnected node is zero as no path can pass through it.
+
+In Fig. 2h, the vertices fdrink2v; beverage1ng are connected
+
+by
+
+two
+
+shortest
+
+paths:
+
+drink2v
+
+;
+
+drinker
+
+2 n
+
+;
+
+beverage
+
+1 n
+
+and
+
+drink2v; boozing1n; beverage1n. Thus, drink2v;beverage1n ¼ 2 and
+
+drink
+
+2 v
+
+;beverage
+
+1 n
+
+ðdrinker
+
+2 n
+
+Þ
+
+¼
+
+1.
+
+Once
+
+we
+
+obtain
+
+all
+
+
+
+values
+
+for
+
+drinker2n, we can calculate betweennessðdrinker2nÞ ¼ 12:19
+
+and
+
+CBðdrinker2nÞ
+
+¼
+
+12:19 14Á13
+
+¼
+
+0:067.
+
+As
+
+shown
+
+in
+
+Table
+
+1,
+
+drink1v has the highest betweenness score for drinkv. The
+
+senses of milkn score 0, since they are not an intermediate
+
+node in any path between the senses of drinkv and milkn.
+
+4.2 Global Measures
+
+with HITS delivers 10 distinct nonzero scores, whereas PageRank only six (see Table 1). Note that, since our graphs are undirected, the authority and hub values coincide. In fact, the edges ðu; vÞ and ðv; uÞ collapse to a
+
+Global connectivity measures are concerned with the structure of the graph as a whole rather than with individual nodes. Here, we discuss three well-known measures, namely, compactness, graph entropy, and edge density.
+
+single undirected edge fu; vg.
+
+4.2.1 Compactness
+
+4.1.3 Key Player Problem (KPP)
+
+With KPP, a vertex is considered important if it is relatively close to all other vertices [53]:
+
+P
+
+1
+
+KP P ðvÞ ¼ u2V :u6¼v dðu;vÞ ; ð7Þ jV j À 1
+
+where the numerator is the sum of the inverse shortest
+distances between v and all other nodes and the denomi-
+nator is the number of nodes in the graph (excluding v). The
+KPP of a disconnected node is a small constant, given by 1K ¼ 1jV j .
+For example, in Fig. 2h,
+
+This measure represents the extent of cross referencing in a graph [18]: When compactness is high, each vertex can be easily reached from other vertices. The measure is defined as:
+PP COðGÞ ¼ Max À u2V v2V dðu; vÞ ; ð10Þ
+Max À Min
+where Max ¼ K Á jV jðjV j À 1Þ is the maximum value the distance sum can assume (for a completely disconnected graph) and Min ¼ jV jðjV j À 1Þ the minimum value (for a fully connected graph). COðGÞ is zero when G is completely disconnected and one when G is a complete graph.
+Table 2 illustrates the compactness scores for the different interpretations (i.e., sense assignments) of our example
+
+À 1Á 3 þ 5 Á 12 þ 13 þ 14 þ 4 Á 114
+
+KP P drinkv ¼
+
+¼ 0:45:
+
+14
+
+KPP selects drink1v and milk1n as the best scoring senses for our sentence (see Table 1).
+KPP is similar to the better known closeness centrality measure [54] which is defined as the reciprocal of the total shortest distance from a given node to all other nodes. Here, we consider only KPP since it outperformed closeness centrality in our experiments.
+
+4.1.4 Betweenness Centrality
+The betweenness of vertex v is calculated as the fraction of the shortest paths between node pairs that pass through v [51]. Formally, betweenness is defined as:
+
+sentence. For instance, the compactness of graph (1) is COðGÞ ¼ ð5Á5Á4ÞÀð5Á4Þ ð5Á5Á4ÞÀ28 ¼ 8072 ¼ 0:90 (where K ¼ jV j ¼ 5). As can be seen, this graph obtains the highest score among all
+possible sense interpretations (here, drinkv disambiguates to drink1v and milkn to milk1n).
+
+4.2.2 Graph Entropy
+
+Entropy measures the amount of information (or, alterna-
+
+tively, uncertainty) in a random variable. In graph-theoretic
+
+terms, high entropy indicates that many vertices are equally
+
+important, whereas low entropy indicates that only a few
+
+vertices are relevant. We define a simple measure of graph
+
+entropy as:
+
+X
+
+HðGÞ ¼ À pðvÞlogðpðvÞÞ;
+
+ð11Þ
+
+betweennessðvÞ ¼ ; X stðvÞ s;t2V :s6¼v6¼t st
+
+v2V
+ð8Þ where the vertex probability pðvÞ is determined by the degree distribution f 2jEj degðvÞgv2V . To obtain a measure with a
+
+NAVIGLI AND LAPATA: AN EXPERIMENTAL STUDY OF GRAPH CONNECTIVITY FOR UNSUPERVISED WORD SENSE DISAMBIGUATION
+
+685
+
+TABLE 2 Global Measures Applied to Six Graphs Representing the Meanings of She Drank Some Milk According to WordNet
+
+½0; 1 range (0 for a totally disconnected graph, 1 for a
+complete graph), we divide HðGÞ by the maximum entropy
+given by log jV j. For example, the distribution associated with graph (1) in Table 2 is ð 312 ; 212 ; 412 ; 212 ; 112Þ (with jEj ¼ 6) yielding an overall graph entropy HðGÞ ¼ 2:18 log 5 ¼ 0:94. Graphs (5) and (6) have the highest entropy in Table 2.
+
+4.2.3 Edge Density
+Finally, we propose the use of edge density as a simple global connectivity measure. Edge density is calculated as the ratio of edges in a graph to the number of edges of a complete graph with jV j vertices (given by ðjV j2 Þ). Formally,
+
+jEðGÞj
+
+EDðGÞ ¼   ;
+
+ð12Þ
+
+jV j
+
+2
+
+where EDðGÞ has a ½0; 1 range, with 0 corresponding to a totally disconnected graph and 1 to a complete graph. For example, graph (1) in Table 2 has edge density
+
+and graph (2)
+
+66 EDðGÞ ¼ À5Á ¼ ¼ 0:60;
+2 10
+
+55 EDðGÞ ¼ À5Á ¼ ¼ 0:50:
+2 10
+
+4.2.4 Search Strategies
+The use of global connectivity measures makes our WSD algorithm susceptible to combinatorial explosion since all
+
+possible interpretations of a given sentence must be ranked (see the complexity analysis in Section 5). There are several heuristic search methods to solve combinatorial optimization problems [55]. Examples include local search, simulated annealing, and genetic algorithms. For our WSD problem, we would like to adopt a search strategy that obtains a reasonable interpretation, even though it is not always the best possible one. Although a detailed study of heuristic search algorithms falls outside the scope of this paper, we nevertheless compared two widely used methods, namely, simulated annealing (SA) and genetic algorithms (GAs). SA has been previously applied to WSD [56], while the use of GAs is novel to our knowledge. In the following, we briefly sketch how we adapt these algorithms to our task. We report on their performance in Section 6. In our setting, the search space consists of interpretations I ¼ ðS1; . . . ; SnÞ for a sentence  ¼ ðw1; . . . ; wnÞ such that Si 2 SensesðwiÞ for all i ¼ 1; . . . ; n.
+Simulated annealing. Initially, we randomly select an interpretation I for sentence . At each step, we (randomly) select a word from  and assign it a new sense also chosen at random. As a result, a new interpretation I 0 is produced. Next, we apply our global measure to the graph induced by I 0 and calculate the difference (ÁE) between its value and that of the graph obtained from the old interpretation I . If the new interpretation has a higher score, we adopt it (i.e., we set I :¼ I0). Otherwise, we either retain the old
+ÁE
+interpretation with probability 1 À e T or nonetheless switch ÁE
+to the new interpretation with probability e T , where T is a constant. The procedure is repeated u times. The algorithm terminates when we observe no changes in I after u steps. Otherwise, the entire procedure is repeated starting from the most recent interpretation.
+Genetic algorithms. Our genetic algorithm [57] starts from an initial random population P of p individuals (i.e., sentence interpretations) and iteratively creates a new population P 0 from a previous generation P by performing the following three steps:
+
+1. probabilistically select ð1 À rÞ Á p elements of P to be
+
+kept in P 0 (r 2 ½0; 1);
+
+2.
+
+probabilistically
+
+select
+
+rÁp 2
+
+pairs
+
+from
+
+P,
+
+apply
+
+a
+
+crossover operator to each pair, and add the
+
+resulting pair of individuals to P 0. We adopted
+
+single-point crossover, which, given two individuals
+
+ðS1; . . . ; SnÞ
+
+and
+
+ðS
+
+0 1
+
+;
+
+.
+
+.
+
+.
+
+;
+
+S
+
+0 n
+
+Þ,
+
+establishes
+
+a
+
+crossover
+
+point i 2 f1; . . . ; n À 1g and generates two offspring
+
+ðS1; . . . ; Si; Si0þ1; . . . ; Sn0 Þ and ðS10 ; . . . ; Si0; Siþ1; . . . ; SnÞ; 3. mutate m Á p individuals in P 0 (m 2 ½0; 1). Mutation
+
+consists of the random change of one sense in the
+
+chosen individuals.
+
+Probabilistic selection is performed by evaluating the
+
+fitness of each individual in the population. Our fitness
+
+function is the graph connectivity measure (e.g., edge
+
+density). The GA has three parameters: the size p of the
+
+population, the percentage r of individuals to be crossed,
+
+and the percentage m of individuals to be mutated. The procedure is repeated (we set P :¼ P 0) until the fitness
+
+value of an individual in P is larger than a threshold . The
+
+algorithm therefore requires more extensive parameter
+
+tuning than SA. Moreover, the execution time and memory
+
+usage are higher (at each iteration we need to compute
+
+order of p interpretations).
+
+686
+
+IEEE TRANSACTIONS ON PATTERN ANALYSIS AND MACHINE INTELLIGENCE, VOL. 32, NO. 4, APRIL 2010
+
+5 COMPLEXITY
+In this section, we discuss the complexity of our WSD algorithm. Recall from Section 3.2 that the algorithm proceeds on a sentence-by-sentence basis and consists essentially of two steps: a graph construction phase and a disambiguation phase. Let k be a constant denoting the highest number of senses a word can have in WordNet:
+
+k ¼ max jSensesðwÞj:
+
+ð13Þ
+
+w2WN
+
+Given a sentence  with n words, the number of senses in the associated sentence graph V is bound by
+
+ [n
+
+
+
+
+
+
+
+jVj ¼  SensesðwiÞ
+
+i¼1
+
+Xn jSensesðwiÞj
+i¼1
+
+Xn k ¼ kn:
+i¼1
+
+ð14Þ
+
+Our graph construction procedure executes a DFS from each vertex v 2 V. The running time for this is OðjVWNj þ jEWNjÞ [58], where VWN and EWN are the sets of vertices and edges in the entire WordNet graph. The number of edges jEWNj can be bound by k0jVWNj, where k0 is a constant equal to the maximum number of WordNet edges incident to any node in the WordNet graph.4 So, the cost of a single DFS is OðjVWNj þ k0jVWNjÞ ¼ OðjVWNjÞ. Given that the number of vertices in V is bound by kn 2 OðnÞ, the overall running time of the graph construction phase is OðnjVWNjÞ. In practice, however, the running time is closer to Oðn2Þ. In fact, a DFS can take OðnÞ time since we do not explore the entire WordNet network, the maximum number of incident edges is a small constant, and the number of vertices visited during the search must be at distance L.
+With a local measure l, the running time of the disambiguation phase is OðclðnÞÞ, where clðnÞ is the time cost incurred by l when applied to all OðnÞ nodes in the sentence graph. We report running times for each measure individually in Table 3. As can be seen, Degree complexity amounts to OðnÞ time if the sentence graph is represented with an adjacency list. Measures of eigenvector centrality require the application of the power method, and thus, take Oðn2Þ time. The time complexity of KPP [59] depends on the calculation of all shortest distances which costs Oðm þ nÞ for each vertex; here, m is the number of edges in the sentence graph and m 2 OðnÞ, as each vertex has a constant upper bound on the number of incident edges. Finally, for betweenness, an OðnmÞ-implementation has been described [60].
+Complexity increases substantially when global measures are employed. Calculating the score of a single graph (corresponding to one interpretation for sentence ) takes Oðn2Þ time (OðnÞ for Graph Entropy and Edge Density if an adjacency list is used). Exhaustively generating all possible interpretations is computationally prohibitive with OðknÞ complexity (recall that k is the maximum number of senses for a word in WordNet). Fortunately, we can reduce the search space to a very large constant  using the approximation algorithms described in Section 4.2.4. The running time of the approximated global measures is thus polynomial.
+
+4. In WordNet 2.0 k0 ¼ 627, however, only 80 nodes out of 115,510 have a degree greater than 100.
+
+TABLE 3 Time Complexity of Local and Global Measures
+6 EXPERIMENTAL SETUP
+6.1 Data We evaluated our connectivity measures on three benchmark data sets. Specifically, we used the SemCor corpus [47], the Senseval-3 [5], and Semeval-2007 [6] data sets. SemCor is the largest publicly available sense-tagged corpus. It is composed of 352 documents extracted from the Brown corpus. In 186 of these, all open class words (nouns, verbs, adjectives, and adverbs) have been sense annotated. The remaining 166 have sense tags for verbs only. The corpus was created to provide examples of senses in context. The order of senses in WordNet is based on their SemCor frequency. SemCor has been used extensively in many WSD approaches, both supervised and unsupervised.
+The Senseval-3 and Semeval-2007 data sets are subsets of the Wall Street Journal corpus. They each contain 2,037 and 465 words annotated with WordNet senses. They are publicly available and distributed as part of the Senseval (and Semeval) WSD evaluation exercises.5 Our experiments were run in the all-words setting: The algorithm must disambiguate all (content) words in a given text (in contrast, in the lexical sample setting, the data set consists of a selected few words and the system must disambiguate only these words).
+The above data sets are tagged with different versions of WordNet. SemCor uses version 1.6, Senseval-3 version 1.7.1, and Semeval-2007 version 2.1. These were normalized to WordNet 2.0 using publicly available sense mappings.6
+6.2 Reference Lexicons An important prerequisite to the graph-based algorithm described in Section 3.2 is the reference lexicon that provides the meaning distinctions as well as the lexical and semantic relations. Our experiments used the publicly available WordNet and an extended version created by the first author [61], which we refer to as EnWordNet. The latter contains additional edges (approximately 60,000) that link concepts across parts of speech via collocational relations. Such information is not explicitly encoded in WordNet, despite strong evidence that it helps in determining a word’s sense in context [62], [63].
+EnWordNet was created as follows: First, a list of collocations was compiled from the Oxford Collocations [64] and the Longman Language Activator [65] dictionaries as well as collocation Web sites. These were word pairs consisting of a base w (e.g., drinkv) and its collocate w0 (e.g., watern), each of which had to be attested in WordNet. Next, each base w was disambiguated manually with an
+5. For more information see http://www.senseval.org/. 6. Available from http://www.lsi.upc.edu/~nlp/web/.
+
+NAVIGLI AND LAPATA: AN EXPERIMENTAL STUDY OF GRAPH CONNECTIVITY FOR UNSUPERVISED WORD SENSE DISAMBIGUATION
+
+687
+
+TABLE 4 Network Properties for WordNet and EnWordNet
+
+Fig. 3. An excerpt of the Enriched WordNet graph centered around drink1v .
+appropriate WordNet sense S. The set of collocates fw0 : ðS; w0Þg was disambiguated automatically with the algorithm proposed in [15] while treating S as context. Disambiguated collocations were manually validated with the aid of a Web interface. This process resulted in an enriched version of WordNet 2.0 which included the same synsets as the original with additional relation edges. Fig. 3 shows an excerpt of this graph centered around drink1v. New nodes that have been added to WordNet are drawn as light gray ellipses (compare Fig. 1).
+To establish the degree to which WordNet and EnWordNet diverge, we examined their graph structure more closely [41]. Specifically, we analyzed how each dictionary fares in terms of the following properties:
+1. The small world effect, which implies that most pairs of vertices are possibly connected by a short path through the network. The small world effect is determined as the mean shortest distance between vertex pairs in the graph:
+1X 2 l ¼ 1 nðn À 1Þ i!j dði; jÞ;
+where dði; jÞ is the length of the shortest path between vertices i and j. A high value of l indicates a low small world effect, i.e., the degree of reachability between pairs of vertices in the graph is, on average, low. Following [41], we set dði; jÞ to zero if vertex j cannot be reached from i through an edge path in the graph (notice that this definition is different from the one given in (1)). 2. The clustering rate (or transitivity), which quantifies the number of triangles in the graph—sets of three vertices each of which is connected to each of the others. In social networks terminology, the friend of your friend is likely to be your friend. The clustering rate is defined as:
+C ¼ 3 Á number of triangles in the network ; number of connected triples of vertices
+where a “connected triple” is a single vertex with edges running to an unordered pair of others. A high C indicates that the associates of words are also directly associated. Clustering rate is complementary to the small world effect. The former measures graph
+
+connectivity in terms of interconnected neighborhoods, whereas the latter in terms of path length. 3. The cumulative degree distribution that is the probability that the degree is greater than or equal to k:
+X 1 Pk ¼ pk0 ;
+k0 ¼k
+where pk0 is the fraction of vertices in the graph that have degree k0. The cumulative distribution of complex networks such as the Web typically follows a power law.
+Table 4 shows the small world effect (l) and clustering rate (C) for the two dictionaries. EnWordNet has a considerably smaller mean shortest distance than WordNet (5.466 versus 7.243 edges) which indicates that it is more densely connected. Further evidence comes from the clustering rate which is increased in EnWordNet by a factor of 2. Fig. 4 plots the cumulative degree distributions for both dictionaries in log-log coordinates. As can be seen, both distributions follow a power law, with the line for EnWordNet being slightly smoother due to the increased connectivity discussed above.
+6.3 Graph Construction and Search
+In order to speed up the graph construction process, all paths connecting pairs of senses in both versions of WordNet were exhaustively enumerated and stored in a database which was consulted at runtime during disambiguation. We determined the optimal value of the maximum path length L experimentally. We ran our WSD algorithm on the SemCor data set using the Degree connectivity measure and the WordNet sense inventory while varying the path length from 0 to 10. We obtained 39 percent WSD accuracy at path length 0 (corresponding to random selection). This steadily increased until it reached a plateau at path length 4 with 50 percent accuracy. Longer paths did not bring additional gains. We thus fixed the maximum path length to 6, as it was longer than 4 but not as computationally expensive as 10.
+When interfaced with global connectivity measures, our algorithm relies on a heuristic search procedure to find the best ranking interpretation (cf. Section 4.2.4). We compared the performance of SA and GAs for this task. Our WSD algorithm was run with the Edge Density measure and the WordNet sense inventory. The number of iterations u for SA was set to 5,000 and, following [56], the constant T , initially set to 1.0, was reset to T :¼ 0:9 Á T after the u iterations. SA obtained an accuracy of 43.54 percent. As mentioned earlier (in Section 4.2), the GAs have more parameters. We performed a set of experiments with p 2 f50; 100g, r 2 f0:3; 0:6g, m ¼ 0:1, and  2 f0:1; 0:2; 0:3g. The highest accuracy was 39.20 percent (with parameters p ¼ 50; r ¼ 0:3; m ¼ 0:1;  ¼ 0:2) which is more than 4 percent below the result obtained with SA. We therefore opted for SA in all subsequent experiments with global measures.
+
+688
+
+IEEE TRANSACTIONS ON PATTERN ANALYSIS AND MACHINE INTELLIGENCE, VOL. 32, NO. 4, APRIL 2010
+
+TABLE 5 Performance of Connectivity Measures on SemCor
+
+Fig. 4. Cumulative degree distribution for WordNet and EnWordNet.
+
+6.4 Evaluation
+We evaluated our graph-based algorithm using the publicly available Senseval-3 scorer.7 For any given system, the scorer reports precision (the number of correct senses over the number of senses returned), recall (the number of correct senses over the total number of senses identified in the evaluation data set), and their combined F1 measure ( 2PR PþR ). Since our method provides an answer for all ambiguous words, precision, recall, and F1 are the same.8 We first examined the behavior of the graph connectivity measures described in Section 4 exhaustively on SemCor, the largest sense tagged data set available. Next, we evaluated the best performing measure on the smaller Senseval-3 and Semeval-2007 data sets and compared it with the state of the art.
+We also compared our results against two baselines. The first one randomly selects a sense for an ambiguous word. The second baseline is Lesk’s WSD algorithm, originally introduced in [16]. The algorithm assigns a sense to an ambiguous word by comparing the dictionary definitions (glosses in WordNet) of each of its senses with the words in the surrounding context. The sense whose definition has the highest overlap with the context is assumed to be the correct one. Following [45], we not only look for overlap between the glosses of two senses, but also between the glosses of their hypernyms, hyponyms, meronyms, holonyms, and troponyms. These extended glosses increase the algorithm’s coverage. We also adopt their overlap scoring mechanism which treats each gloss as a bag of words and assigns an n word overlap the score of n2. Analogously to our graph-based algorithm, we disambiguate words on a sentence-by-sentence basis and break ties randomly. Our inhouse implementation followed closely [45], the main difference being special purpose I/O routines to handle the relatedness relation from EnWordNet.
+Finally, as an upper bound, we used the first-sense heuristic which assigns all instances of an ambiguous word its most frequent sense according to SemCor. It is important to note that current unsupervised WSD approaches—and also many supervised ones—rarely outperform this heuristic [10].
+7. http://www.cse.unt.edu/~rada/senseval/senseval3/scoring/. 8. F1 ranges from 0 to 1. We report percentages in Tables 5, 7, and 8 for the sake of readability.
+
+7 RESULTS
+7.1 Experiments on SemCor
+Our results on SemCor are summarized in Table 5. We report the performance for WordNet and EnWordNet. The column “All” shows results on all words (monosemous and polysemous), whereas column “Poly” shows results on the subset of polysemous words.
+Let us first concentrate on the results we obtained with the standard WordNet inventory. As can be seen, all local measures perform better than the random sense baseline (Random) and worse than the first sense upper bound (First Sense).9 Degree, PageRank, and Betweeness are significantly better than the extended Lesk algorithm (ExtLesk; p < 0:01 using a 2 test). KPP is significantly better than ExtLesk on polysemous words (see the column Poly in Table 5), but the advantage disappears when taking all words into account. HITS performs significantly worse than ExtLesk, and Degree and PageRank significantly outperform all other local measures (p < 0:01). In fact, the two measures yield similar results (their difference is not statistically significant). This is not entirely surprising; the PageRank value of a node is proportional to its degree in undirected graphs. Previous research on undirected graphs has also experimentally shown that the two measures are broadly equivalent [66]. Among the global measures, Compactness and Edge Density are significantly better than Graph Entropy (p < 0:01). However, when compared to local measures and the ExtLesk, global measures lag behind (all differences are statistically significant). We conjecture that the inferior performance of the global measures is due to the necessary heuristic algorithm used for searching the interpretation space (see Section 6.3).
+We now discuss the performance of the different measures under the enriched WordNet. Here, we also observe that all measures are significantly worse than the first sense but better than the random baseline. The best global measure is Edge Density, which significantly outperforms Compactness and Graph entropy and ExtLesk (p < 0:01). The best local measures are Degree, Betweenness, and PageRank (their difference is not statistically significant). They all are significantly better than Edge Density and ExtLesk.
+9. The First Sense performance is an upper bound on SemCor as it is determined on the sense-tagged version of the very same corpus.
+
+NAVIGLI AND LAPATA: AN EXPERIMENTAL STUDY OF GRAPH CONNECTIVITY FOR UNSUPERVISED WORD SENSE DISAMBIGUATION
+
+689
+
+TABLE 6 Average Number of Outgoing Edges by Kind for the Senses Selected by Degree with WordNet and EnWordNet
+
+Fig. 5. Performance of Degree by the number of incident edges for polysemous words in SemCor.
+A denser reference lexicon with a large number of semantic relations seems to benefit both local and global measures. The enriched WordNet yields better results in comparison to vanilla WordNet across the board. Using the former sense inventory increases disambiguation performance in most cases by approximately 10 percent (see the column Poly in Table 5). The benefit of EnWordNet is perhaps most apparent with Edge Density which becomes competitive with HITS despite the combinatorial explosion problem discussed above. This makes intuitively sense. The denser the sense inventory is, the more appropriate edgebased measures will be at capturing sense distinctions. Note that Graph Entropy seems insensitive to the use of a denser sense inventory. The differences between WordNet and EnWordNet are not radical enough to result in changes in graph entropy. For this reason, similar performances are observed with both dictionaries.
+We further analyzed the influence of the sense inventory on the WSD algorithm by examining how Degree’s performance varies on SemCor as the number of incident edges of the correct target word sense increases. Fig. 5 shows that F1 tends to increase when the target sense has a large number of incident edges. This is especially the case for EnWordNet. F1 starts dropping for WordNet when a degree of 60 is reached. This is probably due to the fact that highdegree vertices in WordNet typically have a large number of hyponyms (e.g., periodn; dishn). This often degrades performance, as too many specializations may lead to accidental sense matches. In contrast, a vertex in EnWordNet with a high degree is related to many other vertices transversally (i.e., in a nontaxonomic manner). Thus, the chance of identifying semantically valid paths is increased. In fact, when the correct sense of a target word is adjacent to more than 100 edges (this holds for almost 20,000 test items in SemCor), Degree obtains a precision of 88 percent with EnWordNet (and only 62 percent with WordNet).
+To get more insight into the kinds of semantic relations that contribute to better performance, we estimated their average distribution over the set of outgoing edges for each sense chosen by Degree in SemCor. Table 6 reports results for hypernymy/hyponymy (H), nominalization (N), similarity (S), meronymy/holonymy (M), antonymy (A), and collocation-based relations (C). The latter refer to relations present in EnWordNet but not in WordNet. We only consider relations which constitute at least 0.10 of the incident edges per sense (on average). We observe that the
+
+contribution of each relation significantly increases from WordNet to EnWordNet. Expectedly, hypernymy/hyponymy is an important relation in both dictionaries. Collocation-based relations have a prominent role in EnWordNet, thus confirming our hypothesis that syntagmatic relations play a key role in WSD performance.
+In the results reported thus far, ties are broken randomly as we did not want to make use of any knowledge sources other than the WordNet graph. However, it is customary in the WSD literature to resolve ties by choosing the most frequent sense in SemCor. To establish how much could be gained from this strategy, we modified our algorithm so that it defaults to the first WordNet sense in case of ties. Degree obtained an F1 of 53.08 percent on SemCor. F1 increased to 59.83 percent with EnWordNet. We observed similar gains (i.e., within the range of 3 percent) for the other connectivity measures.
+In sum, our results indicate that Degree is the best connectivity measure overall as it performs consistently well across lexicons. This is an encouraging result: Degree is one of the simplest connectivity measures available, with moderate running time complexity. Indeed, we find that more sophisticated measures such as HITS perform comparably to the extended Lesk algorithm. The latter does not heavily rely on WordNet’s graph structure in any way (it selects the sense whose definition has the highest overlap with the surrounding context words). We also find that the lexicon at hand plays an important role in graphbased WSD. The results in Table 5 suggest that advances in WSD performance can be made by creating better sense connections with a larger number of collocational relations.
+7.2 Experiments on Senseval-3 and Semeval-2007 All Words
+In this section, we situate the WSD algorithm proposed in this paper with regard to the state of the art. Broadly speaking, WSD algorithms come in three flavors. Supervised systems learn disambiguation cues from hand-labeled data and usually demonstrate superior performance to other methods. Unsupervised systems, like the one presented here, do not utilize sense tagged data in any way, and semisupervised approaches use some annotated data selectively, e.g., by defaulting to the SemCor first sense when the system is not confident about the correctness of its answers.
+Table 7 shows the performance of our algorithm on the Senseval-3 all-words data set using Degree and the EnWordNet. The algorithm is run in an unsupervised setting without making use of the first sense and a semisupervised setting where it backs off to the first sense when the Degree score for the target sense is below a certain (empirically estimated) threshold. The latter was set to 0.11 after maximizing Degree’s F1 on 100 randomly chosen word instances from the Senseval-2 all-words test set [67]. Degree is also compared to Lesk, the first sense heuristic,
+
+690
+
+IEEE TRANSACTIONS ON PATTERN ANALYSIS AND MACHINE INTELLIGENCE, VOL. 32, NO. 4, APRIL 2010
+
+TABLE 7 Results on the Senseval-3 All-Words Data Set
+
+TABLE 8 Results on the Semeval All-Words Data Set
+
+Degree is compared to Lesk and the best unsupervised, semisupervised, and supervised systems in the Senseval-3 competition.
+
+Degree is compared to Lesk and the best unsupervised, semisupervised, and supervised systems in the Semeval-2007 competition.
+
+and the best supervised, unsupervised, and semi-supervised systems that participated in Senseval-3.
+As can be seen in Table 7, Degree in the unsupervised setting outperforms Lesk and the best unsupervised Senseval-3 system (Sussex). Both differences are statistically significant (p < 0:01) using bootstrap resampling. The latter system [10] implements a method that does not rely on contextual cues for disambiguation. Instead, it acquires first senses automatically by quantifying the degree of similarity between the distributional neighbors and the sense descriptions of an ambiguous word. Degree has an advantage over [10] as it disambiguates words in context and is not restricted to a unique first sense.
+In the semi-supervised setting, Degree is not significantly worse than the first sense heuristic, but is significantly better (p < 0:01) than the best semi-supervised Senseval-3 system (IRST-DDD), which implements a similarity-based algorithm. The system was developed by [68] and performs domain driven disambiguation. It compares the domain of the context surrounding the target word with the domains of its senses using a version of WordNet augmented with domain labels (e.g., ECONOMY, GEOGRAPHY, etc.). Finally, the best supervised system (GAMBL) is significantly better than Degree in both the unsupervised and semi-supervised settings (see Table 7). This is not surprising: GAMBL [69] is a memory-based system which learns word experts from an extensive collection of training sets. In contrast, Degree has access to no (unsupervised) or very little (semi-supervised) training data. Also, note that GAMBL (significantly) outperforms the first sense heuristic, albeit by a small margin (2.8 percent).
+We replicated the experiment just described on the most recent all-words WSD data set, which was created in the context of the Semeval-2007 competition [70]. Again, we compared Degree in the two settings (unsupervised and semi-supervised) against Lesk and the best systems that participated in Semeval-2007. Although the Semeval test set is generally more difficult than Senseval-3—it has a higher number of verbs which are notoriously hard to disambiguate—we observe similar trends. Degree in the unsupervised setting is significantly better than Lesk. It is also numerically better than the best unsupervised system (JUSKNSB) which is a modified version of the extended Lesk algorithm [71]. However, the difference is not statistically significant (the Semeval-2007 test set is relatively small, containing only 465 instances). The semi-supervised Degree, the best semi-supervised Semeval system (RACAI), and the first sense heuristic are all in the same ballpark (the differences are not statistically significant). RACAI [72] is inspired by lexical attraction models [73]; it finds the
+
+combination of senses that is most likely in a sentence represented by dependency-like structures. Expectedly, Degree (and all other unsupervised and semi-supervised approaches) is significantly worse than the best supervised system (PN-NL), which is essentially a maximum entropy classifier with a rich feature set [74].
+Overall, we find that our graph-based algorithm yields competitive performance with the state of the art. Bear in mind that our approach is relatively simple and parameter-free. All we need is a lexicon and a means of assessing the importance of graph nodes. We do not use any sense-annotated data for training or any syntactic information other than part-of-speech tagging. It is therefore interesting to see that our algorithm fares well in comparison with other more sophisticated methods that exploit syntactic information (e.g., [10], [72]) or additional resources (e.g., [68]).
+8 CONCLUSIONS
+In this paper, we presented a study of graph connectivity measures for unsupervised WSD. We evaluated a wide range of local and global measures with the aim of isolating those that are particularly suited for this task. Our results indicate that local measures yield better performance than global ones. The best local measures are Degree and PageRank. A similar conclusion is drawn in [66] in the context of Web page ranking. Furthermore, Litvak et al. [75] prove that the two measures are closely related, obeying a similar power law distribution.
+We also find that the employed reference dictionary critically influences WSD performance. We obtain a large improvement (in the range of 10 percent) when adopting a version of WordNet enriched with thousands of relatedness edges. This indicates that graph-based WSD algorithms will perform better with more densely connected sense inventories, with more incident edges for every node. An interesting future direction would be to investigate ways of automatically enhancing WordNet (and similar dictionaries) with relatedness information. For example, by adding edges in the graph for nodes whose distributional similarity exceeds a certain threshold.
+Beyond the specific algorithm presented in this paper, our results are relevant for other graph-based approaches to word sense disambiguation [9], [15] and discrimination [29], [30]. Our experiments show that the performance could potentially increase when the right connectivity measure is chosen. The proposed measures are independent of the adopted reference lexicon; they induce a sense ranking solely by considering graph connectivity, and can thus be ported across algorithms, languages, and sense inventories.
+
+NAVIGLI AND LAPATA: AN EXPERIMENTAL STUDY OF GRAPH CONNECTIVITY FOR UNSUPERVISED WORD SENSE DISAMBIGUATION
+
+691
+
+WordNet-like reference lexicons exist for several languages (e.g., EuroWordNet [76] and MultiWordNet [77]). Methods have also been developed for learning taxonomies from machine readable dictionaries [78], [79] and corpora [80]. It is an interesting future direction to establish how well our WSD method performs with such resources.
+Our experiments focused primarily on graph connectivity measures and their suitability for WordNet-like sense inventories. For this reason, we employed a relatively generic WSD algorithm (see Section 3) without extensive tuning and obtained state-of-the-art performance when assessing our system on standard evaluation data sets (e.g., Senseval-3 and Semeval-2007). However, this does not mean to say that the algorithm could not be further improved. For instance, we could consider word sequences larger than sentences, take into account syntactic relations, or score edges in the graph according to semantic importance (e.g., hypernymy is more important than meronymy).
+More research is needed to assess whether our results extend to other NLP tasks, besides WSD. An obvious application would be summarization, where graph-based methods have met with reasonable success [33], [34] and eigenvector centrality measures are a popular choice. However, their performance against other graph connectivity measures has not yet been studied in detail.
+ACKNOWLEDGMENTS
+The authors are grateful to the anonymous referees whose feedback helped to substantially improve the present paper. This work was supported by EPSRC (grant EP/C538447/1) and the Royal Society of Edinburgh. A preliminary version was published in the proceedings of IJCAI 2007.
+REFERENCES
+[1] D. Vickrey, L. Biewald, M. Teyssier, and D. Koller, “Word-Sense Disambiguation for Machine Translation,” Proc. Conf. Human Language Technology and Empirical Methods in Natural Language Processing, pp. 771-778, 2005.
+[2] C. Stokoe, “Differentiating Homonymy and Polysemy in Information Retrieval,” Proc. Conf. Human Language Technology and Empirical Methods in Natural Language Processing, pp. 403-410, 2005.
+[3] G. Ramakrishnan, A. Jadhav, A. Joshi, S. Chakrabarti, and P. Bhattacharyya, “Question Answering via Bayesian Inference on Lexical Relations,” Proc. ACL Workshop Multilingual Summarization and Question Answering, pp. 1-10, 2003.
+[4] R. Barzilay and M. Elhadad, “Using Lexical Chains for Text Summarization,” Proc. ACL Workshop Intelligent Scalable Text Summarization, pp. 10-17, 1997.
+[5] B. Snyder and M. Palmer, “The English All-Words Task,” Proc. Senseval-3 Workshop, pp. 41-43, 2004.
+[6] S. Pradhan, E. Loper, D. Dligach, and M. Palmer, “Semeval-2007 Task-17: English Lexical Sample, SRL and All Words,” Proc. Semeval-2007 Workshop, pp. 87-92, 2007.
+[7] D. Yarowsky and R. Florian, “Evaluating Sense Disambiguation across Diverse Parameter Spaces,” Natural Language Eng., vol. 9, no. 4, pp. 293-310, 2002.
+[8] T.H. Ng, “Getting Serious about Word Sense Disambiguation,” Proc. ACL SIGLEX Workshop Tagging Text with Lexical Semantics: Why, What, and How?, pp. 1-7, 1997.
+[9] R. Mihalcea, “Unsupervised Large-Vocabulary Word Sense Disambiguation with Graph-Based Algorithms for Sequence Data Labeling,” Proc. Human Language Technology and Empirical Methods in Natural Language Processing, pp. 411-418, 2005.
+[10] D. McCarthy, R. Koeling, J. Weeds, and J. Carroll, “Finding Predominant Senses in Untagged Text,” Proc. 42nd Ann. Meeting Assoc. for Computational Linguistics, pp. 280-287, 2004.
+
+[11] H. Schu¨ tze, “Automatic Word Sense Discrimination,” Computational Linguistics, vol. 24, no. 1, pp. 97-124, 1998.
+[12] D. Lin and P. Pantel, “Discovering Word Senses from Text,” Proc. Eighth ACM SIGKDD, pp. 613-619, 2002.
+[13] Word Sense Disambiguation: Algorithms and Applications, E. Agirre and P. Edmonds, eds. Springer, 2007.
+[14] R. Navigli, “Word Sense Disambiguation: A Survey,” ACM Computing Surveys, vol. 41, no. 2, pp. 1-69, 2009.
+[15] R. Navigli and P. Velardi, “Structural Semantic Interconnections: A Knowledge-Based Approach to Word Sense Disambiguation,” IEEE Trans. Pattern Analysis and Machine Intelligence, vol. 27, no. 7, pp. 1075-1088, July 2005.
+[16] M. Lesk, “Automatic Sense Disambiguation Using Machine Readable Dictionaries: How to Tell a Pine Cone from an Ice Cream Cone,” Proc. Fifth ACM SIGDOC, pp. 24-26, 1986.
+[17] S. Brody, R. Navigli, and M. Lapata, “Ensemble Methods for Unsupervised WSD,” Proc. Joint Conf. Int’l Committee on Computational Linguistics and the Assoc. for Computational Linguistics, pp. 97104, 2006.
+[18] R.A. Botafogo, E. Rivlin, and B. Shneiderman, “Structural Analysis of Hypertexts: Identifying Hierarchies and Useful Metrics,” ACM Trans. Information Systems, vol. 10, no. 2, pp. 142-180, 1992.
+[19] P. Hage and F. Harary, “Eccentricity and Centrality in Networks,” Social Networks, vol. 13, pp. 57-63, 1995.
+[20] S. Wasserman and K. Faust, Social Network Analysis: Methods and Applications. Cambridge Univ. Press, 1994.
+[21] S. Brin and M. Page, “Anatomy of a Large-Scale Hypertextual Web Search Engine,” Proc. Seventh Conf. World Wide Web, pp. 107117, 1998.
+[22] J.M. Kleinberg, “Authoritative Sources in a Hyperlinked Environment,” Proc. Ninth Symp. Discrete Algorithms, pp. 668-677, 1998.
+[23] Z. Gyngyi, H. Garcia-Molina, and J. Pedersen, “Combating Web Spam with Trustrank,” Proc. 30th Int’l Conf. Very Large Data Bases, pp. 271-279, 2004.
+[24] S. Chakrabarti, M. van den Berg, and B. Dom, “Focused Crawling: A New Approach to Topic-Specific Web Resource Discovery,” Proc. Eighth Int’l Conf. World Wide Web, pp. 1623-1640, 1999.
+[25] A. Balmin, V. Hristidis, and Y. Papakonstantinou, “Objectrank: Authority-Based Keyword Search in Databases,” Proc. 13th Conf. Very Large Data Bases, pp. 564-575, 2004.
+[26] M.A.R.J. Bollen and H.V. de Sompel, “Mesur: Usage-Based Metrics of Scholarly Impact,” Proc. Seventh ACM/IEEE-CS Joint Conf. Digital Libraries, p. 474, 2007.
+[27] M. Galley and K. McKeown, “Improving Word Sense Disambiguation in Lexical Chaining,” Proc. 18th Int’l Joint Conf. Artificial Intelligence, pp. 1486-1488, 2003.
+[28] R. Mihalcea, P. Tarau, and E. Figa, “Pagerank on Semantic Networks, with Application to Word Sense Disambiguation,” Proc. 20th Int’l Conf. Computational Linguistics, 2004.
+[29] J. Ve´ronis, “Hyperlex: Lexical Cartography for Information Retrieval,” Computer, Speech and Language, vol. 18, no. 3, pp. 223252, 2004.
+[30] E. Agirre, D. Mart´ınez, O.L. de Lacalle, and A. Soroa, “Two Graph-Based Algorithms for State-of-the-Art WSD,” Proc. Conf. Empirical Methods in Natural Language Processing, pp. 585-593, 2006.
+[31] X. Zhu and Z. Ghahramani, “Learning from Labeled and Unlabeled Data with Label Propagation,” Technical Report CMU-CALD-02, 2002.
+[32] Z. Niu, D. Ji, and C.L. Tan, “Word Sense Disambiguation Using Label Propagation Based Semi-Supervised Learning,” Proc. 43rd Ann. Meeting on Assoc. for Computational Linguistics, pp. 395-402, 2005.
+[33] G. Erkan and D.R. Radev, “Lexrank: Graph-Based Lexical Centrality as Salience in Text Summarization,” J. Artificial Intelligence Research, vol. 22, pp. 457-479, 2004.
+[34] R. Mihalcea and P. Tarau, “Textrank: Bringing Order into Texts,” Proc. Conf. Empirical Methods in Natural Language Processing, D. Lin and D. Wu, eds., pp. 404-411, 2004.
+[35] X. Wan and J. Yang, “Improved Affinity Graph Based MultiDocument Summarization,” Proc. Human Language Technology Conf.—North Am. Chapter of the Assoc. for Computational Linguistics Ann. Meeting, pp. 181-184, 2006.
+[36] A. Esuli and F. Sebastiani, “Pageranking WordNet Synsets: An Application to Opinion Mining,” Proc. 45th Ann. Meeting on Assoc. for Computational Linguistics, pp. 424-431, June 2007.
+
+692
+
+IEEE TRANSACTIONS ON PATTERN ANALYSIS AND MACHINE INTELLIGENCE, VOL. 32, NO. 4, APRIL 2010
+
+[37] J. Otterbacher, G. Erkan, and D. Radev, “Using Random Walks for Question-Focused Sentence Retrieval,” Proc. Human Language Technology and Empirical Methods in Natural Language Processing, pp. 915-922, 2005.
+[38] R. Navigli and P. Velardi, “Learning Domain Ontologies from Document Warehouses and Dedicated Websites,” Computational Linguistics, vol. 30, no. 2, pp. 151-179, 2004.
+[39] D. Feng, E. Shaw, J. Kim, and E. Hovy, “Learning to Detect Conversation Focus of Threaded Discussions,” Proc. Human Language Technology Conf.—North Am. Chapter of the Assoc. for Computational Linguistics Ann. Meeting, pp. 208-215, 2006.
+[40] K. Toutanova, C. Manning, and A. Ng, “Learning Random Walk Models for Inducing Word Dependency Distributions,” Proc. 21st Int’l Conf. Machine Learning, 2004.
+[41] M.E.J. Newman, “The Structure and Function of Complex Networks,” SIAM Rev., vol. 45, pp. 167-256, 2003.
+[42] A. Budanitsky and G. Hirst, “Evaluating WordNet-Based Measures of Semantic Distance,” Computational Linguistics, vol. 32, no. 1, pp. 13-47, 2006.
+[43] T. Pedersen, S. Banerjee, and S. Patwardhan, “Maximizing Semantic Relatedness to Perform Word Sense Disambiguation,” Technical Report UMSI 2005/25, 2005.
+[44] R. Navigli and M. Lapata, “Graph Connectivity Measures for Unsupervised Word Sense Disambiguation,” Proc. 20th Int’l Joint Conf. Artificial Intelligence, pp. 1683-1688, 2007.
+[45] S. Banerjee and T. Pedersen, “Extended Gloss Overlaps as a Measure of Semantic Relatedness,” Proc. 18th Int’l Joint Conf. Artificial Intelligence, pp. 805-810, 2003.
+[46] WordNet: An Electronic Lexical Database, C. Fellbaum, ed. MIT Press, 1998.
+[47] G. Miller, C. Leacock, T. Randee, and R. Bunker, “A Semantic Concordance,” Proc. Third DARPA Workshop Human Language Technology, pp. 303-308, 1993.
+[48] A. Novischi, “Combining Methods for Word Sense Disambiguation of WordNet Glosses,” Proc. 17th Florida Artificial Intelligence Research Soc. Conf., 2004.
+[49] E. Agirre and A. Soroa, “Using the Multilingual Central Repository for Graph-Based Word Sense Disambiguation,” Proc. Sixth Language Resources and Evaluation Conf., 2008.
+[50] W. Gale, K. Church, and D. Yarowsky, “One Sense per Discourse,” Proc. Fourth DARPA Speech and Natural Language Workshop, pp. 233-237, 1992.
+[51] L.C. Freeman, “Centrality in Social Networks: Conceptual Clarification,” Social Networks, vol. 1, pp. 215-239, 1979.
+[52] B.P. Bonacich, “Factoring and Weighing Approaches to Status Scores and Clique Identification,” J. Math. Sociology, vol. 2, pp. 113-120, 1972.
+[53] S.P. Borgatti, “Identifying Sets of Key Players in a Network,” Proc. Conf. Integration of Knowledge Intensive Multi-Agent Systems, pp. 127-131, 2003.
+[54] G. Sabidussi, “The Centrality Index of a Graph,” Psychometrika, vol. 31, pp. 581-603, 1966.
+[55] S. Russell and P. Norvig, Artificial Intelligence: A Modern Approach, second ed. Prentice Hall, 2002.
+[56] J. Cowie, J. Guthrie, and L. Guthrie, “Lexical Disambiguation Using Simulated Annealing,” Proc. Fourth Int’l Conf. Computational Linguistics, pp. 359-365, 1992.
+[57] M. Mitchell, An Introduction to Genetic Algorithms. MIT Press, 1996.
+[58] T.H. Cormen, C.E. Leiserson, and R.L. Rivest, Introduction to Algorithms. MIT Press, 1990.
+[59] D.B. Johnson, “Efficient Algorithms for Shortest Paths in Sparse Networks,” J. ACM, vol. 24, pp. 1-13, 1977.
+[60] U. Brandes, “A Faster Algorithm for Betweenness Centrality,” J. Math. Sociology, vol. 25, no. 2, pp. 163-177, 2001.
+[61] R. Navigli, “Semi-Automatic Extension of Large-Scale Linguistic Knowledge Bases,” Proc. 18th Florida Artificial Intelligence Research Soc. Conf., pp. 548-553, 2005.
+[62] D. Yarowsky, “One Sense Per Collocation,” Proc. ARPA Workshop Human Language Technology, pp. 266-271, 1993.
+[63] H.T. Ng and H.B. Lee, “Integrating Multiple Knowledge Sources to Disambiguate Word Sense: An Exemplar-Based Approach,” Proc. 34th Ann. Meeting on Assoc. for Computational Linguistics, pp. 40-47, 1996.
+[64] Oxford Collocations, D. Lea, ed. Oxford Univ. Press, 2002.
+[65] Longman Language Activator, Longman, ed. Pearson Education, 2003.
+
+[66] T. Upstill, N. Craswell, and D. Hawking, “Predicting Fame and Fortune: PageRank or Indegree?” Proc. Eighth Australasian Document Computing Symp., pp. 31-40, 2003.
+[67] P. Edmonds and S. Cotton, “Senseval-2: Overview,” Proc. Senseval2 Workshop, pp. 1-6, 2001.
+[68] C. Strapparava, A. Gliozzo, and C. Giuliano, “Pattern Abstraction and Term Similarity for Word Sense Disambiguation: IRST at Senseval-3,” Proc. Senseval-3 Workshop, pp. 229-234, 2004.
+[69] B. Decadt, V. Hoste, W. Daelemans, and A. van den Bosch, “GAMBL, Genetic Algorithm Optimization of Memory-Based WSD,” Proc. Senseval-3 Workshop, pp. 108-112, 2004.
+[70] E. Agirre, L. Ma`rquez, and R. Wicentowski, Proc. Semeval-2007 Workshop, 2007.
+[71] S.K. Naskar and S. Bandyopadhyay, “Ju-Sknsb: Extended WordNet Based WSD on the English All-Words Task at Semeval-1,” Proc. Semeval-2007 Workshop, pp. 203-206, 2007.
+[72] R. Ion and D. Tufis¸, “RACAI: Meaning Affinity Models,” Proc. Semeval-2007 Workshop, pp. 282-287, 2007.
+[73] D. Yuret, “Discovery of Linguistic Relations Using Lexical Attraction,” PhD dissertation, Dept. of Computer Science and Electrical Eng., Massachusetts Inst. of Technology, 1998.
+[74] S. Tratz, A. Sanfilippo, M. Gregory, A. Chappell, C. Posse, and P. Whitney, “PNNL: A Supervised Maximum Entropy Approach to Word Sense Disambiguation,” Proc. Semeval-2007 Workshop, pp. 264-267, June 2007.
+[75] N. Litvak, W. Scheinhardt, and Y. Volkovich, “In-Degree and PageRank of Web Pages: Why Do They Follow Similar Power Laws?” Memorandum 1807, Dept. of Applied Math., Univ. of Twente, 2006.
+[76] EuroWordNet: A Multilingual Database with Lexical Semantic Networks, P. Vossen, ed. Kluwer, 1998.
+[77] E. Pianta, L. Bentivogli, and C. Girardi, “MultiWordNet: Developing an Aligned Multilingual Database,” Proc. First Int’l Conf. Global WordNet, pp. 21-25, 2002.
+[78] M. Chodorow, R. Byrd, and G. Heidorn, “Extracting Semantic Hierarchies from a Large On-Line Dictionary,” Proc. 23rd Ann. Meeting on Assoc. for Computational Linguistics, pp. 299-304, 1985.
+[79] G. Rigau, H. Rodr´ıguez, and E. Agirre, “Building Accurate Semantic Taxonomies from Monolingual mrds,” Proc. Seventh Int’l Conf. Computational Linguistics, pp. 1103-1109, 1998.
+[80] R. Snow, D. Jurafsky, and A.Y. Ng, “Semantic Taxonomy Induction from Heterogenous Evidence,” Proc. Joint Conf. Int’l Committee on Computational Linguistics and the Assoc. for Computational Linguistics, pp. 801-808, 2006.
+
+Roberto Navigli received the PhD degree in computer science from the Universita` di Roma “La Sapienza,” where he is currenlty an assistant professor in the Department of Computer Science. He was awarded the Marco Cadoli 2007 Italian National Prize for the best PhD thesis in Artificial Intelligence. His research focuses on natural language processing (specifically, word sense disambiguation, knowledge acquisition, ontology learning, semantic social network analysis, and the semantic Web).
+
+discourse
+
+modeling,
+
+Mirella Lapata received the BSc (Hons) degree in computer science from the University of Athens in 1994, the MSc degree from Carnegie Mellon University in 1998, and the PhD degree in natural language processing from the University of Edinburgh in 2001. She is a reader in Edinburgh’s School of Informatics. Her research focuses on probabilistic learning techniques for natural language understanding and generation. Examples include word sense disambiguation, lexicon acquisition, and document summarization.
+
+. For more information on this or any other computing topic, please visit our Digital Library at www.computer.org/publications/dlib.
+

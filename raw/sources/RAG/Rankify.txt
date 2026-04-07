@@ -1,0 +1,1418 @@
+Rankify: A Comprehensive Python Toolkit for Retrieval, Re-Ranking, and Retrieval-Augmented Generation
+
+Abdelrahman Abdallah
+University of Innsbruck Innsbruck, Tyrol, Austria abdelrahman.abdallah@uibk.ac.at
+
+Jamshid Mozafari
+University of Innsbruck Innsbruck, Tyrol, Austria jamshid.mozafari@uibk.ac.at
+
+Bhawna Piryani
+University of Innsbruck Innsbruck, Tyrol, Austria bhawna.piryani@uibk.ac.at
+
+Mohammed Ali
+University of Innsbruck Innsbruck, Tyrol, Austria Mohammed.ali@uibk.ac.at
+
+Adam Jatowt
+University of Innsbruck Innsbruck, Tyrol, Austria adam.jatowt@uibk.ac.at
+
+arXiv:2502.02464v1 [cs.IR] 4 Feb 2025
+
+Abstract
+Retrieval, re-ranking, and retrieval-augmented generation (RAG) are critical components of modern natural language processing (NLP) applications in information retrieval, question answering, and knowledge-based text generation. However, existing solutions are often fragmented, lacking a unified framework that easily integrates these essential processes. The absence of a standardized implementation, coupled with the complexity of retrieval and reranking workflows, makes it challenging for researchers to compare and evaluate different approaches in a consistent environment. While existing toolkits such as Rerankers and RankLLM provide general-purpose reranking pipelines, they often lack the flexibility required for fine-grained experimentation and benchmarking. In response to these challenges, we introduce Rankify, a powerful and modular open-source toolkit designed to unify retrieval, reranking, and RAG within a cohesive framework. Rankify supports a wide range of retrieval techniques, including dense and sparse retrievers, while incorporating state-of-the-art re-ranking models to enhance retrieval quality. Additionally, Rankify includes a collection of pre-retrieved datasets to facilitate benchmarking, available at Huggingface1. To encourage adoption and ease of integration, we provide comprehensive documentation2, an open-source implementation on GitHub3, and a PyPI package for effortless installation4. By providing a unified and lightweight framework, Rankify allows researchers and practitioners to advance retrieval and re-ranking methodologies while ensuring consistency, scalability, and ease of use.
+1 https://huggingface.co/datasets/abdoelsayed/reranking- datasets- light 2 http://rankify.readthedocs.io/ 3 https://github.com/DataScienceUIBK/rankify 4 https://pypi.org/project/rankify/
+Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY © 2018 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-1-4503-XXXX-X/18/06 https://doi.org/XXXXXXX.XXXXXXX
+
+Figure 1: Rankify logo.
+CCS Concepts
+• Information systems → Information retrieval; Evaluation of retrieval results; Presentation of retrieval results; Top-k retrieval in databases; Rank aggregation.
+Keywords
+Neural IR, Dense Retrieval, Sparse Retrieval, Re-ranking, Toolkit
+ACM Reference Format: Abdelrahman Abdallah, Jamshid Mozafari, Bhawna Piryani, Mohammed Ali, and Adam Jatowt. 2018. Rankify: A Comprehensive Python Toolkit for Retrieval, Re-Ranking, and Retrieval-Augmented Generation. In Proceedings of Make sure to enter the correct conference title from your rights confirmation emai (Conference acronym ’XX). ACM, New York, NY, USA, 13 pages. https: //doi.org/XXXXXXX.XXXXXXX
+1 Introduction
+Information retrieval (IR) systems [19, 99] are fundamental to many natural language processing (NLP) applications [64, 110], including question-answering [5, 47], search engines [24, 114], and knowledgebased generation [65]. These systems often rely on a two-stage pipeline: a retriever that efficiently identifies a set of candidate documents and a re-ranker that refines these results to maximize relevance to the query [4, 78, 91, 120]. This approach has proven highly effective, with retrieval and re-ranking methods achieving state-of-the-art performance across diverse NLP benchmarks.
+Retrievers form the backbone of information retrieval systems by identifying a subset of documents relevant to a user’s query. The retrieval landscape includes sparse, dense, and hybrid methods. Sparse retrievers, such as BM25 [92], rely on exact term matching by representing queries and documents as high-dimensional sparse vectors. These methods are highly effective when query terms closely align with document content but struggle to capture semantic relationships. Dense retrievers, including models like
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+DPR [120], BPR [117], ColBERT [96], BGE [15], Contriever [40] and ANCE [115], overcome this limitation by encoding queries and documents into low-dimensional dense vectors using neural networks, enabling retrieval based on semantic similarity even when lexical overlap is minimal. However, dense retrieval requires significant computational resources for training and inference. Hybrid retrieval methods [17, 118] integrate the strengths of both approaches, combining the precision of sparse retrievers with the semantic understanding of dense models to achieve a more balanced and robust retrieval system.
+Re-ranking techniques enhance the initial retrieval results by ensuring the most relevant documents appear at the top. These methods are categorized into three main approaches: (1) Pointwise reranking [6, 7, 78, 94] treats reranking as a regression or classification task, assigning independent relevance scores to each document. (2) Pairwise reranking [39, 85, 100] refines ranking by comparing document pairs and optimizing their relative order based on relevance. However, this approach treats all document pairs equally, sometimes improving lower-ranked results at the expense of topranked ones. (3) Listwise reranking [83, 101, 121] considers the entire document list, prompting LLMs with the query and a subset of candidates for reranking. Due to input length limitations, these methods tend to employ a sliding window strategy, progressively refining rankings from back to front.
+Retrieval-Augmented Generation (RAG) [3, 31, 57, 73] enhances language models by integrating retrieval and generation, making them more effective in knowledge-intensive tasks. Rather than relying solely on pre-trained knowledge, RAG dynamically retrieves relevant documents from external sources during inference, incorporating them into the generation process.
+The growing complexity and diversity of retrieval, re-ranking, and RAG methods pose significant challenges for benchmarking, reproducibility, and integration. Existing toolkits, such as Pyserini [58], Rerankers [23] and RankLLM [82], often lack flexibility, enforce rigid implementations, and require extensive preprocessing, making them less suitable for research-driven experimentation. Additionally, retrieval and re-ranking datasets are scattered across different sources, complicating evaluation and comparison. To address these challenges, we introduce Rankify, an open-source framework that unifies retrieval, re-ranking, and RAG into a modular and extensible ecosystem with its logo shown in Figure 1. Rankify supports diverse retrieval techniques, integrates state-of-the-art re-ranking models, and provides curated pre-retrieved datasets to streamline experimentation. Designed with flexibility, it enables researchers to efficiently build, evaluate, and extend retrieval pipelines while ensuring consistency in benchmarking.
+The main contributions of this paper are as follows:
+• Curated retrieval datasets and precomputed embeddings: Rankify provides 40 datasets with 1,000 pre-retrieved documents per query across various domains (QA, dialogue, entity linking, etc.). It also includes pre-computed Wikipedia and MS MARCO corpora for multiple retrievers, eliminating preprocessing overhead.
+• Diverse retriever and re-ranking support: Rankify integrates dense (DPR, ANCE, BPR, ColBERT, BGE, Contriever) and sparse (BM25) retrievers, along with 24 state-of-the-art
+
+Trovato et al.
+re-ranking models, enabling seamless retrieval and ranking experimentation. • RAG integration and evaluation tools: Rankify bridges retrieval, re-ranking, and RAG by passing retrieved documents to LLMs for evaluation. • Comprehensive evaluation tools: Rankify offers a diverse range of evaluation metrics and tools for retrieval and question answering. The framework is accompanied by extensive online documentation, making it easy for users to explore its features. Additionally, Rankify is freely available on PyPI and GitHub, ensuring accessibility for researchers and practitioners.
+2 Related Work
+2.1 Retrievers
+Retrieval models have evolved significantly, transitioning from traditional sparse retrievers to sophisticated dense and hybrid retrieval techniques. Sparse retrievers, such as BM25 [92], remain widely used due to their strong lexical matching capabilities and generalization. However, they struggle with capturing semantic relationships, leading to the rise of dense retrieval methods [55], which leverage pre-trained neural encoders to generate embeddings for queries and documents. Notable advancements, such as DPR [120] and ANCE [115], improve retrieval effectiveness by employing contrastive training with in-batch negatives [33] and hard-negative mining [46, 116]. Multi-vector approaches like ColBERT [49] enable fine-grained interaction between queries and documents, albeit at the cost of increased computational overhead. To address the limitations of dense retrievers, hybrid models [30, 67] combine sparse and dense approaches, utilizing both term matching and semantic understanding for enhanced retrieval performance.
+Recent research has also explored retrieval enhancements through knowledge distillation, curriculum learning, and pre-training. Distillation techniques transfer knowledge from cross-encoders or teacher retrievers to student models, improving dense retriever effectiveness [18, 86]. Curriculum learning strategies, which progressively train retrievers from easy to hard samples [60, 124], have been shown to enhance both supervised and zero-shot retrieval effectiveness. Meanwhile, pre-training methods such as contrastive learning [40] and masked autoencoding [29, 63] have significantly improved the generalization of retrieval models. Additionally, approaches like query augmentation [66, 70] generate synthetic training data to enhance retrieval robustness.
+2.2 Re-Ranking Methods
+Re-ranking plays a crucial role in refining retrieved document lists to improve ranking quality. Traditional approaches include pointwise learning-to-rank (LTR) methods, where each document is scored independently [20, 125], and pairwise methods, which optimize the relative ordering of document pairs [13, 42]. Listwise approaches, such as LambdaRank and ListNet, directly optimize ranking metrics like Discounted Cumulative Gain (DCG) to enhance top-ranked results [12, 13, 62]. More recently, deep neural networks and large language models (LLMs) have revolutionized re-ranking, enabling context-aware ranking adjustments. Cross-encoder models, which jointly encode queries and candidate documents, have
+
+Rankify: A Comprehensive Python Toolkit for Retrieval, Re-Ranking, and RAG
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+
+Toolkit
+
+# Datasets # Retrievers # Re-rankers # RAG Methods Modular Design Automatic Evaluation Corpus
+
+FlashRAG [43]
+
+32
+
+3
+
+2
+
+12
+
+✓
+
+FastRAG [2]
+
+0
+
+1
+
+3
+
+7
+
+✓
+
+AutoRAG [50]
+
+4
+
+2
+
+7
+
+1
+
+✓
+
+LocalRQA [122]
+
+0
+
+2
+
+0
+
+0
+
+✗
+
+Rerankers [23]
+
+0
+
+0
+
+15
+
+0
+
+✓
+
+Rankify
+
+40
+
+7
+
+24
+
+3+
+
+✓
+
+✓
+
+✓
+
+✗
+
+✗
+
+✓
+
+✗
+
+✓
+
+✗
+
+✓
+
+✗
+
+✓
+
+✓
+
+Table 1: Comparison with other Retriever, Re-ranking, and RAG toolkits. Modular Component refers to whether the toolkit is
+
+composed of modular components. Automatic Evaluation indicates if the toolkit provides automated evaluation capabilities to
+
+assess the performance of various datasets. Corpus Helper shows if the toolkit offers auxiliary tools for processing corpus,
+
+including cleaning and chunking.
+
+demonstrated significant improvements in ranking accuracy by capturing fine-grained interactions between them. Additionally, zero-shot re-ranking approaches leverage models like GPT-4 for listwise re-ranking without task-specific training [8, 103], while knowledge distillation techniques such as RankZephyr fine-tune smaller models to approximate LLM performance with reduced computational cost [83].
+Re-ranking is also increasingly integrated into retrieval-augmented generation (RAG) systems, where refining retrieved documents before response generation ensures higher relevance and coherence in generated outputs. These advancements highlight the transition from traditional ranking techniques to sophisticated, modeldriven re-ranking approaches that enhance retrieval quality in diverse NLP applications. Recent innovations in re-ranking include leveraging large language models (LLMs) such as GPT-4 [8] for zero-shot and listwise re-ranking [103]. Other approaches, such as RankZephyr [83], utilize knowledge distillation to fine-tune smaller models based on LLM outputs, enabling efficient and effective reranking.
+2.3 Retrieval-Augmented Generation (RAG)
+Retrieval-Augmented Generation (RAG) combines retrieval and generation to enhance language models in knowledge-intensive tasks. Early RAG systems [57] retrieve context documents relevant to a query and use these as input for generation, enabling models to answer queries beyond their training data. More recent approaches explore the integration of retrieval with both encoder-decoder [41] and decoder-only [87] architectures, optimizing performance for a variety of downstream tasks.
+One key area of focus in RAG is mitigating hallucinations and improving the factuality of generated responses [69]. Techniques such as self-consistency [113] and noisy context filtering [28] have been proposed to enhance the reliability of RAG outputs. However, the quality of retrieved documents remains a critical factor in the overall effectiveness of RAG pipelines. Recent works emphasize the importance of combining retrieval with robust re-ranking techniques to ensure that the retrieved context is both relevant and precise [45].
+2.4 Frameworks
+Several frameworks have been developed to support research and development in retrieval and re-ranking systems. rerankers [23] is
+
+a lightweight Python library that provides a unified interface to commonly used re-ranking approaches, simplifying the integration of various methods into retrieval pipelines. Similarly, RankLLM5 offers a Python toolkit focused on reproducible information retrieval research, emphasizing listwise re-ranking with large language models. Additionally, FlashRAG [43] and AutoRAG [51] introduce a modular toolkit designed for efficient retrieval-augmented generation (RAG) research, aiming to enhance flexibility and extensibility in experimental settings. These frameworks, along with others like LangChain [14], LlamaIndex [61], and DSPy [48], provide researchers and practitioners with versatile tools to develop and evaluate retrieval and RAG applications. A comparison of retrieval, re-ranking, and RAG toolkits is presented in Table 1, highlighting the advantages of Rankify in dataset diversity, retriever and re-ranker support, and modularity.
+3 Rankify
+Modern information retrieval systems rely on a combination of retrieval, ranking, and generative techniques to surface relevant content and generate accurate responses. However, existing solutions are often fragmented, requiring researchers and practitioners to integrate multiple toolkits to experiment with different retrieval and ranking strategies. Rankify addresses this challenge by offering an end-to-end retrieval and ranking ecosystem, enabling seamless experimentation across a wide range of retrieval, re-ranking, and retrieval-augmented generation (RAG) models.
+Unlike existing retrieval and ranking frameworks that focus on a single aspect of the pipeline, Rankify is designed to be modular, extensible, and lightweight, allowing users to plug in different retrievers, ranking models, and RAG techniques with minimal effort. Built in Python, it leverages machine learning libraries such as TensorFlow [1], PyTorch [79], Spacy [38], and Pyserini [58] . The framework is available on PyPI6, making installation straightforward:
+$ pip install rankify
+To ensure accessibility and reproducibility, Rankify supports both precomputed and real-time retrieval workflows. Users can work with pre-retrieved datasets for benchmarking or perform live document retrieval and re-ranking on large-scale corpora. The framework includes ready-to-use indices for Wikipedia and MS
+5 https://github.com/castorini/rank_llm/tree/main 6 https://pypi.org/project/rankify/
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+
+Data
+
+Question Answering
+
+Datasets
+Temp QA
+
+Entity Question
+
+Muti-Hop
+
+Fact
+
+Mutiple
+
+QA
+
+QA
+
+Choice
+
+Other Datasets
+
+Corpora
+
+Wikipedia
+
+MS MARCO
+
+Other Corpus
+
+Retrievers
+
+DPR
+
+Methods BM25
+
+BGB
+
+Contriever
+
+Ance
+
+BDR
+
+Other retreivers
+
+Pre-defined datasets
+
+NQ WebQ TriviaQA
+
+Hotpot Archivial America
+
+QA
+
+QA
+
+QA
+
+Other Pre-retrieved datasets
+
+Rerankers
+
+Pairwise Reranking
+
+Colbert Monobert RankGPT
+
+Sentence Transformer
+
+Splade
+
+UPR
+
+Other ReRanking
+
+Listwise Reranking
+
+RankGPT lit5
+
+ListT5
+llm layerwise
+
+Other ReRanking
+
+RAG
+
+Zero-shot
+
+FiD Other RAG
+
+In-Context
+
+Figure 2: The architecture of the Rankify, showing the in-
+terplay between its core modules: Datasets, Retrievers, ReRankers, and RAG Evaluation. Each module operates independently while seamlessly integrating with others, enabling
+end-to-end retrieval and ranking workflows.
+MARCO, eliminating the need for time-consuming indexing. Additionally, it supports different retrievers, giving users the flexibility to test different retrieval paradigms without modifying their pipeline.
+Rankify consists of four core modules: Datasets, Retrievers, ReRankers, and RAG. The Datasets module provides standardized access to benchmark datasets, including Natural Questions, TriviaQA, and HotpotQA, as well as the ability to create custom datasets. The Retrievers module integrates state-of-the-art retrieval methods, including BM25, DPR, ANCE, BGE, and ColBERT, allowing users to experiment with different retrieval strategies. The Re-Rankers module includes 24 ranking models with 41 sub-methods, supporting pointwise, pairwise, and listwise re-ranking techniques. Finally, the RAG module enables retrieval-augmented generation using models such as LLAMA, GPT, and T5, supporting in-context learning, Fusion-in-Decoder (FiD), and retrieval-augmented latent memory (RALM).
+A key advantage of Rankify is its unified API, which abstracts away implementation details, allowing users to experiment with different models and configurations using a simple interface. Figure 2 illustrates the architecture of Rankify, demonstrating how retrieval, ranking, and generation components interact within the pipeline. The framework is designed to be scalable and adaptable, making it suitable for both academic research and real-world applications in search, question answering, and document ranking.
+
+Trovato et al.
+To encourage collaboration and community contributions, Rankify is open-source and actively maintained7. Extensive documentation8 and inline docstrings provide clear guidance on using the framework, ensuring ease of adoption for both beginners and experienced researchers. The next sections explore its capabilities in greater detail, covering retrieval benchmarks, ranking evaluations, and retrieval-augmented generation results.
+3.1 Prebuilt Retrieval Corpora and Indexes
+Rankify provides two large-scale retrieval corpora: Wikipedia [46] and MS MARCO [74], enabling researchers to conduct retrieval experiments on well-established benchmarks. To support efficient retrieval, Rankify includes pre-builtt index files for each retriever, allowing users to directly query the corpora without requiring costly indexing. Each corpus has been indexed for multiple retrieval models, including BM25, DPR, ANCE, BGE, Contriever, and ColBERT. By providing precomputed indexes, Rankify simplifies large-scale retrieval research while maintaining consistency across different retrieval pipelines. Users can view all available datasets and retrievers using the following command (see Listing 1):
+Listing 1: This script retrieves the latest information about
+the available datasets, and displays metadata for each dataset
+in the terminal.
+1 from rankify.dataset.dataset import Dataset 2 Dataset.avaiable_dataset()
+3.2 Datasets
+With Rankify, we aim to provide a standardized and efficient way to handle datasets for retrieval, re-ranking, and retrieval-augmented generation (RAG). Given the complexity of retrieval workflows, Rankify integrates pre-retrieved datasets with structured annotations, allowing users to experiment with different retrieval and reranking methods using just a few lines of code. Our dataset design unifies multiple annotation styles and storage formats, enabling a seamless interface for loading, processing, and benchmarking retrieval-based tasks.
+The datasets included in Rankify fall into multiple categories, as illustrated in Figure 3, which showcases their distribution based on task type and dataset size. Each dataset in Rankify follows a standardized schema that consists of three main components: (1) Question: The input query for which relevant information needs to be retrieved. (2) Answers: The expected correct responses associated with the question. (3) Contexts (Or Retrieved Documents): A ranked list of candidate documents retrieved by a specific retriever. The Dataset class in Rankify encapsulates these attributes and provides easy access to retrieval, evaluation, and benchmarking. The dataset schema is depicted in Figure 4, illustrating how questions, answers, and contexts interact within Rankify.
+To facilitate benchmarking and ease of use, Rankify provides pre-retrieved datasets where each query is associated with 1,000 retrieved documents from different retrievers. These datasets allow users to test different re-ranking and retrieval models without the need for time-consuming indexing.
+7 https://github.com/abdoelsayed2016/reranking 8 http://rankify.readthedocs.io/
+
+Rankify: A Comprehensive Python Toolkit for Retrieval, Re-Ranking, and RAG
+
+Dataset Size (log scale)
+
+MSMARCO-QA 6
+
+ArchivalQA
+
+ELI5 ChroniclingQA
+
+TSriQvuiaAQDA NQ
+WikiPassageQA 5
+NarrativeQA SIQA WikiQA
+PIQA PopQA AmBoboiglQQA 4 CommenseQA Fermi
+WebQuestions CuratedTREC
+
+HotpotQA
+2WikiMultiHopQA Musique
+ASQA StrategyQA
+
+3
+
+T-REx
+
+MMLU HellaSwag
+
+Zero-shot RE AY2
+zsre AIDA CoNLL-YAGO
+
+ARC
+
+OpenBookQA
+
+WNED
+
+QuARTz
+
+TruthfulQA
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+
+WikiAsp
+
+Categories QA TempQA Multi-Hop QA Long-Form QA Multiple-Choice Entity-linking Slot Filling Fact Verification Dialog Generation Summarization Other
+
+FEVER
+
+WOW
+
+DomainRAG
+
+2
+
+Bamboogle
+
+T Q e A mp ulti- Q H A op ng-F Q o A rm ltiple Q -C A ho ntity i - c l e ink Slo i t ng Fil Ver li i n fi g cat Gen io e n rat mma i r o i n zation Other
+
+M
+
+Lo
+
+Mu
+
+E
+
+Fact Dialog Su
+
+Figure 3: Summary of datasets used in our Rankify. The figure illustrates the dataset sizes across different categories. The bubble size represents the total number of samples (Train + Dev + Test) for each dataset. Categories include QA, Multi-Hop QA, Long-Form QA, Multiple-Choice, Entity-Linking, Slot Filling, Fact Verification, Dialog Generation, Summarization, and Other specialized datasets. The log scale is used for better visualization of dataset size variations.
+
+Dataset .dataset_name: str .retriever: str .documents: Document .id_to_text_title .n_docs
+Document .answers: Answer .answers: Answer .contexts: Context .reorder_contexts:Context
+
+Question .question: str
+Answer .answers: List[str]
+Context .score: float .has_answer: bool .id: int .title: str .text: str
+
+Figure 4: Schema of the Dataset class, illustrating the objects used to represent a dataset in Rankify.
+
+As mentioned above, to ensure standardized retrieval benchmarking, Rankify provides pre-retrieved datasets, where each query is associated with 1,000 retrieved documents from Wikipedia. These datasets span multiple retrieval tasks, including question answering, multi-hop reasoning, temporal retrieval, entity linking, fact verification, dialogue generation, and summarization. To enable fair comparisons across different retrieval methods, each dataset
+
+has been processed using multiple retrievers, including BM25, DPR, ANCE, BGE, Contriever, and ColBERT. By applying the same retrieval pipeline across all the datasets, Rankify eliminates the need for computationally expensive indexing while maintaining consistency in evaluation.
+Rankify allows users to load and explore datasets with minimal effort. Below is an example demonstrating how to download and inspect a dataset using Rankify ’s API:
+Listing 2: Loading a dataset in Rankify and inspecting its
+structure.
+1 from rankify.dataset.dataset import Dataset 2 # Load the nq-test dataset retrieved with BM25 3 dataset = Dataset(retriever="bm25", dataset_name="nq -test") 4 documents = dataset.download(force_download=False) 5 # Inspect the first document 6 print(documents[0])
+Beyond preloaded datasets, Rankify enables users to define their own datasets using the Dataset class. Below is an example demonstrating how to create a custom retrieval dataset:
+Listing 3: Creating a custom dataset in Rankify.
+1 from rankify.dataset.dataset import Dataset , Document , Question , Answer , Context
+2 # Define a new dataset with a single question and answer 3 question = Question("What is the capital of France?") 4 answer = Answer(["Paris"]) 5 context = [Context(score=0.9, has_answer=True , id=1, title="
+France", text="The capital is Paris.")] 6 # Create the document and dataset
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+
+7 document = Document(question , answer , context) 8 custom_dataset = Dataset(retriever="custom", dataset_name="
+MyDataset") 9 custom_dataset.documents = [document] 10 # Save the dataset 11 custom_dataset . save_dataset (" my_dataset . json ")
+Users can load their own datasets using load_dataset and load_dataset_qa functions. The load_dataset function is designed for structured datasets that include both queries and retrieved documents. On the other hand, load_dataset_qa is intended for question-answering datasets that contain only queries and answers, allowing users to use them directly for retrieval tasks. The following examples demonstrate how users can load these datasets in Rankify:
+Listing 4: Loading a dataset with documents and a QA-only
+dataset.
+1 from rankify.dataset.dataset import Dataset 2 # Load a dataset that includes retrieved documents 3 retrieval_dataset = Dataset.load_dataset("path/to/
+retrieval_dataset.json") 4 # Load a QA dataset with only questions and answers 5 qa_dataset = Dataset.load_dataset_qa("path/to/qa_dataset.jsonl
+")
+
+3.3 Retriever Models
+
+Rankify supports a diverse set of retriever models to facilitate document retrieval for various information retrieval tasks. The current version includes both sparse and dense retrievers. Sparse retrievers, such as BM25 [92], rely on exact term matching, while dense retrievers, such as DPR [120], ANCE [115], and BGE [15], and ColBERT [49].
+The retrievers implemented in Rankify are accessible via a unified interface, where users can specify the retrieval method and parameters. The available retriever models include BM25, DPR, ANCE, Contriever [40], BGB, and ColBERT. Rankify allows users to retrieve documents efficiently using different retrieval models. The retrievers can be applied to any dataset supported by Rankify, making it flexible for experimentation and benchmarking. Users can easily initialize a retriever and apply it to a list of query-document pairs, as demonstrated in Listing 5.
+
+Listing 5: Using a retriever model in Rankify to retrieve documents.
+
+1 from rankify.dataset.dataset import Document , Question , Answer
+
+2 from rankify.retrievers.retriever import Retriever
+
+3
+
+4 # Define sample documents
+
+5 documents = [
+
+6
+
+Document(question=Question("the cast of a good day to die
+
+hard?"),
+
+7
+
+answers=Answer(["Jai Courtney", "Bruce Willis"]),
+
+contexts =[]) ,
+
+8
+
+Document(question=Question("Who wrote Hamlet?"),
+
+9
+
+answers=Answer(["Shakespeare"]), contexts =[])
+
+10 ]
+
+11 # Initialize a retriever ( example : ColBERT )
+
+12 retriever = Retriever ( method =" colbert " , model =" colbert - ir /
+
+colbertv2.0", n_docs=5, index_type="msmarco")
+
+13 # Retrieve documents
+
+14 retrieved_documents = retriever . retrieve ( documents )
+
+15 # Print retrieved documents
+
+16 for i , doc in enumerate ( retrieved_documents ):
+
+17
+
+print(f"\nDocument {i+1}:")
+
+Trovato et al.
+
+18
+
+print(doc)
+
+In Listing 5, users can specify the retrieval corpus, select the desired retriever model, and define the number of documents to retrieve. This flexibility allows researchers to experiment with different retrieval settings, optimizing their retrieval strategy based on the task requirements.
+
+3.4 Re-Ranking Models
+In information retrieval, two-stage pipelines are widely used to maximize retrieval performance. The first stage involves retrieving a set of candidate documents using a computationally efficient retriever, followed by a second stage where these documents are re-ranked using a stronger, typically neural network-based, model. This reranking step enhances retrieval quality by considering deeper semantic relationships between the query and documents. While effective, re-ranking models vary significantly in their architectures, trade-offs, and implementations, making it challenging for users to select the most suitable method for their specific needs.
+To address this, Rankify provides a unified interface for reranking, enabling users to effortlessly switch between different models with minimal modifications. The framework supports a diverse set of 24 primary re-ranking models with 41 sub-methods, spanning different re-ranking strategies such as pointwise, pairwise, and listwise approaches. The implemented models include MonoBERT [76], MonoT5 [77], RankT5 [126], ListT5 [121], ColBERT [96], RankGPT [102], and various transformer-based re-rankers.
+Users can apply these models to re-rank retrieved documents using a simple interface, as demonstrated in Listing 6.
+
+Listing 6: Applying re-ranking in Rankify.
+
+1 from rankify.dataset.dataset import Document , Question , Answer
+
+2 from rankify.retrievers.retriever import Retriever
+
+3 from rankify.rerankers.reranker import Reranker
+
+4 # Define sample documents
+
+5 documents = [
+
+6
+
+Document(question=Question("the cast of a good day to die
+
+hard?"),
+
+7
+
+answers=Answer(["Jai Courtney", "Bruce Willis"]),
+
+contexts =[]) ,
+
+8
+
+Document(question=Question("Who wrote Hamlet?"),
+
+9
+
+answers=Answer(["Shakespeare"]), contexts =[])
+
+10 ]
+
+11 # Initialize a retriever
+
+12 retriever = Retriever ( method =" colbert " , model =" colbert - ir /
+
+colbertv2.0", n_docs=5, index_type="msmarco")
+
+13 retrieved_documents = retriever . retrieve ( documents )
+
+14 # Initialize a re - ranker
+
+15 reranker = Reranker ( method =" monot5 " , model_name =" monot5 - base ")
+
+16 # Apply re - ranking
+
+17 reranked_documents = reranker . rerank ( retrieved_documents )
+
+18 # Print re - ranked documents
+
+19 for i , doc in enumerate ( reranked_documents ):
+
+20
+
+print(f"\nDocument {i+1}:")
+
+21
+
+print(doc)
+
+Rankify supports both pre-trained models from Hugging Face and API-based re-ranking models such as RankGPT, Cohere, and Jina Reranker. Users can select from a variety of models, including cross-encoders, T5-based ranking models, and late-interaction retrieval models like ColBERT. The flexibility to switch between different re-ranking strategies allows researchers and practitioners to optimize ranking performance based on their task requirements.
+
+Rankify: A Comprehensive Python Toolkit for Retrieval, Re-Ranking, and RAG
+
+3.5 Retrieval-Augmented Generation (RAG)
+Models
+Retrieval-Augmented Generation (RAG) enhances language models by integrating retrieval mechanisms, allowing them to generate responses based on dynamically retrieved documents rather than relying solely on pre-trained knowledge. This approach is particularly effective for knowledge-intensive tasks such as open-domain question answering, fact verification, and knowledge-based text generation. Rankify provides a modular and extensible interface for applying multiple RAG methods, including zero-shot generation, Fusion-in-Decoder (FiD) [41], and in-context learning [89].
+In Rankify, the Generator module enables seamless integration of RAG techniques, allowing users to experiment with different generative approaches. Users can specify the desired RAG method and model, applying generation strategies across retrieved documents.
+Users can apply these methods to generate responses based on retrieved documents. Listing 7 demonstrates how to use Rankify’s RAG module with an in-context learning approach.
+
+Listing 7: Applying Retrieval-Augmented Generation (RAG) in Rankify.
+
+1 from rankify.dataset.dataset import Document , Question , Answer
+
+, Context
+
+2 from rankify.generator.generator import Generator
+
+3 # Sample question and contexts
+
+4 question = Question("What is the capital of France?")
+
+5 answers = Answer(["Paris"])
+
+6 contexts = [
+
+7
+
+Context(id=1, title="France", text="The capital of France
+
+is Paris.", score =0.9),
+
+8
+
+Context(id=2, title="Germany", text="Berlin is the capital
+
+of Germany.", score =0.5)
+
+9]
+
+10 # Create a Document
+
+11 doc = Document ( question = question , answers = answers , contexts =
+
+contexts)
+
+12 # Initialize Generator with In - Context RALM
+
+13 generator = Generator ( method ="in - context - ralm " , model_name = '
+
+meta -llama/Llama -3.1-8B')
+
+14 # Generate answer
+
+15 generated_answers = generator . generate ([ doc , doc ])
+
+16 print ( generated_answers )
+
+Rankify allows users to leverage large-scale language models such as LLaMA [108], GPT-4 [8], and T5-based models [87] for retrieval-augmented generation. By supporting both encoderdecoder architectures (FiD [41]) and decoder-only models (e.g., GPT, LLaMA), Rankify provides flexibility for optimizing generation quality based on task-specific requirements.
+
+3.6 Evaluation Metrics
+Rankify provides evaluation metrics for retrieval, re-ranking, and retrieval-augmented generation (RAG). For retrieval and re-ranking, Top-k accuracy measures whether relevant documents appear within the top-k results, allowing performance comparison before and after re-ranking. Listing 8 demonstrates how to compute Top-k accuracy.
+
+Listing 8: Computing Top-k accuracy for retrieval and re-
+ranking in Rankify.
+1 from rankify.metrics.metrics import Metrics 2 metrics = Metrics(documents) 3 # Compute Top -k accuracy before and after re-ranking
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+4 before_ranking = metrics.calculate_retrieval_metrics(ks =[1,5,10,20,50,100], use_reordered=False)
+5 after_ranking = metrics.calculate_retrieval_metrics(ks =[1,5,10,20,50,100], use_reordered=True)
+6 print("Before Ranking:", before_ranking) 7 print("After Ranking:", after_ranking)
+For QA and RAG, Rankify supports Exact Match (EM), recall, precision, and containment to evaluate generated answers. Listing 9 shows how these metrics are computed.
+Listing 9: Computing QA and RAG evaluation metrics in
+Rankify.
+1 from rankify.metrics.metrics import Metrics 2 qa_metrics = Metrics(documents) 3 qa_results = qa_metrics.calculate_generation_metrics(
+generated_answers) 4 print(qa_results)
+By providing a unified evaluation module, Rankify ensures consistent benchmarking across retrieval, re-ranking, and RAG tasks.
+4 Experimental Result and Discussion
+4.1 Experiment Setup
+Rankify enables researchers to benchmark retrieval, re-ranking, and RAG methods, evaluate their own approaches, and explore optimizations within these tasks. To demonstrate its capabilities, we conducted multiple experiments to provide reproducible benchmarks and performance insights. All main experiments were conducted on 8 NVIDIA A100 GPUs.
+Experiments were performed on a diverse set of datasets, covering open-domain and multi-hop QA, fact verification, and temporal retrieval tasks. We evaluated retrieval performance on datasets such as Natural Questions (NQ), TriviaQA, HotpotQA, 2WikiMultiHopQA, and ArchivalQA, while re-ranking performance was analyzed on MSMARCO, WebQuestions, and PopQA. For retrieval evaluation, we measured Top-k accuracy at k=1, 5, 10, 20, 50, 100. Exact match (EM), Precision, Recall, Contains, and F1 were used as the primary evaluation metric for QA tasks.
+We conducted experiments across all supported retrieval, reranking, and RAG methods. Retrieval models BM25, DPR, ANCE, BGE, and ColBERT. Re-ranking methods tested included MonoT5, RankT5, RankGPT, and various transformer-based re-rankers. For RAG, we evaluated zero-shot generation, Fusion-in-Decoder (FiD), in-context learning (RALM). These experiments highlight the adaptability of Rankify for benchmarking retrieval, ranking, and knowledgegrounded text generation.
+4.2 Retrieval Results
+The retrieval performance of BM25 across multiple datasets is shown in Table 2. The results report Top-1, Top-5, Top-10, Top20, Top-50, and Top-100 retrieval accuracy for each dataset split. Performance varies significantly based on dataset characteristics, with open-domain QA datasets such as TriviaQA and Natural Questions achieving high Top-k accuracy, while more complex multihop datasets like 2WikiMultiHopQA and HotpotQA show lower retrieval rates, reflecting the challenges in retrieving supporting evidence across multiple documents. Temporal datasets like ArchivalQA and ChroniclingQA exhibit moderate retrieval performance, likely due to the temporal nature of their content.
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+
+Trovato et al.
+
+Dataset
+
+Split Top-1 (%) Top-5 (%) Top-10 (%) Top-20 (%) Top-50 (%) Top-100 (%) Dataset
+
+Split Top-1 (%) Top-5 (%) Top-10 (%) Top-20 (%) Top-50 (%) Top-100 (%)
+
+2WikiMultiHopQA [36]
+
+dev 17.17 train 8.85
+
+31.72 19.78
+
+40.14 28.15
+
+47.73 38.16
+
+55.88 51.16
+
+61.17 57.70
+
+ArchivalQA [111]
+
+dev 18.18 test 17.68
+
+33.29 32.55
+
+39.72 39.26
+
+45.96 45.36
+
+53.68 52.76
+
+58.74 58.08
+
+ChroniclingAmericaQA [81] test 4.18 dev 4.26
+
+11.23 11.80
+
+15.83 16.42
+
+20.87 21.50
+
+27.49 28.19
+
+32.48 33.15
+
+AmbigQA [52, 72]
+
+train 27.30 dev 30.22
+
+50.67 54.25
+
+59.63 65.58
+
+67.63 72.98
+
+75.68 80.47
+
+79.87 84.92
+
+ARC [22]
+
+test 4.96 dev 4.83 train 4.45
+
+19.84 19.45 18.16
+
+33.57 30.84 31.39
+
+51.94 52.13 51.39
+
+79.09 79.06 78.19
+
+91.80 91.83 91.36
+
+TriviaQA [44]
+
+dev 48.70 test 48.22 train 47.87
+
+67.57 67.44 67.22
+
+72.84 72.79 72.90
+
+77.38 77.28 77.15
+
+81.19 81.42 81.30
+
+83.59 83.87 83.64
+
+BoolQ [21]
+
+train 1.71 4.33 7.23 12.03 24.56 37.76 CommenseQA [105] train 2.85 8.74 13.36 19.28 28.87 36.54
+
+dev 1.22
+
+3.94
+
+6.61
+
+11.68
+
+23.67
+
+37.49
+
+dev 2.13
+
+6.96
+
+11.88
+
+17.77
+
+27.11
+
+33.82
+
+CuratedTREC [54]
+
+train 16.98 test 18.14
+
+29.77 31.63
+
+33.95 34.65
+
+36.74 38.84
+
+40.00 41.86
+
+40.93 43.02
+
+AY2 [37]
+
+train 23.81 dev 25.02
+
+41.60 41.14
+
+48.84 48.10
+
+55.88 55.39
+
+63.78 64.19
+
+69.62 70.55
+
+FEVER [80, 107]
+
+dev 0.05
+
+0.41
+
+0.90
+
+1.70
+
+3.78
+
+6.50 HellaSwag [123]
+
+train 3.97
+
+16.60
+
+28.86
+
+46.02
+
+71.68
+
+85.20
+
+train 0.15
+
+0.74
+
+1.42
+
+2.52
+
+5.85
+
+10.49
+
+dev 3.77
+
+15.00
+
+26.31
+
+42.89
+
+69.00
+
+83.51
+
+SQuAD [88]
+
+dev 36.94 test 36.67 train 31.84
+
+57.61 57.37 50.24
+
+64.78 64.50 57.15
+
+71.31 71.09 63.33
+
+77.89 77.74 70.32
+
+81.96 81.84 74.61
+
+MMLU [34, 35]
+
+train 3.65 dev 6.53 test 6.53
+
+14.14 21.75 22.01
+
+23.98 33.64 34.67
+
+38.68 50.62 51.22
+
+62.22 75.77 74.35
+
+78.04 88.18 86.40
+
+QuaRTz [104]
+
+test 5.87 dev 7.81 train 7.81
+
+23.60 26.82 26.82
+
+38.90 40.62 40.62
+
+58.67 63.54 63.54
+
+80.74 84.38 84.38
+
+90.43 92.19 92.19
+
+NarrativeQA [93]
+
+dev 15.46 test 16.80 train 16.80
+
+23.92 25.24 25.24
+
+27.10 28.46 28.46
+
+30.45 31.50 31.50
+
+35.08 35.74 35.74
+
+38.89 38.65 38.65
+
+NQ [52]
+
+dev 23.62 test 23.46 train 22.89
+
+45.60 45.62 44.97
+
+55.41 56.32 54.32
+
+64.19 64.88 62.73
+
+72.51 74.57 71.75
+
+77.72 79.72 77.03
+
+dev 3.40 OpenBookQA [71] train 3.35
+test 4.00
+
+15.20 16.24 16.80
+
+31.60 28.99 32.20
+
+50.60 47.85 51.20
+
+79.00 75.01 74.00
+
+90.00 88.56 88.80
+
+WebQuestions [11]
+
+test 19.54 train 21.41
+
+42.86 44.71
+
+53.44 55.35
+
+63.24 64.21
+
+72.34 72.71
+
+76.43 78.45
+
+Musique [109]
+
+dev 7.36 train 6.23
+
+15.47 13.70
+
+21.39 18.54
+
+25.98 24.39
+
+34.59 33.77
+
+41.29 40.81
+
+T-REx [27, 80]
+
+dev 45.48
+
+64.34
+
+70.60
+
+76.04
+
+80.42
+
+82.98
+
+TruthfulQA [59]
+
+dev 2.33
+
+7.59
+
+12.12
+
+20.69
+
+38.19
+
+56.55
+
+SIQA [97]
+
+train 0.34
+
+1.52
+
+2.78
+
+dev 0.61
+
+2.05
+
+3.58
+
+4.85 8.92 13.43 HotpotQA [119] dev 28.13 45.02 51.92 57.79 65.44 70.67
+
+6.55
+
+11.31
+
+16.58
+
+train 34.89
+
+51.71
+
+58.13
+
+64.09
+
+71.11
+
+75.49
+
+StrategyQA [32]
+
+train 4.19
+
+15.72
+
+26.29
+
+39.87
+
+52.88
+
+57.86
+
+PopQA [68]
+
+test 25.00
+
+38.77
+
+44.70
+
+49.74
+
+56.82
+
+62.36
+
+WOW [26, 80]
+
+dev 0.20
+
+0.33
+
+0.36
+
+0.39
+
+0.46
+
+train 0.26
+
+0.38
+
+0.41
+
+0.45
+
+0.49
+
+0.46 ZSRC [56] 0.52
+
+dev 52.26 train 50.53
+
+70.86 67.23
+
+76.29 72.06
+
+81.44 76.10
+
+85.39 80.35
+
+87.73 82.99
+
+Bamboogle [84]
+
+test 5.60
+
+12.80
+
+17.60
+
+24.80
+
+39.20
+
+44.00
+
+EntityQuestions [98] test 43.36
+
+60.50
+
+66.08
+
+70.61
+
+75.41
+
+79.06
+
+Table 2: Retrieval performance of BM25 across several selected datasets. The table reports Top-1, Top-5, Top-10, Top-20, Top-50,
+
+and Top-100 retrieval accuracy for each dataset split. Datasets vary in complexity, including open-domain QA (e.g., TriviaQA,
+
+NQ), multi-hop reasoning (e.g., 2WikiMultiHopQA, HotpotQA), fact verification (e.g., FEVER, TruthfulQA), and temporal
+
+retrieval (e.g., ArchivalQA, ChroniclingQA).
+
+For datasets requiring precise fact verification, such as FEVER and TruthfulQA, BM25 struggles, achieving low Top-1 accuracy, indicating the limitations of keyword-based retrieval in distinguishing fine-grained factual nuances. In contrast, reasoning-based datasets like StrategyQA and CommonsenseQA show relatively low retrieval accuracy, highlighting the need for more advanced retrievers capable of capturing implicit reasoning dependencies.
+Table 3 presents the retrieval performance of various retrievers across three benchmark datasets: NQ, WebQ, and TriviaQA. The results report Top-1, Top-5, Top-10, Top-20, Top-50, and Top-100 retrieval accuracy, providing insights into how different retrieval models rank relevant documents. Among the tested retrievers, dense retrieval methods such as DPR, MSS-DPR, and ColBERT consistently outperform retrievers like MSS and Contriever. MSS-DPR achieves the highest Top-1 accuracy, reaching 50.16% on NQ, 44.24% on WebQ, and 61.63% on TriviaQA, demonstrating the effectiveness of fine-tuned dense retrieval. Standard DPR also performs well, particularly on NQ and TriviaQA, where it reaches 48.67% and 57.47% Top-1 accuracy, respectively. ColBERT, which employs lateinteraction ranking, shows competitive performance, particularly in higher recall settings (Top-50 and Top-100).
+4.3 Re-Ranking Results
+The performance of various re-ranking methods applied to BM25retrieved documents is presented in Table 4. The table reports Top-1,
+
+Retriever
+
+Dataset Top-1 Top-5 Top-10 Top-20 Top-50 Top-100
+
+MSS [95] MSS-DPR [95] Contriever [40]
+
+NQ WebQ TriviaQA NQ WebQ TriviaQA NQ WebQ TriviaQA
+
+19.27 11.66 30.76 50.16 44.24 61.63 22.16 19.98 34.16
+
+41.24 29.03 52.64 71.88 65.00 75.21 47.28 43.45 59.48
+
+51.27 39.12 60.52 77.47 71.65 79.14 58.72 56.39 68.00
+
+59.97 49.21 67.17 81.44 76.91 81.85 67.86 65.69 73.91
+
+69.55 61.12 74.57 85.98 81.84 84.92 76.01 74.85 79.83
+
+75.56 68.35 79.11 88.14 84.54 86.58 80.55 80.11 82.93
+
+DPR [120]
+
+NQ WebQ TriviaQA
+
+48.67 44.83 57.47
+
+68.78 65.00 72.40
+
+74.54 70.62 76.50
+
+79.19 74.60 79.76
+
+83.71 78.69 82.96
+
+85.70 81.64 85.09
+
+ColBert [96]
+
+NQ WebQ TriviaQA
+
+42.99 40.11 57.36
+
+68.78 64.81 75.90
+
+76.12 71.56 79.49
+
+82.08 76.57 82.18
+
+86.15 81.20 84.74
+
+88.59 84.50 86.41
+
+Table 3: Comparison of different retrieval models on Natural
+
+Questions (NQ), WebQuestions (WebQ), and TriviaQA. The
+
+table reports Top-1 to Top-100 accuracy for each retriever.
+
+Top-5, Top-10, Top-20, and Top-50 accuracy for two datasets: Natural Questions (NQ-Test) and WebQuestions (WebQ). The baseline BM25 retrieval scores serve as a reference, demonstrating the extent to which re-ranking improves document ranking quality across different ranking models.
+Across all models, re-ranking consistently improves retrieval effectiveness, with notable gains observed in Top-1 accuracy. Transformerbased ranking models such as UPR (T5-based models), RankGPT, Flaskrank (MiniLM and TinyBERT), and RankT5 achieve substantial
+
+Rankify: A Comprehensive Python Toolkit for Retrieval, Re-Ranking, and RAG
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+
+Reranking/ BM25
+UPR [94]
+RankGPT [101]
+FlaskRank [25]
+RankT5 [126]
+Inranker [53] LLM2Vec [10] MonoBert [78] Twolar [9] Echorank [90] Incontext Reranker [16]
+Lit5 [106]
+Sentence Transformer Reranker
+
+Model
+-
+T5-small T5-base T5-large T0-3B gpt-neo-2.7B gpt2 gpt2-medium gpt2-large gpt2-xl
+llamav3.1-8b
+TinyBERT-L-2-v2 MiniLM-L-12-v2 MultiBERT-L-12 ce-esci-MiniLM-L12-v2
+base large 3b
+small base 3b
+Meta-Llama-31-8B
+large
+twolar-xl
+flan-t5-large flan-t5-xl
+llamav3.1-8b
+LiT5-Distill-base LiT5-Distill-large LiT5-Distill-xl LiT5-Distill-base-v2 LiT5-Distill-large-v2 LiT5-Distill-xl-v2
+all-MiniLM-L6-v2 [112] GTR-base [75] GTR-large GTR-xl GTR-xxl T5-base [87] T5-xxl T5-large
+
+Top-1
+22.10
+23.60 26.81 29.75 35.42 28.75 25.95 26.75 26.59 27.28
+41.55
+31.49 41.02 11.99 34.70
+43.04 45.54 47.17
+15.90 15.90 15.90
+24.32
+39.05
+46.84
+36.73 41.68
+15.15
+40.05 44.40 47.81 42.57 46.53 47.92
+33.35 39.41 40.63 41.55 42.93 31.19 38.89 30.80
+
+Top-5
+43.76
+49.44 52.93 55.84 60.44 55.01 50.08 52.99 52.35 53.85
+60.30
+53.90 62.07 31.74 57.47
+62.99 64.98 66.45
+40.11 40.69 40.22
+49.22
+61.71
+65.29
+55.09 55.15
+38.50
+59.80 62.57 64.07 61.49 63.10 64.18
+57.34 59.08 62.07 61.82 63.32 55.84 61.46 55.59
+
+NQ-Test Top-10 Top-20
+
+54.45 62.93
+
+59.97 63.32 65.67 67.56 64.81 60.47 63.04 62.68 63.24
+
+67.70 69.77 72.02 72.68 71.13 69.05 69.80 70.13 70.11
+
+66.17 70.60
+
+61.57 67.50 43.54 64.81
+
+68.33 72.49 55.01 70.60
+
+68.47 70.02 70.85
+
+72.99 73.85 74.18
+
+46.84 48.11 48.06
+
+56.23 56.62 57.97
+
+59.55 68.08
+
+67.89 72.63
+
+70.22 73.62
+
+59.11 59.05
+
+62.38 62.38
+
+57.11 69.66
+
+65.95 67.59 68.55 66.73 67.83 69.03
+65.37 65.95 68.25 67.78 68.55 63.60 67.78 63.35
+
+70.80 71.74 72.07 70.83 71.91 72.40
+70.72 71.32 72.32 72.65 73.01 70.22 72.49 70.02
+
+Top-50
+72.74
+75.15 76.12 76.48 76.75 76.56 75.87 75.95 75.95 75.84
+75.42
+74.95 76.26 69.63 76.17
+76.28 76.81 76.89
+69.83 69.66 69.00
+75.26
+76.56
+76.86
+62.38 62.38
+76.48
+75.73 76.01 76.26 75.56 75.87 76.17
+76.01 76.03 76.73 76.81 77.00 76.06 76.64 76.37
+
+Top-1
+18.80
+18.55 20.66 24.21 32.48 24.75 20.47 22.39 24.06 23.57
+38.77
+28.54 37.05 12.54 31.84
+36.95 38.77 40.40
+14.46 14.46 14.46
+26.72
+34.99
+41.68
+31.74 36.22
+18.89
+36.76 39.66 42.37 39.61 41.97 41.53
+30.95 36.56 38.97 38.92 39.41 29.77 35.82 30.51
+
+Top-5
+41.83
+43.65 48.52 51.77 56.39 48.91 45.32 49.01 49.85 50.78
+58.36
+51.87 58.07 34.30 55.01
+58.75 60.28 60.33
+36.36 37.45 37.30
+50.39
+57.33
+60.82
+53.69 52.55
+41.83
+56.79 58.02 59.44 57.97 59.49 60.13
+53.44 58.21 58.51 59.69 60.03 54.92 58.26 55.06
+
+WebQ Top-10
+52.16
+55.56 58.56 60.38 64.17 59.64 56.49 59.54 59.84 60.48
+62.69
+60.62 64.96 45.91 62.54
+64.27 66.48 66.58
+46.25 46.80 46.11
+60.48
+64.56
+67.07
+58.75 57.18
+52.16
+63.48 64.56 65.55 64.22 65.64 65.69
+62.10 64.32 65.30 66.04 65.89 62.84 65.206 61.71
+
+Top-20
+62.40
+64.91 66.48 67.27 69.09 66.83 65.69 66.92 67.07 66.87
+67.71
+67.42 70.02 55.90 68.60
+70.07 70.96 71.16
+57.48 56.54 57.48
+68.40
+70.12
+71.55
+61.51 61.51
+62.40
+67.81 68.94 69.38 68.55 68.65 69.04
+68.01 69.14 70.02 70.57 70.47 68.70 70.32 68.35
+
+Top-50
+71.70
+72.68 72.68 73.32 73.67 72.63 72.78 72.44 72.78 72.73
+73.12
+73.17 73.96 67.91 73.47
+74.45 74.31 74.45
+69.98 69.68 69.34
+73.47
+73.96
+74.40
+61.51 61.51
+71.70
+73.12 73.67 73.62 73.32 72.98 73.27
+73.52 73.62 73.57 74.01 74.01 73.52 74.01 73.37
+
+Table 4: Performance of re-ranking methods on BM25-retrieved documents for Natural Questions (NQ-Test) and WebQuestions (WebQ-Test). Results are reported in terms of Top-1, Top-5, Top-10, Top-20, and Top-50 accuracy, highlighting the impact of various re-ranking models on retrieval effectiveness.
+
+improvements over the BM25 baseline. In particular, RankT5-3B outperforms other ranking models, achieving a Top-1 accuracy of 47.17% on NQ-Test and 40.40% on WebQ, highlighting the effectiveness of T5-based ranking models for large-scale retrieval. RankGPT, leveraging LLaMA-3.1-8B, also demonstrates strong performance, particularly in WebQ, where it improves Top-1 accuracy from 18.80% (BM25) to 38.77%.
+Among lighter-weight models, Flaskrank (MiniLM and TinyBERT) and MonoBERT-large provide solid improvements while maintaining efficiency. MiniLM-L-12-v2 achieves 41.02% Top-1 accuracy on NQ-Test and 37.05% on WebQ, making it a strong candidate for deployment scenarios where computational efficiency is critical. The MonoBERT-large model reaches 39.05% on NQ-Test
+
+and 34.99% on WebQ, reinforcing the effectiveness of BERT-based cross-encoders for document ranking.
+Models that integrate listwise and contrastive ranking techniques, such as Twolar, and LiT5 re-rankers, show competitive performance. Twolar-xl achieves 46.84% Top-1 accuracy on NQTest and 41.68% on WebQ, while LiT5-Distill-xl reaches 47.81% on NQ-Test and 42.37% on WebQ, demonstrating that fine-tuned T5 models can significantly improve ranking quality. The sentencetransformer rerankers, particularly GTR-xxl, achieve 42.93% and 39.41% Top-1 accuracy on NQ-Test and WebQ, respectively, making them effective in ranking diverse retrieval outputs.
+Overall, the results highlight the importance of re-ranking in improving retrieval effectiveness. While BM25 provides a strong initial retrieval, the application of neural re-rankers significantly
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+enhances retrieval quality, particularly for Top-1 and Top-5 results. The effectiveness of different models varies based on dataset characteristics, with larger transformer-based models excelling in ranking accuracy, while lighter-weight models offer a balance between accuracy and efficiency.
+5 Conclusion
+We introduced Rankify, a modular toolkit that unifies retrieval, re-ranking, and retrieval-augmented generation (RAG) within a cohesive framework. By integrating diverse retrievers, state-of-theart re-rankers, and seamless RAG pipelines, Rankify streamlines experimentation and benchmarking in information retrieval. Our experiments demonstrate its effectiveness in enhancing ranking quality and retrieval-based text generation.
+Designed for extensibility, Rankify allows for easy integration of new models and evaluation methods. Future work will focus on improving retrieval efficiency, optimizing re-ranking strategies, and advancing RAG capabilities. The framework is open-source, actively maintained, and freely available for the research community.
+References
+[1] Martín Abadi, Paul Barham, Jianmin Chen, Zhifeng Chen, Andy Davis, Jeffrey Dean, Matthieu Devin, Sanjay Ghemawat, Geoffrey Irving, Michael Isard, Manjunath Kudlur, Josh Levenberg, Rajat Monga, Sherry Moore, Derek G. Murray, Benoit Steiner, Paul Tucker, Vijay Vasudevan, Pete Warden, Martin Wicke, Yuan Yu, and Xiaoqiang Zheng. 2016. TensorFlow: a system for large-scale machine learning. In Proceedings of the 12th USENIX Conference on Operating Systems Design and Implementation (Savannah, GA, USA) (OSDI’16). USENIX Association, USA, 265–283.
+[2] Amar Abane, Anis Bekri, and Abdella Battou. 2024. FastRAG: Retrieval Augmented Generation for Semi-structured Data. arXiv preprint arXiv:2411.13773 (2024).
+[3] Abdelrahman Abdallah and Adam Jatowt. 2023. Generator-retriever-generator: A novel approach to open-domain question answering. arXiv preprint arXiv:2307.11278 (2023).
+[4] Abdelrahman Abdallah, Mahmoud Kasem, Mahmoud Abdalla, Mohamed Mahmoud, Mohamed Elkasaby, Yasser Elbendary, and Adam Jatowt. 2024. Arabicaqa: A comprehensive dataset for arabic question answering. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval. 2049–2059.
+[5] Abdelrahman Abdallah, Jamshid Mozafari, Bhawna Piryani, Mohammed M Abdelgwad, and Adam Jatowt. 2024. DynRank: Improving Passage Retrieval with Dynamic Zero-Shot Prompting Based on Question Classification. arXiv preprint arXiv:2412.00600 (2024).
+[6] Abdelrahman Abdallah, Jamshid Mozafari, Bhawna Piryani, and Adam Jatowt. 2025. ASRank: Zero-Shot Re-Ranking with Answer Scent for Document Retrieval. arXiv:2501.15245 [cs.CL] https://arxiv.org/abs/2501.15245
+[7] Abdelrahman Elsayed Mahmoud Abdallah, Jamshid Mozafari, Bhawna Piryani, Mohammed M.Abdelgwad, and Adam Jatowt. 2025. DynRank: Improve Passage Retrieval with Dynamic Zero-Shot Prompting Based on Question Classification. In Proceedings of the 31st International Conference on Computational Linguistics, Owen Rambow, Leo Wanner, Marianna Apidianaki, Hend Al-Khalifa, Barbara Di Eugenio, and Steven Schockaert (Eds.). Association for Computational Linguistics, Abu Dhabi, UAE, 4768–4778. https://aclanthology.org/2025.colingmain.319/
+[8] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. 2023. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 (2023).
+[9] Davide Baldelli, Junfeng Jiang, Akiko Aizawa, and Paolo Torroni. 2024. TWOLAR: a TWO-step LLM-Augmented distillation method for passage Reranking. In European Conference on Information Retrieval. Springer, 470–485.
+[10] Parishad BehnamGhader, Vaibhav Adlakha, Marius Mosbach, Dzmitry Bahdanau, Nicolas Chapados, and Siva Reddy. 2024. Llm2vec: Large language models are secretly powerful text encoders. arXiv preprint arXiv:2404.05961 (2024).
+[11] Jonathan Berant, Andrew Chou, Roy Frostig, and Percy Liang. 2013. Semantic Parsing on Freebase from Question-Answer Pairs. In Proceedings of the 2013 Conference on Empirical Methods in Natural Language Processing, David Yarowsky,
+
+Trovato et al.
+Timothy Baldwin, Anna Korhonen, Karen Livescu, and Steven Bethard (Eds.). Association for Computational Linguistics, Seattle, Washington, USA, 1533–1544. https://aclanthology.org/D13- 1160 [12] Christopher JC Burges. 2010. From ranknet to lambdarank to lambdamart: An overview. Learning 11, 23-581 (2010), 81. [13] Zhe Cao, Tao Qin, Tie-Yan Liu, Ming-Feng Tsai, and Hang Li. 2007. Learning to rank: from pairwise approach to listwise approach. In Proceedings of the 24th international conference on Machine learning. 129–136. [14] Harrison Chase. 2022. LangChain: Building applications with LLMs through composability. https://www.langchain.com Available at https://www.langchain. com. [15] Jianlv Chen, Shitao Xiao, Peitian Zhang, Kun Luo, Defu Lian, and Zheng Liu. 2023. BGE M3-Embedding: Multi-Lingual, Multi-Functionality, Multi-Granularity Text Embeddings Through Self-Knowledge Distillation. arXiv:2309.07597 [cs.CL] [16] Shijie Chen, Bernal Jiménez Gutiérrez, and Yu Su. 2024. Attention in Large Language Models Yields Efficient Zero-Shot Re-Rankers. arXiv:2410.02642 [cs.CL] https://arxiv.org/abs/2410.02642 [17] Tao Chen, Mingyang Zhang, Jing Lu, Michael Bendersky, and Marc Najork. 2022. Out-of-domain semantics to the rescue! zero-shot hybrid retrieval models. In European Conference on Information Retrieval. Springer, 95–110. [18] Xilun Chen, Kushal Lakhotia, Barlas Oğuz, Anchit Gupta, Patrick Lewis, Stan Peshterliev, Yashar Mehdad, Sonal Gupta, and Wen tau Yih. 2021. Salient Phrase Aware Dense Retrieval: Can a Dense Retriever Imitate a Sparse One? arXiv:2110.06918 (2021). [19] Gobinda G Chowdhury. 2010. Introduction to modern information retrieval. Facet publishing. [20] Yagmur Gizem Cinar and Jean-Michel Renders. 2020. Adaptive pointwisepairwise learning-to-rank for content-based personalized recommendation. In Proceedings of the 14th ACM Conference on Recommender Systems. 414–419. [21] Christopher Clark, Kenton Lee, Ming-Wei Chang, Tom Kwiatkowski, Michael Collins, and Kristina Toutanova. 2019. BoolQ: Exploring the Surprising Difficulty of Natural Yes/No Questions. In NAACL. [22] Peter Clark, Isaac Cowhey, Oren Etzioni, Tushar Khot, Ashish Sabharwal, Carissa Schoenick, and Oyvind Tafjord. 2018. Think you have Solved Question Answering? Try ARC, the AI2 Reasoning Challenge. CoRR abs/1803.05457 (2018). arXiv:1803.05457 http://arxiv.org/abs/1803.05457 [23] Benjamin Clavié. 2024. rerankers: A Lightweight Python Library to Unify Ranking Methods. arXiv:2408.17344 [cs.IR] https://arxiv.org/abs/2408.17344 [24] W Bruce Croft, Donald Metzler, and Trevor Strohman. 2010. Search engines: Information retrieval in practice. Vol. 520. Addison-Wesley Reading. [25] P. Damodaran. 2024. FlashRank, Lightest and Fastest 2nd Stage Reranker for search pipelines. https://doi.org/10.5281/zenodo.11093524 [26] Emily Dinan, Stephen Roller, Kurt Shuster, Angela Fan, Michael Auli, and Jason Weston. 2019. Wizard of Wikipedia: Knowledge-Powered Conversational Agents. In International Conference on Learning Representations. https://openreview. net/forum?id=r1l73iRqKm [27] Hady ElSahar, Pavlos Vougiouklis, Arslen Remaci, Christophe Gravier, Jonathon S. Hare, Frédérique Laforest, and Elena Simperl. 2018. T-REx: A Large Scale Alignment of Natural Language with Knowledge Base Triples. In
+Proceedings of the Eleventh International Conference on Language Resources and
+Evaluation, LREC 2018, Miyazaki, Japan, May 7-12, 2018. [28] Feiteng Fang, Yuelin Bai, Shiwen Ni, Min Yang, Xiaojun Chen, and Ruifeng Xu.
+2024. Enhancing Noise Robustness of Retrieval-Augmented Language Models with Adaptive Adversarial Training. arXiv preprint arXiv:2405.20978 (2024). [29] Luyu Gao and Jamie Callan. 2021. Condenser: a Pre-training Architecture for Dense Retrieval. In Proc. EMNLP. 981–993. [30] Luyu Gao, Zhuyun Dai, Tongfei Chen, Zhen Fan, Benjamin Van Durme, and Jamie Callan. 2021. Complement Lexical Retrieval Model with Semantic Residual Embeddings. In Advances in Information Retrieval - 43rd European Conference on
+IR Research, ECIR 2021, Virtual Event, March 28 - April 1, 2021, Proceedings, Part I (Lecture Notes in Computer Science, Vol. 12656), Djoerd Hiemstra, Marie-Francine Moens, Josiane Mothe, Raffaele Perego, Martin Potthast, and Fabrizio Sebastiani (Eds.). Springer, 146–160. https://doi.org/10.1007/978-3-030-72113-8_10 [31] Yunfan Gao, Yun Xiong, Xinyu Gao, Kangxiang Jia, Jinliu Pan, Yuxi Bi, Yi Dai, Jiawei Sun, and Haofen Wang. 2023. Retrieval-augmented generation for large language models: A survey. arXiv preprint arXiv:2312.10997 (2023). [32] Mor Geva, Daniel Khashabi, Elad Segal, Tushar Khot, Dan Roth, and Jonathan Berant. 2021. Did Aristotle Use a Laptop? A Question Answering Benchmark with Implicit Reasoning Strategies. Transactions of the Association for Computational Linguistics 9 (2021), 346–361. https://doi.org/10.1162/tacl_a_00370 [33] Daniel Gillick, Sayali Kulkarni, Larry Lansing, Alessandro Presta, Jason Baldridge, Eugene Ie, and Diego Garcia-Olano. 2019. Learning Dense Representations for Entity Retrieval. In Proceedings of the 23rd Conference on Computational Natural Language Learning (CoNLL). https://doi.org/10.18653/v1/K19-1049 [34] Dan Hendrycks, Collin Burns, Steven Basart, Andrew Critch, Jerry Li, Dawn Song, and Jacob Steinhardt. 2021. Aligning AI With Shared Human Values.
+Proceedings of the International Conference on Learning Representations (ICLR)
+
+Rankify: A Comprehensive Python Toolkit for Retrieval, Re-Ranking, and RAG
+(2021). [35] Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn
+Song, and Jacob Steinhardt. 2021. Measuring Massive Multitask Language Understanding. Proceedings of the International Conference on Learning Representations (ICLR) (2021). [36] Xanh Ho, Anh-Khoa Duong Nguyen, Saku Sugawara, and Akiko Aizawa. 2020. Constructing A Multi-hop QA Dataset for Comprehensive Evaluation of Reasoning Steps. In Proceedings of the 28th International Conference on Computational Linguistics. International Committee on Computational Linguistics, Barcelona, Spain (Online), 6609–6625. https://www.aclweb.org/anthology/2020.colingmain.580 [37] Johannes Hoffart, Mohamed Amir Yosef, Ilaria Bordino, Hagen Fürstenau, Manfred Pinkal, Marc Spaniol, Bilyana Taneva, Stefan Thater, and Gerhard Weikum. 2011. A knowledge-based approach to named entity disambiguation. In Proceedings of the 2011 Conference on Empirical Methods in Natural Language Processing. 782–792. [38] Matthew Honnibal, Ines Montani, Sofie Van Landeghem, Adriane Boyd, et al. 2020. spaCy: Industrial-strength natural language processing in python. (2020). [39] Chao-Wei Huang and Yun-Nung Chen. 2024. PairDistill: Pairwise Relevance Distillation for Dense Retrieval. arXiv preprint arXiv:2410.01383 (2024). [40] Gautier Izacard, Mathilde Caron, Lucas Hosseini, Sebastian Riedel, Piotr Bojanowski, Armand Joulin, and Edouard Grave. 2021. Unsupervised Dense Information Retrieval with Contrastive Learning. https://doi.org/10.48550/ARXIV. 2112.09118 [41] Gautier Izacard and Edouard Grave. 2020. Leveraging passage retrieval with generative models for open domain question answering. arXiv preprint arXiv:2007.01282 (2020). [42] Yiling Jia, Huazheng Wang, Stephen Guo, and Hongning Wang. 2021. Pairrank: Online pairwise learning to rank by divide-and-conquer. In Proceedings of the web conference 2021. 146–157. [43] Jiajie Jin, Yutao Zhu, Xinyu Yang, Chenghao Zhang, and Zhicheng Dou. 2024. FlashRAG: A Modular Toolkit for Efficient Retrieval-Augmented Generation Research. arXiv preprint arXiv:2405.13576 (2024). [44] Mandar Joshi, Eunsol Choi, Daniel Weld, and Luke Zettlemoyer. 2017. TriviaQA: A Large Scale Distantly Supervised Challenge Dataset for Reading Comprehension. In Proceedings of the 55th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), Regina Barzilay and MinYen Kan (Eds.). Association for Computational Linguistics, Vancouver, Canada, 1601–1611. https://doi.org/10.18653/v1/P17-1147 [45] Ehsan Kamalloo, Nouha Dziri, Charles LA Clarke, and Davood Rafiei. 2023. Evaluating open-domain question answering in the era of large language models. arXiv preprint arXiv:2305.06984 (2023). [46] Vladimir Karpukhin, Barlas Oğuz, Sewon Min, Ledell Wu, Sergey Edunov, Danqi Chen, and Wen-tau Yih. 2020. Dense Passage Retrieval for Open-Domain Question Answering. In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP). https://www.aclweb.org/anthology/ 2020.emnlp- main.550 [47] Danupat Khamnuansin, Tawunrat Chalothorn, and Ekapol Chuangsuwanich. 2024. MrRank: Improving Question Answering Retrieval System through MultiResult Ranking Model. arXiv preprint arXiv:2406.05733 (2024). [48] Omar Khattab, Arnav Singhvi, Paridhi Maheshwari, Zhiyuan Zhang, Keshav Santhanam, Sri Vardhamanan, Saiful Haq, Ashutosh Sharma, Thomas T Joshi, Hanna Moazam, et al. 2023. Dspy: Compiling declarative language model calls into self-improving pipelines. arXiv preprint arXiv:2310.03714 (2023). [49] Omar Khattab and Matei Zaharia. 2020. ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT. arXiv:2004.12832 [cs.IR] https://arxiv.org/abs/2004.12832 [50] Dongkyu Kim, Byoungwook Kim, Donggeon Han, and Matouš Eibich. 2024. AutoRAG: automated framework for optimization of retrieval augmented generation pipeline. arXiv preprint arXiv:2410.20878 (2024). [51] Dongkyu Kim, Byoungwook Kim, Donggeon Han, and Matouš Eibich. 2024. AutoRAG: Automated Framework for optimization of Retrieval Augmented Generation Pipeline. arXiv:2410.20878 [cs.CL] https://arxiv.org/abs/2410.20878 [52] Tom Kwiatkowski, Jennimaria Palomaki, Olivia Redfield, Michael Collins, Ankur Parikh, Chris Alberti, Danielle Epstein, Illia Polosukhin, Jacob Devlin, Kenton Lee, Kristina Toutanova, Llion Jones, Matthew Kelcey, Ming-Wei Chang, Andrew M. Dai, Jakob Uszkoreit, Quoc Le, and Slav Petrov. 2019. Natural Questions: A Benchmark for Question Answering Research. Transactions of the Association for Computational Linguistics 7 (2019), 452–466. https: //doi.org/10.1162/tacl_a_00276 [53] Thiago Laitz, Konstantinos Papakostas, Roberto Lotufo, and Rodrigo Nogueira. 2024. InRanker: Distilled Rankers for Zero-shot Information Retrieval. arXiv:2401.06910 [cs.IR] [54] Jinhyuk Lee, Minjoon Seo, Hannaneh Hajishirzi, and Jaewoo Kang. 2020. Contextualized Sparse Representations for Real-Time Open-Domain Question Answering. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics, Dan Jurafsky, Joyce Chai, Natalie Schluter, and Joel Tetreault (Eds.). Association for Computational Linguistics, Online, 912–919.
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+https://doi.org/10.18653/v1/2020.acl- main.85 [55] Kenton Lee, Ming-Wei Chang, and Kristina Toutanova. 2019. Latent Retrieval
+for Weakly Supervised Open Domain Question Answering. In Proc. ACL. 6086– 6096. [56] Omer Levy, Minjoon Seo, Eunsol Choi, and Luke Zettlemoyer. 2017. ZeroShot Relation Extraction via Reading Comprehension. In Proceedings of the 21st Conference on Computational Natural Language Learning (CoNLL 2017). Association for Computational Linguistics, Vancouver, Canada, 333–342. https: //doi.org/10.18653/v1/K17- 1034 [57] Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich Küttler, Mike Lewis, Wen-tau Yih, Tim Rocktäschel, et al. 2020. Retrieval-augmented generation for knowledge-intensive nlp tasks. Advances in Neural Information Processing Systems 33 (2020), 9459–9474. [58] Jimmy Lin, Xueguang Ma, Sheng-Chieh Lin, Jheng-Hong Yang, Ronak Pradeep, and Rodrigo Nogueira. 2021. Pyserini: A Python Toolkit for Reproducible Information Retrieval Research with Sparse and Dense Representations. In
+Proceedings of the 44th Annual International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR 2021). 2356–2362. [59] Stephanie Lin, Jacob Hilton, and Owain Evans. 2022. TruthfulQA: Measuring How Models Mimic Human Falsehoods. In Proceedings of the 60th Annual
+Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), Smaranda Muresan, Preslav Nakov, and Aline Villavicencio (Eds.). Association for Computational Linguistics, Dublin, Ireland, 3214–3252. https: //doi.org/10.18653/v1/2022.acl- long.229 [60] Zhenghao Lin, Yeyun Gong, Xiao Liu, Hang Zhang, Chen Lin, Anlei Dong, Jian Jiao, Jingwen Lu, Daxin Jiang, Rangan Majumder, and Nan Duan. 2022. PROD: Progressive Distillation for Dense Retrieval. arXiv:2209.13335 (2022). [61] Jerry Liu. 2022. LlamaIndex. https://doi.org/10.5281/zenodo.1234 [62] Yaqi Liu, Xiaoyu Zhang, Xiaobin Zhu, Qingxiao Guan, and Xianfeng Zhao. 2017. Listnet-based object proposals ranking. Neurocomputing 267 (2017), 182–194. [63] Zheng Liu and Yingxia Shao. 2022. RetroMAE: Pre-training Retrieval-oriented Transformers via Masked Auto-Encoder. arXiv:2205.12035 (2022). [64] Zheng Liu, Yujia Zhou, Yutao Zhu, Jianxun Lian, Chaozhuo Li, Zhicheng Dou, Defu Lian, and Jian-Yun Nie. 2024. Information Retrieval Meets Large Language Models. In Companion Proceedings of the ACM on Web Conference 2024. 1586– 1589. [65] Xinwei Long, Jiali Zeng, Fandong Meng, Zhiyuan Ma, Kaiyan Zhang, Bowen Zhou, and Jie Zhou. 2024. Generative multi-modal knowledge retrieval with large language models. In Proceedings of the AAAI Conference on Artificial Intelligence, Vol. 38. 18733–18741. [66] Ji Ma, Ivan Korotkov, Yinfei Yang, Keith Hall, and Ryan McDonald. 2021. Zeroshot Neural Passage Retrieval via Domain-targeted Synthetic Question Generation. In Proceedings of the 16th Conference of the European Chapter of the Association for Computational Linguistics: Main Volume. https://doi.org/10. 18653/v1/2021.eacl- main.92 [67] Xueguang Ma, Kai Sun, Ronak Pradeep, Minghan Li, and Jimmy Lin. 2022. Another Look at DPR: Reproduction of Training and Replication of Retrieval. In Advances in Information Retrieval: 44th European Conference on IR Research, ECIR 2022, Stavanger, Norway, April 10–14, 2022, Proceedings, Part I (Stavanger, Norway). Springer-Verlag, Berlin, Heidelberg, 613–626. https://doi.org/10.1007/ 978- 3- 030- 99736- 6_41 [68] Alex Mallen, Akari Asai, Victor Zhong, Rajarshi Das, Hannaneh Hajishirzi, and Daniel Khashabi. 2022. When Not to Trust Language Models: Investigating Effectiveness and Limitations of Parametric and Non-Parametric Memories. arXiv preprint (2022). [69] Potsawee Manakul, Adian Liusie, and Mark JF Gales. 2023. Selfcheckgpt: Zeroresource black-box hallucination detection for generative large language models. arXiv preprint arXiv:2303.08896 (2023). [70] Yuning Mao, Pengcheng He, Xiaodong Liu, Yelong Shen, Jianfeng Gao, Jiawei Han, and Weizhu Chen. 2021. Generation-Augmented Retrieval for OpenDomain Question Answering. In Proceedings of the 59th Annual Meeting of
+the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers). https: //doi.org/10.18653/v1/2021.acl- long.316 [71] Todor Mihaylov, Peter Clark, Tushar Khot, and Ashish Sabharwal. 2018. Can a Suit of Armor Conduct Electricity? A New Dataset for Open Book Question Answering. In EMNLP. [72] Sewon Min, Julian Michael, Hannaneh Hajishirzi, and Luke Zettlemoyer. 2020. AmbigQA: Answering Ambiguous Open-domain Questions. In EMNLP. [73] Jamshid Mozafari, Abdelrahman Abdallah, Bhawna Piryani, and Adam Jatowt. 2024. Exploring Hint Generation Approaches in Open-Domain Question Answering. arXiv preprint arXiv:2409.16096 (2024). [74] Tri Nguyen, Mir Rosenberg, Xia Song, Jianfeng Gao, Saurabh Tiwary, Rangan Majumder, and Li Deng. 2017. MS MARCO: A Human-Generated MAchine Reading COmprehension Dataset. https://openreview.net/forum?id=Hk1iOLcle [75] Jianmo Ni, Chen Qu, Jing Lu, Zhuyun Dai, Gustavo Hernández Ábrego, Ji Ma, Vincent Y Zhao, Yi Luan, Keith B Hall, Ming-Wei Chang, et al. 2021. Large dual
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+encoders are generalizable retrievers. arXiv preprint arXiv:2112.07899 (2021). [76] Rodrigo Nogueira and Kyunghyun Cho. 2019. Passage Re-ranking with BERT.
+arXiv preprint arXiv:1901.04085 (2019). [77] Rodrigo Nogueira, Zhiying Jiang, and Jimmy Lin. 2020. Document ranking
+with a pretrained sequence-to-sequence model. arXiv preprint arXiv:2003.06713 (2020). [78] Rodrigo Nogueira, Wei Yang, Kyunghyun Cho, and Jimmy Lin. 2019. Multi-stage document ranking with BERT. arXiv preprint arXiv:1910.14424 (2019). [79] Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, Alban Desmaison, Andreas Köpf, Edward Yang, Zach DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy, Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala. 2019. PyTorch: an imperative style, high-performance deep learning library. Curran Associates Inc., Red Hook, NY, USA. [80] Fabio Petroni, Aleksandra Piktus, Angela Fan, Patrick Lewis, Majid Yazdani, Nicola De Cao, James Thorne, Yacine Jernite, Vladimir Karpukhin, Jean Maillard, Vassilis Plachouras, Tim Rocktäschel, and Sebastian Riedel. 2021. KILT: a Benchmark for Knowledge Intensive Language Tasks. In Proceedings of the 2021
+Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies. Association for Computational Linguistics, Online, 2523–2544. https://doi.org/10.18653/v1/2021.naacl-main.200 [81] Bhawna Piryani, Jamshid Mozafari, and Adam Jatowt. 2024. Chroniclingamericaqa: A large-scale question answering dataset based on historical american newspaper pages. In Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval. 2038–2048. [82] Ronak Pradeep, Sahel Sharifymoghaddam, and Jimmy Lin. 2023. RankVicuna: Zero-Shot Listwise Document Reranking with Open-Source Large Language Models. arXiv:2309.15088 [cs.IR] https://arxiv.org/abs/2309.15088 [83] Ronak Pradeep, Sahel Sharifymoghaddam, and Jimmy Lin. 2023. RankZephyr: Effective and Robust Zero-Shot Listwise Reranking is a Breeze! arXiv preprint arXiv:2312.02724 (2023). [84] Ofir Press, Muru Zhang, Sewon Min, Ludwig Schmidt, Noah Smith, and Mike Lewis. 2023. Measuring and Narrowing the Compositionality Gap in Language Models. In Findings of the Association for Computational Linguistics: EMNLP 2023, Houda Bouamor, Juan Pino, and Kalika Bali (Eds.). Association for Computational Linguistics, Singapore, 5687–5711. https://doi.org/10.18653/v1/2023. findings- emnlp.378 [85] Zhen Qin, Rolf Jagerman, Kai Hui, Honglei Zhuang, Junru Wu, Le Yan, Jiaming Shen, Tianqi Liu, Jialu Liu, Donald Metzler, et al. 2023. Large language models are effective text rankers with pairwise ranking prompting. arXiv preprint arXiv:2306.17563 (2023). [86] Yingqi Qu, Yuchen Ding, Jing Liu, Kai Liu, Ruiyang Ren, Wayne Xin Zhao, Daxiang Dong, Hua Wu, and Haifeng Wang. 2021. RocketQA: An Optimized Training Approach to Dense Passage Retrieval for Open-Domain Question Answering. In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies. https://doi.org/10.18653/v1/2021.naacl- main.466 [87] Colin Raffel, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou, Wei Li, and Peter J Liu. 2020. Exploring the limits of transfer learning with a unified text-to-text transformer. Journal of machine learning research 21, 140 (2020), 1–67. [88] Pranav Rajpurkar, Jian Zhang, Konstantin Lopyrev, and Percy Liang. 2016. SQuAD: 100,000+ Questions for Machine Comprehension of Text. In Proceedings of the 2016 Conference on Empirical Methods in Natural Language Processing, Jian Su, Kevin Duh, and Xavier Carreras (Eds.). Association for Computational Linguistics, Austin, Texas, 2383–2392. https://doi.org/10.18653/v1/D16-1264 [89] Ori Ram, Yoav Levine, Itay Dalmedigos, Dor Muhlgay, Amnon Shashua, Kevin Leyton-Brown, and Yoav Shoham. 2023. In-Context Retrieval-Augmented Language Models. Transactions of the Association for Computational Linguistics 11 (2023), 1316–1331. https://doi.org/10.1162/tacl_a_00605 [90] Muhammad Shihab Rashid, Jannat Ara Meem, Yue Dong, and Vagelis Hristidis. 2024. EcoRank: Budget-Constrained Text Re-ranking Using Large Language Models. arXiv preprint arXiv:2402.10866 (2024). [91] Ruiyang Ren, Yingqi Qu, Jing Liu, Wayne Xin Zhao, Qiaoqiao She, Hua Wu, Haifeng Wang, and Ji-Rong Wen. 2021. Rocketqav2: A joint training method for dense passage retrieval and passage re-ranking. arXiv preprint arXiv:2110.07367 (2021). [92] Stephen E Robertson, Steve Walker, Susan Jones, Micheline M Hancock-Beaulieu, Mike Gatford, et al. 1995. Okapi at TREC-3. Nist Special Publication Sp 109 (1995), 109. [93] Tomáš Koˇ ciský, Jonathan Schwarz, Phil Blunsom, Chris Dyer, Karl Moritz Hermann, Gábor Melis, and Edward Grefenstette. 2018. The NarrativeQA Reading Comprehension Challenge. Transactions of the Association for Computational Linguistics TBD (2018), TBD. https://TBD [94] Devendra Singh Sachan, Mike Lewis, Mandar Joshi, Armen Aghajanyan, Wentau Yih, Joelle Pineau, and Luke Zettlemoyer. 2022. Improving Passage Retrieval with Zero-Shot Question Generation. (2022). https://arxiv.org/abs/2204.07496
+
+Trovato et al.
+
+[95] [96] [97]
+[98] [99] [100] [101] [102] [103] [104]
+[105]
+[106] [107] [108] [109] [110] [111] [112] [113] [114]
+
+Devendra Singh Sachan, Mostofa Patwary, Mohammad Shoeybi, Neel Kant, Wei Ping, William L Hamilton, and Bryan Catanzaro. 2021. End-to-end training of neural retrievers for open-domain question answering. arXiv preprint arXiv:2101.00408 (2021). Keshav Santhanam, Omar Khattab, Jon Saad-Falcon, Christopher Potts, and Matei Zaharia. 2021. Colbertv2: Effective and efficient retrieval via lightweight late interaction. arXiv preprint arXiv:2112.01488 (2021). Maarten Sap, Hannah Rashkin, Derek Chen, Ronan Le Bras, and Yejin Choi. 2019. Social IQa: Commonsense Reasoning about Social Interactions. In Pro-
+ceedings of the 2019 Conference on Empirical Methods in Natural Language Pro-
+cessing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP), Kentaro Inui, Jing Jiang, Vincent Ng, and Xiaojun Wan (Eds.). Association for Computational Linguistics, Hong Kong, China, 4463–4473. https://doi.org/10.18653/v1/D19- 1454 Christopher Sciavolino, Zexuan Zhong, Jinhyuk Lee, and Danqi Chen. 2021. Simple Entity-centric Questions Challenge Dense Retrievers. In Empirical Methods in Natural Language Processing (EMNLP). Amit Singhal et al. 2001. Modern information retrieval: A brief overview. IEEE Data Eng. Bull. 24, 4 (2001), 35–43. Nilanjan Sinhababu, Andrew Parry, Debasis Ganguly, Debasis Samanta, and Pabitra Mitra. 2024. Few-shot Prompting for Pairwise Ranking: An Effective Non-Parametric Retrieval Model. arXiv preprint arXiv:2409.17745 (2024). Weiwei Sun, Lingyong Yan, Xinyu Ma, Pengjie Ren, Dawei Yin, and Zhaochun Ren. 2023. Is ChatGPT Good at Search? Investigating Large Language Models as Re-Ranking Agent. ArXiv abs/2304.09542 (2023). Weiwei Sun, Lingyong Yan, Xinyu Ma, Pengjie Ren, Dawei Yin, and Zhaochun Ren. 2023. Is ChatGPT Good at Search? Investigating Large Language Models as Re-Ranking Agent. ArXiv abs/2304.09542 (2023). Weiwei Sun, Lingyong Yan, Xinyu Ma, Shuaiqiang Wang, Pengjie Ren, Zhumin Chen, Dawei Yin, and Zhaochun Ren. 2023. Is ChatGPT good at search? investigating large language models as re-ranking agents. arXiv preprint arXiv:2304.09542 (2023). Oyvind Tafjord, Matt Gardner, Kevin Lin, and Peter Clark. 2019. QuaRTz: An Open-Domain Dataset of Qualitative Relationship Questions. In Proceed-
+ings of the 2019 Conference on Empirical Methods in Natural Language Process-
+ing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP), Kentaro Inui, Jing Jiang, Vincent Ng, and Xiaojun Wan (Eds.). Association for Computational Linguistics, Hong Kong, China, 5941–5946. https://doi.org/10.18653/v1/D19- 1608 Alon Talmor, Jonathan Herzig, Nicholas Lourie, and Jonathan Berant. 2019. CommonsenseQA: A Question Answering Challenge Targeting Commonsense Knowledge. In Proceedings of the 2019 Conference of the North American Chapter
+of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers), Jill Burstein, Christy Doran, and Thamar Solorio (Eds.). Association for Computational Linguistics, Minneapolis, Minnesota, 4149–4158. https://doi.org/10.18653/v1/N19-1421 Manveer Singh Tamber, Ronak Pradeep, and Jimmy Lin. 2023. Scaling Down, LiTting Up: Efficient Zero-Shot Listwise Reranking with Seq2seq Encoder-Decoder Models. arXiv preprint arXiv: 2312.16098 (2023). James Thorne, Andreas Vlachos, Christos Christodoulopoulos, and Arpit Mittal. 2018. FEVER: a Large-scale Dataset for Fact Extraction and VERification. In NAACL-HLT. Hugo Touvron, Louis Martin, Kevin Stone, Peter Albert, Amjad Almahairi, Yasmine Babaei, Nikolay Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti Bhosale, et al. 2023. Llama 2: Open foundation and fine-tuned chat models. arXiv preprint arXiv:2307.09288 (2023). Harsh Trivedi, Niranjan Balasubramanian, Tushar Khot, and Ashish Sabharwal. 2022. MuSiQue: Multihop Questions via Single-hop Question Composition. Transactions of the Association for Computational Linguistics (2022). Jiajia Wang, Jimmy Xiangji Huang, Xinhui Tu, Junmei Wang, Angela Jennifer Huang, Md Tahmid Rahman Laskar, and Amran Bhuiyan. 2024. Utilizing BERT for Information Retrieval: Survey, Applications, Resources, and Challenges. Comput. Surveys 56, 7 (2024), 1–33. Jiexin Wang, Adam Jatowt, and Masatoshi Yoshikawa. 2022. Archivalqa: A largescale benchmark dataset for open-domain question answering over historical news collections. In Proceedings of the 45th International ACM SIGIR Conference on Research and Development in Information Retrieval. 3025–3035. Wenhui Wang, Hangbo Bao, Shaohan Huang, Li Dong, and Furu Wei. 2020. Minilmv2: Multi-head self-attention relation distillation for compressing pretrained transformers. arXiv preprint arXiv:2012.15828 (2020). Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. 2022. Self-consistency improves chain of thought reasoning in language models. arXiv preprint arXiv:2203.11171 (2022). Haoyi Xiong, Jiang Bian, Yuchen Li, Xuhong Li, Mengnan Du, Shuaiqiang Wang, Dawei Yin, and Sumi Helal. 2024. When search engine services meet large language models: visions and challenges. IEEE Transactions on Services Computing (2024).
+
+Rankify: A Comprehensive Python Toolkit for Retrieval, Re-Ranking, and RAG
+
+[115] [116] [117] [118] [119]
+[120]
+
+Lee Xiong, Chenyan Xiong, Ye Li, Kwok-Fung Tang, Jialin Liu, Paul N. Bennett, Junaid Ahmed, and Arnold Overwijk. 2021. Approximate Nearest Neighbor Negative Contrastive Learning for Dense Text Retrieval. In Proceedings of the 9th International Conference on Learning Representations (ICLR 2021). Lee Xiong, Chenyan Xiong, Ye Li, Kwok-Fung Tang, Jialin Liu, Paul N. Bennett, Junaid Ahmed, and Arnold Overwijk. 2021. Approximate Nearest Neighbor Negative Contrastive Learning for Dense Text Retrieval. In International Conference on Learning Representations. https://openreview.net/forum?id=zeFrfgyZln Ikuya Yamada, Akari Asai, and Hannaneh Hajishirzi. 2021. Efficient Passage Retrieval with Hashing for Open-domain Question Answering. In ACL. Liu Yang, Junjie Hu, Minghui Qiu, Chen Qu, Jianfeng Gao, W Bruce Croft, Xiaodong Liu, Yelong Shen, and Jingjing Liu. 2019. A hybrid retrieval-generation neural conversation model. In Proceedings of the 28th ACM international conference on information and knowledge management. 1341–1350. Zhilin Yang, Peng Qi, Saizheng Zhang, Yoshua Bengio, William Cohen, Ruslan Salakhutdinov, and Christopher D. Manning. 2018. HotpotQA: A Dataset for Diverse, Explainable Multi-hop Question Answering. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing, Ellen Riloff, David Chiang, Julia Hockenmaier, and Jun’ichi Tsujii (Eds.). Association for Computational Linguistics, Brussels, Belgium, 2369–2380. https://doi.org/10. 18653/v1/D18- 1259 Andrew Yates, Rodrigo Nogueira, and Jimmy Lin. 2021. Pretrained transformers for text ranking: BERT and beyond. In Proceedings of the 14th ACM International
+
+Conference acronym ’XX, June 03–05, 2018, Woodstock, NY
+
+[121] [122] [123] [124] [125] [126]
+
+Conference on web search and data mining. 1154–1156. Soyoung Yoon, Eunbi Choi, Jiyeon Kim, Hyeongu Yun, Yireun Kim, and Seung won Hwang. 2024. ListT5: Listwise Reranking with Fusion-in-Decoder Improves Zero-shot Retrieval. arXiv:2402.15838 [cs.IR] https://arxiv.org/abs/2402.15838 Xiao Yu, Yunan Lu, and Zhou Yu. 2024. LocalRQA: From Generating Data to Locally Training, Testing, and Deploying Retrieval-Augmented QA Systems. arXiv preprint arXiv:2403.00982 (2024). Rowan Zellers, Ari Holtzman, Yonatan Bisk, Ali Farhadi, and Yejin Choi. 2019. HellaSwag: Can a Machine Really Finish Your Sentence?. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics. Hansi Zeng, Hamed Zamani, and Vishwa Vinay. 2022. Curriculum Learning for Dense Retrieval Distillation. In Proc. SIGIR. 1979–1983. Nengjun Zhu, Jian Cao, Xinjiang Lu, and Qi Gu. 2021. Leveraging pointwise prediction with learning to rank for top-N recommendation. World Wide Web 24 (2021), 375–396. Honglei Zhuang, Zhen Qin, Rolf Jagerman, Kai Hui, Ji Ma, Jing Lu, Jianmo Ni, Xuanhui Wang, and Michael Bendersky. 2023. Rankt5: Fine-tuning t5 for text ranking with ranking losses. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval. 2308–2313.
+
+Received 20 February 2007; revised 12 March 2009; accepted 5 June 2009
+

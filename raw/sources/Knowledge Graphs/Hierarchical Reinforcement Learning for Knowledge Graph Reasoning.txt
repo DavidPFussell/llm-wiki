@@ -1,0 +1,659 @@
+Proceedings of the Twenty-Ninth International Joint Conference on Artiﬁcial Intelligence (IJCAI-20)
+
+Reasoning Like Human: Hierarchical Reinforcement Learning for Knowledge Graph Reasoning
+Guojia Wan1 , Shirui Pan2 , Chen Gong3,4 , Chuan Zhou5 , Gholamreza Haffari2 1School of Computer Science, Institute of Artiﬁcial Intelligence, and National Engineering Research
+Center for Multimedia Software, Wuhan University, China 2Faculty of Information Technology, Monash University, Australia 3School of Computer Science and Engineering, Nanjing University of Science and Technology, China 4Department of Computing, Hong Kong Polytechnic University, Hong Kong, China 5Academy of Mathematics and Systems Science, Chinese Academy of Sciences, China
+guojiawan@whu.edu.cn, shirui.pan@monash.edu, chen.gong@njust.edu.cn, zhouchuan@amss.ac.cn, gholamreza.haffari@monash.edu
+
+Abstract
+Knowledge Graphs typically suffer from incompleteness. A popular approach to knowledge graph completion is to infer missing knowledge by multihop reasoning over the information found along other paths connecting a pair of entities. However, multi-hop reasoning is still challenging because the reasoning process usually experiences multiple semantic issue that a relation or an entity has multiple meanings. In order to deal with the situation, we propose a novel Hierarchical Reinforcement Learning framework to learn chains of reasoning from a Knowledge Graph automatically. Our framework is inspired by the hierarchical structure through which a human being handles cognitionally ambiguous cases. The whole reasoning process is decomposed into a hierarchy of two-level Reinforcement Learning policies for encoding historical information and learning structured action space. As a consequence, it is more feasible and natural for dealing with the multiple semantic issue. Experimental results show that our proposed model achieves substantial improvements in ambiguous relation tasks.
+1 Introduction
+The development of Knowledge Graphs have increasingly impacted on many downstream AI-related applications, such as question answering (QA), information retrieval, recommendation systems, etc. However, KGs are highly incomplete, which has signiﬁcantly hindered the capability of KG’s application [Fang et al., 2020; Ji et al., 2020]. Therefore, a fundamental problem for knowledge graph reasoning is to predict the missing knowledge.
+Recently, extensive research has emerged on learning lowdimensional representations of entities and relations for missing link prediction [Bordes et al., 2013; Wang et al., 2017; Nickel et al., 2015]. Unfortunately, these approaches are only suitable for single-hop reasoning. Meanwhile, auto-
+
+Multiple Semantic Issue
+
+a)
+Actor-award
+
+b) Jewish
+
+Artist-award
+
+African America
+
+Organization
+
+Irish
+
+Others
+
+Others
+
+Award_nominee
+
+Ethnicity_people
+
+Figure 1: Visualization of TransE embeddings with PCA dimension reduction. We select two relation a) ‘Award nomee’ and b) ‘Ethninicy people’ from FB15K. A dot denotes a triplet, and it is depends on the difference vector between tail and head entity, i.e. ˆr ≈ t − h. The distribution of multiple clusters indicates that a relation may have multiple unknown semantics.
+
+mated multi-hop reasoning on a large-scale KG is still a challenging problem due to the presence of diverse and ambiguous semantics. In other words, multiple semantic issue where an entity or a relation may have various meanings hinders the reasoning accuracy in a KG [Xiao et al., 2016; Kertkeidkachorn and Ichise, 2017]. For instance, the visualization of TransE embedding vectors with PCA dimension reduction is presented in Figure 1. In Figure 1a, the relation ‘Award nominee’ has multiple latent semantics including ‘Actor-award’, ‘Artist-award’, ‘Organization’, etc. The non-uniform distribution indicates the presence of the multiple semantic issue. Accordingly, semantic ambiguity is accumulated in chained reasoning process, leading to more severe performance drop.
+On the contrary, a human being can easily deal with this situation. Joshi et al. [2013] found that structured multiple cognitive sub-processes drive the disambiguation. One important hallmark of human cognition is that one tends to process information hierarchically [Purcell and Kiani, 2016], which divides ongoing behavior into discrete tasks that is comprised of sub-task sequences built of simple actions. Additionally, recent research [Purcell and Kiani, 2016; Sarafyazd and Jazayeri, 2019] in neuroscience and cognitive
+
+1926
+
+Proceedings of the Twenty-Ninth International Joint Conference on Artiﬁcial Intelligence (IJCAI-20)
+
+science revealed that a human being resolves the ambiguous information of casual inference by hierarchical reasoning.
+Inspired by the above observations, we formulate the mechanism of hierarchical reasoning process as Hierarchical Reinforcement Learning (HRL). HRL works on decomposing the entire problem into sub-problems, i.e, HRL splits each action into sub-actions. Some previous works have shown that not only it tackles the dimensionality curse problem [Barto and Mahadevan, 2003], but it also successfully models hierarchical decision making in robotic systems [Colin et al., 2016]. By learning each sub-action of multi-hop reasoning, the agent can also learn the latent semantics of a relation through chains of reasoning. Therefore, the HRL formulation enables training an agent wtih high expressive policy networks to address the multiple semantic issue.
+More recently, several RL-based KGR models have emerged as promising approaches to infer paths linking two entities in a KG [Xiong et al., 2017; Das et al., 2018; Shen et al., 2018; Das et al., 2018]. However, these approaches simply model every action in a uniform decision space. Less consideration has been given to the investigation of the hierarchical structure of knowledge reasoning process. In particular, these methods exhibit performance decrease in the tasks where multiple semantic issue exists.
+In this paper, we develop a novel Hierarchical Reinforcement Learning framework, Reasoning Like Human (RLH), to imitate the thought pattern of human for applying multi-hop reasoning on knowledge graphs. By emulating hierarchical decision making, our model enables to learn chains of reasoning paths over a KG automatically. To be speciﬁc, HRL decomposes each step of reasoning into a high-level policy for encoding historical information and a low-level policy for learning to identify relation clusters. In the high-level policy, the agent trained by our model allows to encode and transfer historical information by a Gated recurrent unit (GRU). In the low-level policy, the agent follows the paradigm of hierarchical decision making, learning the concepts of relation clusters at different level of granularity. Lastly, we design a joint training method for effectively optimizing the parameters of our model. Our contributions are summarized as ﬂows:
+• We address the multiple semantic issue where a relation in knowledge graph has different meanings on multi-hop knowledge graph reasoning, which is an essential but rarely studied problem.
+• We propose a novel Hierarchical Reinforcement Learning framework, Reasoning Like Human (RLH), to deal with the multiple semantic issue. The proposed model consists of a high-level policy and a low-level policy, decomposing the macro-actions into simpler sub-tasks, leading to learn the latent semantics of each relation.
+• We conduct extensive experiments on three knowledge graph completion benchmarks. The results show that our model achieves competitive performance. Most importantly, our model signiﬁcantly outperforms other approaches on the queries suffering from more multiple semantic issue.
+
+2 Related Work
+Knowledge Graph Reasoning. Recent developments in the ﬁeld of KG have led to a renewed interest in knowledge graph reasoning. From its early days, the focus of knowledge graph reasoning has been on building systems based on symbolic logical rules [McCarthy, 1960; Quinlan, 1990]. Rule-based approaches are accurate, but suffer from poor generalization and huge complexity. Recently, knowledge graph embedding approaches largely superseded them [Wang et al., 2017]. These methods learn topological connection information and associate entities and relations into low dimensional continuous vector spaces [Bordes et al., 2013; Yih et al., 2011; Dettmers et al., 2018; Ye et al., 2018; Nickel et al., 2015]. Then, a score function or an decoder is deﬁned to rank the target query objects with only single hop reasoning, which is a black-box system that lacks interpretability for users.
+Multi-Hop Reasoning. Due to the limitations of interpretability, researchers have recently proposed multi-hop path-based approaches, such as random walks [Lao et al., 2011] through a sequence of reasoning chain, further improving performance in knowledge graph completion (KGC) tasks. Unfortunately, the approaches are still computationally expensive to access the entire graph in memory. Neural LP [Yang et al., 2017] is proposed to learn logical rules that can be trained in a end-to-end framework with gradientbased learning. It introduces a differential rule learning system using operators deﬁned in TensorLog [Cohen, 2016]. Although differentiable memory allows end-to-end training, it costs expensive computation resources due to accessing the entire memory.
+Deep Reinforcement Learning Reasoning. Recently, deep reinforcement learning has achieved great success in many artiﬁcial intelligence problems [Silver et al., 2016]. RL shows great potential to model reasoning systems on a KG. DeepPath [Xiong et al., 2017] is the ﬁrst RL-based multi-hop reasoning approach for KGR. Das et al. [2018] further improves DeepPath by 1) avoiding pre-trained information, 2) encoding historical information using LSTM. Then, Shen et al. [2018] adopts Monte Carlo Tree Search (MCTS) to deal with the issue of sparse rewards to improve the efﬁciency of RL reasoning. However, the previous multi-hop reasoning approaches rarely consider the hierarchical structure of action space.
+3 Deﬁnitions and Notations
+The notation table is shown in Table 1. Then, several key deﬁnitions are given as follows.
+Deﬁnition 1 (Knowledge Graph). A Knowledge Graph is a directed graph G = (E, R, U ), where E is a set of entities, R is a set of relations, and U is a set of edges. e ∈ E is an entity. r ∈ R is a relation. u ∈ U is an edge (eo, r, et) that points the head entity h to the tail entity t.
+Deﬁnition 2 (Knowledge Graph Reasoning). Given a query among three cases (h, r, ?), (?, r, t), (h, ?, t), Knowledge Graph Reasoning aims to predict the missing element of ?
+
+1927
+
+Proceedings of the Twenty-Ninth International Joint Conference on Artiﬁcial Intelligence (IJCAI-20)
+
+Symbol
+
+Meaning
+
+Symbol
+
+Meaning
+
+E
+
+Entity set
+
+e
+
+Entity
+
+R
+
+Relation set
+
+r
+
+Relation
+
+e0
+
+Source entity
+
+et
+
+Target entity
+
+G
+
+KG
+
+U
+
+Edge set
+
+S
+
+State set
+
+s
+
+State
+
+A
+
+Action set
+
+a
+
+Action
+
+R
+
+Reward
+
+γ
+
+Reward factor
+
+π
+
+High-level policy
+
+θ
+
+Parameters
+
+τ
+
+High-level trajectory ht
+
+History vector
+
+Low-level trajectory
+
+µ
+
+Low-level policy
+
+φ
+
+Transition function
+
+Φ
+
+The set of φ
+
+c
+
+Sub-action
+
+σ
+
+Sigmoid function
+
+We denote a vector using a bold letter, e.g. e corresponding to e
+
+Table 1: Annotation table
+
+r1
+
+r2
+
+rk
+
+through a k-hop reasoning path e1 −→ e2 −→ · · · −→
+
+ek+1.
+
+Example: Given (Trump, isPresident,?), a possible 2-hop
+
+W orkAt
+
+LocatedI n
+
+reasoning path is T rump −→ W hiteHouse −→
+
+the U S.
+
+Deﬁnition 3 (Markov Decision Process). A Markov decision
+process is a 4-tuple (S, A, Pa, Ra). Here S is a ﬁnite set of states, A is a ﬁnite set of actions (alternatively, As is the ﬁnite set of actions available from state s), Pa(s, s ) = Pr(st+1 = s |st = s, at = a) is the probability that action a in state s at time t will lead to state s at time t + 1, Ra(s, s ) is the immediate reward (or expected immediate reward) received
+after transitioning from state s to state s , due to the action a.
+
+Remark: The RL is formulated as a MDP. At each stage in the sequence stages, the agent observes an environment‘s state s, contained in a ﬁnite set S, and executes an action a selected from a ﬁnite, non-empty set, As, of admissible actions. The agent receives an immediate reward having expected value R(s, a), and the state transition probabilities P (s |s, a).
+
+Deﬁnition 4 (Hierarchical Reinforcement Learning). Hierarchical Reinforcement Learning is formulated as a semi-MDP (S, A, Pa, Ra,Φ), where Pa(s, s ) = Pr(st+1 = s |st = s, at = a) i=1 K−1 Pr(φi+1|Φi). Φ is a transition function space to describe K stages transiting inside the action a. Each φ is a sub-action of a. All of φ are relevant each other.
+
+Remark: HRL involves discrete-time and countable subactions inside each action [Barto and Mahadevan, 2003]. HRL delegates the optimization of the total problem to simpler sub-problems, in which knowledge can be transferred across problems and in which component solutions can be recombined to solve larger and more complicated problems.
+
+4 Methodology
+4.1 Overview of RLH
+A schematic overview of our proposed approach is presented in Figure 2. For each query, the agent trained by our RLbased reasoning approach predicts a reasoning path from the source entity to the target entity. It observes the current state
+
+Input Query: (Trump, ? , the USA) The agent
+Source object
+Trump W a1 orkA aa2 t 2
+White House New York
+
+Action Space
+
+Observe
+rc1
+
+rc2
+
+rc2
+
+rc2
+
+BornIn Located
+
+isPresident
+
+Washington
+
+Located
+
+the USA
+
+Unselected action
+
+Target object
+
+High Level RL μ
+
+Path instances:
+
+a
+
+a
+
+aa
+
+a White House a
+
+a
+
+Low Level RL π
+
+The next action
+
+} Trump BornIn New YorkLocatedIn the USA
+Trump WorkAt White HouseLocatedInWashingtonLocatedIn the USA
+. . .
+
+Output:(Trump,isPresident,the USA)
+
+Figure 2: Schematic illustration of RLH.
+and decides to move to the next entity that has the highest expectation of reaching the target entity via our well-designed hierarchical policies. The agent alternates between such observation and movement until it reaches the target entity or the maximum length. The agent’s trajectory is a reasoning chain that has an attractive property that explains how the query result is obtained from the inference system.
+To apply the hierarchical cognition mechanism, we propose a hierarchical policy framework Φ = {φ1, φ2, · · · , φk} for RL-based reasoning. The right box of Figure 2 schematically shows a 3-layers hierarchical strategy. For each interaction, the agent observes an action space A, then it selects the most promising sub-action through Φ from hypernymy concepts to hyponymy concepts. In a knowledge graph environment, the structure of the action space is generally a hierarchical structure. As a result, the complex action space is hierarchically decomposed into sub-tasks like a search tree. Hence the multiple semantics of the relation is also decomposed into more speciﬁc representation. The details about the hierarchical policy are in Section 4.2 and 4.3.
+
+4.2 High Level Policy for Encoding History Information
+Reinforcement Learning train an agent to learn from the interactions with the environment derived from a KG through sequential exploration and exploitation. In a KG, RL is formalized with the quartuple (S, A, P, R), whose elements are elaborated below.
+States. The state si at step i is deﬁned as a tuple (ei−1, ri, ei, et), where ei ∈ E is the current entity, ei−1 is the last entity, ri denotes the relation between ei and ei−1, and et is the target entity. si ∈ S, where the state space S consists of all valid combination in E × R × E × E. Given a pair (eo, et), the starting state is represented as ( ST , ST , e0, et), where a start state indicator ‘ST’ was added to indicate the initial state of the agent. The ﬁnal state is (et−1, rt, et, et). Each state captures the agent’s position in the KG. After taking action, the agent will move to the next state.
+Actions. The action space Asi for the state si = (ei, ri+1, ei+1, et) is the set of outgoing edges of the current entity ei in the KG, where Asi = {(r, e)|(ei, r, e) ∈ G, e ∈/ {eo, e1, · · · , et}}. Beginning with the source entity eo, the
+
+1928
+
+Proceedings of the Twenty-Ninth International Joint Conference on Artiﬁcial Intelligence (IJCAI-20)
+
+Datasets |E| |R| Triplets Tasks
+FB15K-237 14505 237 310116 20 NELL995 75942 200 154231 12 WN18RR 40903 18 141422 10
+
+Table 2: Datasets
+
+agent uses the policy network to predict the most promising path, and it then extends its path at each step until it reaches the target entity et.
+
+Transition. The transition P is the state transition probability used to identify the probability distribution of the next state, which is deﬁned as a map function:P : S ×A → S. The policy network encodes the current state to output a probability distribution P(si+1|si, ai), where ai ∈ Asi . In our RL framework, the transition strategy involves selecting the action with maximum probability in Asi .
+
+Policy. We design a high-level policy network µ(s, A) =
+
+P (a|s; θ) based on deep learning to model the RL agent
+
+in a continuous space, where θ is the neural network pa-
+
+rameter. Considering that the agent needs to do sequen-
+
+tial decision making, we introduce a history vector ht to
+
+keep historical information in order to better guide the agent.
+
+Given a trajectory τ at step t, the history vector is deter-
+
+mined by the last history ht−1 and the last state st−1, where st−1 = [et−1; rt−1; et], while e, r ∈ Rd, µ is the low-level policy,
+
+ht = GRU (ht−1, st−1).
+
+(1)
+
+a ∼ π(at|st−1) = sof tmax(Wπc).
+
+(2)
+
+where c is the output sub-action (relation cluster) of the lowlevel policy and c is its vector representation. Wπ is an array of |R| matrices.
+
+Rewards. Given a pair (eo, et), if the agent reaches the target entity, i.e., ei = et, the agent’s trajectory is labeled as a successful ﬁnding. The reward for each hop is deﬁned as
+follows:
+
+R 1 · γi, eˆ H (τi) = t = et , (3)
+
+0,
+
+otherwise
+
+4.3 Low Level Policy for Structured Action Space
+The low-level policy Φ decomposes the complex action space As into structured sub-actions. The transition of these subactions also follows a MDP. The relations in KGs can make up relation clusters. We can build a hierarchical relation clusters by means of hierarchical-clustering relation embeddings. In this way, all states of the low-level RL are organized as a search tree. Thus the latent multiple semantics for each relation is well-expressed.
+Actions. We ﬁrst perform TransE 1 on a given data set and obtain the embeddings. Then, the k-means algorithm is applied to these embeddings for initializing relation clusters C1, C2, C3, · · · , Cn, where j-th sub-action cij ∈ Ci. In this way, we enable to build hierarchical sets of relation clusters.
+
+1https://github.com/thunlp/OpenKE
+
+State. The low-level state sl is a set containing the current valid sub-actions. For a trajectory , the starting state is the As. If successful, the ﬁnal state is {at+1}, otherwise ∅. Policy. When the agent observes the sub-action space under the state sli, it launches the current sub-task,
+c ∼ µ(ct|ct−1, ht, st−1) = Sof tmax(ReLU (σ(Ws[ht; st−1])[sil]WcCi)), (4)
+where ct is the next sub-action.
+Reward. For a trajectory , a reward is obtained when the ﬁnal state contains the correct action anext,
+R 1, a L( ) = next ∈ sl , (5) 0, otherwise
+
+4.4 Optimization and Training
+
+In this section, we discuss how to optimize our framework. The objective function of the low-level policy network is to maximize the expectation of accumulated rewards of hierarchical decisions,
+
+J L(θL) = E ∼pθL ( )[RL( )],
+
+(6)
+
+where denotes an M -length trajectory generated from the underlying distribution pθL ( ) of the low-level policy µ, while R( ) is the reward function for . The objective func-
+tion of the high-level policy under the low-level policy is,
+
+J H (θH ) = EθL,τ∼pθH (τ)[RH (τ )],
+
+(7)
+
+where τ denotes an N -length trajectory generated from the underlying distribution pθH (τ ). Similarly, RH (τ ) is the reward function for τ .
+Then, we use policy gradient methods [Sutton et al., 2000] with the REINFORCE algorithm [Williams, 1992] to opti-
+mize both high-level and low-level policies. With the like-
+lihood ratio trick, the gradient for the policies yields:
+
+∂J L(θL) 1 K M ∂
+
+jj
+
+j
+
+∂θL ≈ K j=1 τj,i=1 [ ∂θL log µ(ai |si−1, ai−1)]. (8)
+
+Algorithm 1 Training Procedure
+
+1: Initialize θH , θL
+
+2: Pre-train the low-level policy µ
+
+3: for 1 → episode do
+
+4: Generate a trajectory τ
+
+5: Initialize state vector h0 ← 0
+
+6: for i ← 1 to |τ | do
+
+7:
+
+Calculate hi ← GRU (hi−1, si−1)
+
+8:
+
+Generate a trajectory
+
+9:
+
+for j ← 1 to | | do
+
+10:
+
+Obtain reward RL( j)
+
+11: ∇J L ← − ∂θL ∂ log µ(cij |si−1 j , ci−1 j , hi)
+
+12:
+
+Obtain reward RL(τi)
+
+13: ∇J H ← − ∂θ∂H log π(aji |sji−1, aji−1, θL, hi)γi 14: Update θL,θL using ∇J L,∇J H
+
+1929
+
+Proceedings of the Twenty-Ninth International Joint Conference on Artiﬁcial Intelligence (IJCAI-20)
+
+Data NELL995 FB15K-237 WN18RR
+
+Metric
+Hit@1 Hit@3 Hit@10 MRR Hit@1 Hit@3 Hit@10 MRR Hit@1 Hit@3 Hit@10 MRR
+
+TransE
+0.514 0.678 0.751 0.456 0.248 0.401 0.450 0.361 0.289 0.475 0.560 0.359
+
+ComplEX
+0.614 0.784 0.815 0.652 0.318 0.415 0.542 0.374 0.319 0.459 0.462 0.428
+
+ConvE
+0.672 0.808 0.864 0.747 0.313 0.447 0.601 0.410 0.402 0.453 0.519 0.438
+
+NeuralLP
+0.166 0.248 0.348 0.227 0.376 0.468 0.657 0.463
+
+MINRVA
+0.663 0.773 0.831 0.725 0.217 0.329 0.456 0.293 0.413 0.456 0.513 0.448
+
+RLH
+0.692 0.768 0.873 0.723 0.342 0.457 0.648 0.460 0.453 0.483 0.516 0.481
+
+Table 3: Link Prediction on three KGC benchmarks.
+
+Tasks
+AthletePlaysForTeam AthletePlaysInLeague AthleteHomeStadium
+AthletePlaysSport TeamPlaySports OrgHeadquaterCity BornLocation PersonLeadsOrg OrgHiredPerson
+··· Overall adjoins contains personNationality musicianOrigin capitalOf ﬁlmWritten ﬁlmLanguag ﬁlmDirector
+··· Overall
+
+TransE
+62.7 77.3 71.8 87.6 76.1 62.0 67.7 75.1 71.9
+72.3 68.4 56.7 44.2 38.2 42.5 56.1 61.5 41.5
+45.3
+
+PRA
+54.7 84.1 85.9 47.4 79.1 79.0 81.1 68.1 66.8
+71.8 41.8 32.5 42.1 18.5 25.8 32.1 45.1 32.8
+31.5
+
+DeepPath
+72.1 92.7 84.6 91.7 69.6 79.0 69.9 75.5 79.0
+78.41 69.1 39.8 52.8 23.7 43.8 36.5 52.5 45.6
+39.8
+
+MINERVA
+82.7 95.2 92.8 98.6 87.5 94.5 82.7 83.0 83.0
+88.4 71.8 41.5 62.1 23.8 48.9 59.1 58.9 38.9
+42.3
+
+M-Walk
+84.7 97.8 91.9 98.3 88.4 95.0 84.2 81.2 88.8
+90.0 64.8 53.8 59.1 33.8 44.0 57.2 62.3 31.8
+43.8
+
+RLH
+86.9 94.6 93.4 97.4 89.1 93.6 87.3 81.4 89.5
+90.2 79.1 68.4 61.9 46.7 53.6 72.5 68.2 48.3
+59.2
+
+Table 4: The MAP scores on NELL995 and FB15K-237.
+
+∂J H (θH ) 1 K N
+
+≈
+
+[
+
+∂ log π(aij |si−1 j , ai−1 j , θL)γi].
+
+∂θH
+
+K j=1 τ j ,i=1 ∂θH
+
+where π and µ are respectively the high-level policy and the low-level policy.
+The training process is shown in Algorithm 1. In order to improve the training stability of our model, we adopt some tricks for our models. 1) We ﬁrst pre-train the low-level policy network by ﬁxing the high-level policy. Then, these two networks are jointly trained. 2)We add regularized terms into the policy networks for controlling the over-ﬁtting, and λ is regularization. We employ ADAM [Kingma and Ba, 2014] to optimize the policy network. The parameters are updated every κ episodes.
+
+5 Experiments Settings
+Datasets. We conducted experiments on three datasets: 1) NELL995 released by [Xiong et al., 2017] is generated from the 995-th dump of Never Ending Language Learning [Carlson et al., 2010]. 2) FB15K-237, a subset of FB15K where inverse relations are removed is a knowledge base where all entities are present in Wikilinks database. 3) WN18RR is a subset of Wordnet, which provides semantic knowledge of words. Details about these datasets are shown in Table 2.
+For evaluating the performance of KGR, our experiments are mainly based on two applications:
+• Relation Link Prediction. Given a query (h, ?, t), relation prediction is to predict the relation between the head
+
+entity h and the tail entity t. First, we remove all links of the ground-truth relation r in the KG. Then the agent tries to infer and walk through the KG to reach the target entity. By collecting the path between entity pairs, we feed the path features into path ranking algorithm (PRA) [Lao et al., 2011], which trains a per-relation classiﬁer to predict the existence of the ground-truth relation r in the way of binary classiﬁcation. In this way, the test set containing positive and negative query pairs is evaluated, then we report the mean average precision (MAP) scores for each task.
+• Entity Link Prediction. Given a query (h, r, ?) or (?, r, t), we produce a ranking of the entities by carrying out knowledge graph reasoning, and we then do a beam search with a beam width of 50 and rank entities by the probability of the trajectory reaching the correct entity. In this way, Hit@1,3,10 and mean reciprocal rank (MRR) are calculated from the ranking process, which are standard metrics for knowledge grah completion tasks [Bordes et al., 2013].
+Baselines. We compared some popular knowledge graph completion approaches, TransE [Bordes et al., 2013], ComplEX [Yih et al., 2011], ConvE [Dettmers et al., 2018], and some multi-hop reasoning methods, PRA [Lao et al., 2011], NeuralLP [Yang et al., 2017], DeepPath [Xiong et al., 2017], MINERVA [Das et al., 2018].
+Hyper-parameter Settings. In the training stage, the key hyper-parameter settings are as follows. The maximum length of the high-level policy lH is ﬁxed to 4. The maximum length of the low-level policy lL is ﬁxed to 2. The reward factor γ is 1.2, and the batch size κ is 100. the vector dimension d is 100. The clustering number for i-th relation cluster is 2i − 1. The regularization λ is 0.005. The network architecture parameters is optimized by grid-search in the valid set.
+6 Results and Discussion
+6.1 Link Prediction
+Entity Link Prediction. In this task, we conduct link prediction experimental based on the entity prediction metric on three standard datasets, NELL995, FB15K-237, and WN18RR. Note that NeuralLP does not scale to NELL995, therefore the results are not included. The MAP results are shown in Table 3.
+On NELL995 and WN18RR, our model demonstrates competitive results compared to other approaches. Meanwhile, our model signiﬁcantly outperforms other baselines on FB15K-237, which obviously differs from NELL995 and WN18RR. We further analyzed the type structure of relations on FB15K-237. Then we observed that the query number of 1-to-M is larger than the M-to-1, where respectively 54% compared to 26% on FB15K-237[Bordes et al., 2013]. It indicates that FB15K-237 has many multiple-semantic relations. Accordingly, multi-hop reasoning methods (PRA, NeuraLP, MINERVA) present worse performance than single-hop reasoning (TransE, ComplEX, ConvE) on FB15K-237. The results reveal that the search process of multi-hop reasoning
+
+1930
+
+Proceedings of the Twenty-Ninth International Joint Conference on Artiﬁcial Intelligence (IJCAI-20)
+
+ID Query 1:(Texas,?,Oklahoma)→(Texas,adjoins,Oklahoma)
+
+Prediction
+
+MINERVA
+
+country
+
+country−1
+
+1 Texas −→ United States of America −→ Oklahoma
+
+country
+
+country−1
+
+adjoin−1
+
+2 Texas −→ United States of America −→ Louisiana −→ Oklahoma
+
+adjoins
+
+country
+
+country−1
+
+3 Texas −→ Louisiana −→ United States of America −→ Arkansas
+
+×
+
+RLH
+
+country
+
+contains
+
+4 Texas −→ United States of America −→ Oklahoma
+
+f irst level
+
+contains
+
+5 Texas −→ United States of America −→ Oklahoma
+
+country
+
+contains
+
+state province region
+
+6 Texas −→ United States of America −→ University of Oklahoma
+
+−→
+
+Oklahoma
+
+Query 2:(Ingrid Bergman,languages,?)→ (Ingrid Bergman,languages, German)
+
+MINERVA
+
+f ilm
+
+language
+
+7 Ingrid Bergman −→Casablanca −→ German
+
+f ilm
+
+f ilm−1
+
+f ilm
+
+8 Ingrid Bergman −→Gaslight −→ Joseph Cotten −→Citizen Kane
+
+×
+
+award
+
+award−1
+
+nominated f or
+
+9 Ingrid Bergman −→ Academy Award for Best Actress −→ Piper Laurie −→ Frasier
+
+×
+
+RLH
+
+f ilm
+
+M urderontheOrientExpress
+
+language
+
+10 Ingrid Bergman −→SportsLeague mlb
+
+−→
+
+SportsTeam chicago cubs −→ German
+
+f ilm
+
+language
+
+11 Ingrid Bergman −→Casablanca −→ German
+
+award
+
+nominatedf or
+
+language
+
+12 Ingrid Bergman −→ Academy Award for Best Supporting Actress −→ Roman Holiday −→ German
+
+Table 5: Reasoning path cases on the two queries: (Texas,?,Oklahoma), (Ingrid Bergman,languages,?).
+
+methods is prone to be stuck in the local nodes with highdegree centrality, resulting in a fail to reach the correct entity.
+Comparing to MINERVA, our approach has superior performance, indicating that the hierarchical cognition mechanism can handle multiple semantic issues.
+Relation Link Prediction. In this experiment, we perform relation prediction for two datasets, NELL995, FB15K-237. The results of MAP are reported in Table 4. As the results show for NELL995, despite of failing to achieve all improvements on each task, our approach performs better on the relations with multiple semantics. For instance, ‘OrgHirePerson’, ‘agentBelongToOrg’, ‘WorksFor’, ‘PersonLeadOrg’. Similarly to entity prediction experiments, our model outperforms other baselines in most tasks on FB15K-237.
+In summary, link prediction results demonstrate that our model succeeds multi-hop reasoning on KGs with competitive performance, therefore providing interpretable reasoning path to users, and it is also favorable to handle the multiple semantic issues.
+6.2 Reasoning Path Case Study
+To investigate the property of reasoning paths, we present the reasoning paths found by the approaches (MINERVA, RLH) for two typical queries on FB15K-237. Table 5 shows the top-three frequency paths found by MINERVA and RLH. For the two queries, our approach all achieves the correct target entity, but MINERVA gets 4/6 hits. Note that MINERVA adds the inverse relation of each edge, i.e., for an edge (e1, r, e2) ∈ U , the edge (e2, r−1, e1) to the graph. Consequently, the agent trained by MINERVA has the ability to reversely infer the reasoning paths. However, we observe that this operation signiﬁcantly suppresses the reasoning process when the intermediate entities or relations are key nodes with high degree centrality, such as ‘United States of America’, ‘country’ and ‘ﬁlm’ in Table 5. Once the agent is at this kind of nodes, the large action space hinders the decision of the policy. As a result, we observe a high-frequency occurrence
+
+of relations with high-degree centrality in path 1-3, 7-9. Contrastively, our model learns reasoning chains with wider concepts. For instance, ‘country’, ‘ﬁrst level’, and ‘state province region’ are all in the multiple meanings of ‘sub-part of’. In brief, the reasoning cases reveal that our model can learn the structural semantics of actions to identify both speciﬁc actions and sub-actions, therefore achieves improvement.
+7 Conclusions
+In this paper, we study multiple semantic issue where an entity or relation has multiple meanings during multi-hop knowledge graph reasoning. In order to address the problem, we consider the way that a human being handles ambiguous situations as a promising solution. We therefore design a HRL framework with a hierarchical decision making mechanism. The mechanism is implemented by a hierarchy of the high-level policy and the low-level policy. The high-level policy learns historical information. Meanwhile, the low-level policy is responsible for learning sub-actions as well as dividing each entire action space into a smaller action space. As a result, the multiple semantics of each relation can also be learned. In this way, our proposed approach can deal with multiple semantic issue in the multi-hop reasoning tasks. Experimental results show our model demonstrates competitive performance compared with existing knowledge graph completion methods. In particular, our approach achieves signiﬁcant improvements on the tasks with multiple semantic issue.
+Acknowledgements
+This work was supported in part by NSFC under Grants 61822113, 62041105, 61872360, 61973162, STMP of Hubei Province under Grant 2019AEA170, NSF of Hubei Province under Grants 2018CFA050, FRFCU under Grant 413000092, 413000082, and 30918011319, Supercomputing Center of Wuhan University, Youth Innovation Promotion Association CAS (2017210), NSF of Jiangsu Province (BK20171430), and Australian Research Council (FT190100039).
+
+1931
+
+Proceedings of the Twenty-Ninth International Joint Conference on Artiﬁcial Intelligence (IJCAI-20)
+
+References
+[Barto and Mahadevan, 2003] Andrew G Barto and Sridhar Mahadevan. Recent advances in hierarchical reinforcement learning. Discrete event dynamic systems, 13(12):41–77, 2003.
+[Bordes et al., 2013] Antoine Bordes, Nicolas Usunier, Alberto Garcia-Duran, Jason Weston, and Oksana Yakhnenko. Translating embeddings for modeling multi-relational data. In NeurIPS, pages 2787–2795, 2013.
+[Carlson et al., 2010] Andrew Carlson, Justin Betteridge, Bryan Kisiel, Burr Settles, Estevam R Hruschka, and Tom M Mitchell. Toward an architecture for never-ending language learning. In AAAI, 2010.
+[Cohen, 2016] William W Cohen. Tensorlog: A differentiable deductive database. arXiv:1605.06523, 2016.
+[Colin et al., 2016] Thomas R Colin, Tony Belpaeme, Angelo Cangelosi, and Nikolas Hemion. Hierarchical reinforcement learning as creative problem solving. Robotics and Autonomous Systems, 86:196–206, 2016.
+[Das et al., 2018] Rajarshi Das, Shehzaad Dhuliawala, Manzil Zaheer, Luke Vilnis, Ishan Durugkar, Akshay Krishnamurthy, Alex Smola, and Andrew McCallum. Go for a walk and arrive at the answer: Reasoning over paths in knowledge bases using reinforcement learning. In ICLR, 2018.
+[Dettmers et al., 2018] Tim Dettmers, Pasquale Minervini, Pontus Stenetorp, and Sebastian Riedel. Convolutional 2d knowledge graph embeddings. In AAAI, 2018.
+[Fang et al., 2020] Yixiang Fang, Xin Huang, Lu Qin, Ying Zhang, Wenjie Zhang, Reynold Cheng, and Xuemin Lin. A survey of community search over big graphs. The VLDB Journal, 29(1):353–392, 2020.
+[Ji et al., 2020] Shaoxiong Ji, Shirui Pan, Erik Cambria, Pekka Marttinen, and Philip S Yu. A survey on knowledge graphs: Representation, acquisition and applications. arXiv preprint arXiv:2002.00388, 2020.
+[Joshi et al., 2013] Salil Joshi, Diptesh Kanojia, and Pushpak Bhattacharyya. More than meets the eye: Study of human cognition in sense annotation. In NAACL, pages 733–738, 2013.
+[Kertkeidkachorn and Ichise, 2017] Natthawut Kertkeidkachorn and Ryutaro Ichise. T2kg: An end-to-end system for creating knowledge graph from unstructured text. In AAAI, 2017.
+[Kingma and Ba, 2014] Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. ICLR, 2014.
+[Lao et al., 2011] Ni Lao, Tom Mitchell, and William W Cohen. Random walk inference and learning in a large scale knowledge base. In EMNLP, pages 529–539. Association for Computational Linguistics, 2011.
+[McCarthy, 1960] John McCarthy. Programs with common sense. RLE and MIT computation center, 1960.
+
+[Nickel et al., 2015] Maximilian Nickel, Kevin Murphy, Volker Tresp, and Evgeniy Gabrilovich. A review of relational machine learning for knowledge graphs. Proceedings of the IEEE, 104(1):11–33, 2015.
+[Purcell and Kiani, 2016] Braden A Purcell and Roozbeh Kiani. Hierarchical decision processes that operate over distinct timescales underlie choice and changes in strategy. PNAS, 113(31):E4531–E4540, 2016.
+[Quinlan, 1990] J. Ross Quinlan. Learning logical deﬁnitions from relations. Machine learning, 5(3):239–266, 1990.
+[Sarafyazd and Jazayeri, 2019] Morteza Sarafyazd and Mehrdad Jazayeri. Hierarchical reasoning by neural circuits in the frontal cortex. Science, 364(6441):eaav8911, 2019.
+[Shen et al., 2018] Yelong Shen, Jianshu Chen, Po-Sen Huang, Yuqing Guo, and Jianfeng Gao. M-walk: Learning to walk over graphs using monte carlo tree search. In NeurIPS, pages 6786–6797, 2018.
+[Silver et al., 2016] David Silver, Aja Huang, Chris J Maddison, Arthur Guez, Laurent Sifre, George Van Den Driessche, Julian Schrittwieser, Ioannis Antonoglou, Veda Panneershelvam, Marc Lanctot, et al. Mastering the game of go with deep neural networks and tree search. Nature, 529(7587):484, 2016.
+[Sutton et al., 2000] Richard S Sutton, David A McAllester, Satinder P Singh, and Yishay Mansour. Policy gradient methods for reinforcement learning with function approximation. In NeurIPS, pages 1057–1063, 2000.
+[Wang et al., 2017] Quan Wang, Zhendong Mao, Bin Wang, and Li Guo. Knowledge graph embedding: A survey of approaches and applications. TKDE, 29(12):2724–2743, 2017.
+[Williams, 1992] Ronald J Williams. Simple statistical gradient-following algorithms for connectionist reinforcement learning. Machine learning, 8(3-4):229–256, 1992.
+[Xiao et al., 2016] Han Xiao, Minlie Huang, and Xiaoyan Zhu. Transg: A generative model for knowledge graph embedding. In ACL, volume 1, pages 2316–2325, 2016.
+[Xiong et al., 2017] Wenhan Xiong, Thien Hoang, and William Yang Wang. Deeppath: A reinforcement learning method for knowledge graph reasoning. In EMNLP, pages 564–573, 2017.
+[Yang et al., 2017] Fan Yang, Zhilin Yang, and William W Cohen. Differentiable learning of logical rules for knowledge base reasoning. In NeurIPS, pages 2319–2328, 2017.
+[Ye et al., 2018] Mang Ye, Zheng Wang, Xiangyuan Lan, and Pong C Yuen. Visible thermal person re-identiﬁcation via dual-constrained top-ranking. In IJCAI, volume 1, page 2, 2018.
+[Yih et al., 2011] Wen-tau Yih, Kristina Toutanova, John C Platt, and Christopher Meek. Learning discriminative projections for text similarity measures. In CoNLL, pages 247–256, 2011.
+
+1932
+

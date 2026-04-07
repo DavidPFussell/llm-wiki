@@ -1,0 +1,1842 @@
+A Comparative Study of Eﬃcient Initialization Methods for the K-Means Clustering Algorithm
+M. Emre Celebi
+Department of Computer Science Louisiana State University, Shreveport, LA, USA
+ecelebi@lsus.edu
+Hassan A. Kingravi
+School of Electrical and Computer Engineering Georgia Institute of Technology, Atlanta, GA, USA
+kingravi@gatech.edu
+Patricio A. Vela
+School of Electrical and Computer Engineering Georgia Institute of Technology, Atlanta, GA, USA
+pvela@gatech.edu
+
+arXiv:1209.1960v1 [cs.LG] 10 Sep 2012
+
+Abstract
+K-means is undoubtedly the most widely used partitional clustering algorithm. Unfortunately, due to its gradient descent nature, this algorithm is highly sensitive to the initial placement of the cluster centers. Numerous initialization methods have been proposed to address this problem. In this paper, we ﬁrst present an overview of these methods with an emphasis on their computational eﬃciency. We then compare eight commonly used linear time complexity initialization methods on a large and diverse collection of data sets using various performance criteria. Finally, we analyze the experimental results using non-parametric statistical tests and provide recommendations for practitioners. We demonstrate that popular initialization methods often perform poorly and that there are in fact strong alternatives to these methods.
+
+1. Introduction
+Clustering, the unsupervised classiﬁcation of patterns into groups, is one of the most important tasks in exploratory data analysis [1]. Primary goals of clustering include gaining insight into data (detecting anomalies, identifying salient features, etc.), classifying data, and compressing data. Clustering has a long and rich history in a variety of scientiﬁc disciplines including anthropology, biology, medicine, psychology, statistics, mathematics, engineering, and computer science. As a result, numerous clustering algorithms have been proposed since the early 1950s [2].
+Clustering algorithms can be broadly classiﬁed into two groups: hierarchical and partitional [2]. Hierarchical algorithms recursively ﬁnd nested clusters either in a top-down (divisive) or bottom-up (agglomerative) fashion. In contrast, partitional algorithms ﬁnd all the clusters simultaneously as a partition of the data and do not impose a hierarchical structure. Most hierarchical algorithms have quadratic or higher complexity in the number of data points [1] and therefore are not suitable for large data sets, whereas partitional algorithms often have lower complexity.
+Given a data set X = {x1, x2, . . . , xN } in RD, i.e., N points (vectors) each with D attributes (components), hard partitional algorithms divide X into K exhaustive and mutually exclusive clusters P = {P1, P2, . . . , PK },
+i=1 K Pi = X , Pi ∩ Pj = ∅ for 1 ≤ i = j ≤ K. These algorithms usually generate clusters by optimizing a criterion function. The most intuitive and frequently used criterion function is the Sum of Squared Error (SSE) given by:
+K
+SSE = xj − ci 22 (1)
+i=1 xj ∈Pi
+where . 2 denotes the Euclidean (L2) norm and ci = 1/|Pi| xj∈Pi xj is the centroid of cluster Pi whose cardinality is |Pi|. The optimization of (1) is often referred to as the minimum SSE clustering (MSSC) problem.
+
+Expert Systems with Applications
+
+September 11, 2012
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+The number of ways in which a set of N objects can be partitioned into K non-empty groups is given by Stirling numbers of the second kind:
+S(N, K) = 1 (−1)K−i K K iN (2) K! i=0 i
+which can be approximated by KN /K! It can be seen that a complete enumeration of all possible clusterings to determine the global minimum of (1) is clearly computationally prohibitive except for very small data sets [3]. In fact, this non-convex optimization problem is proven to be NP-hard even for K = 2 [4] or D = 2 [5]. Consequently, various heuristics have been developed to provide approximate solutions to this problem [6]. Among these heuristics, Lloyd’s algorithm [7], often referred to as the (batch) k-means algorithm, is the simplest and most commonly used one. This algorithm starts with K arbitrary centers, typically chosen uniformly at random from the data points. Each point is assigned to the nearest center and then each center is recalculated as the mean of all points assigned to it. These two steps are repeated until a predeﬁned termination criterion is met.
+The k-means algorithm is undoubtedly the most widely used partitional clustering algorithm [1, 2]. Its popularity can be attributed to several reasons. First, it is conceptually simple and easy to implement. Virtually every data mining software includes an implementation of it. Second, it is versatile, i.e., almost every aspect of the algorithm (initialization, distance function, termination criterion, etc.) can be modiﬁed. This is evidenced by hundreds of publications over the last ﬁfty years that extend k-means in various ways. Third, it has a time complexity that is linear in N , D, and K (in general, D ≪ N and K ≪ N ). For this reason, it can be used to initialize more expensive clustering algorithms such as expectation maximization [8], DBSCAN [9], and spectral clustering [10]. Furthermore, numerous sequential [11, 12] and parallel [13] acceleration techniques are available in the literature. Fourth, it has a storage complexity that is linear in N , D, and K. In addition, there exist disk-based variants that do not require all points to be stored in memory [14]. Fifth, it is guaranteed to converge [15] at a quadratic rate [16]. Finally, it is invariant to data ordering, i.e., random shuﬄings of the data points.
+On the other hand, k-means has several signiﬁcant disadvantages. First, it requires the number of clusters, K, to be speciﬁed a priori. The value of this parameter can be determined automatically by means of various cluster validity measures [17]. Second, it can only detect compact, hyperspherical clusters that are well separated. This can be alleviated by using a more general distance function such as the Mahalanobis distance, which permits the detection of hyperellipsoidal clusters [18]. Third, due its utilization of the squared Euclidean distance, it is sensitive to noise and outlier points since even a few such points can signiﬁcantly inﬂuence the means of their respective clusters. This can addressed by outlier pruning [19] or using a more robust distance function such as City-block (L1) distance. Fourth, due to its gradient descent nature, it often converges to a local minimum of the criterion function [15]. For the same reason, it is highly sensitive to the selection of the initial centers. Adverse eﬀects of improper initialization include empty clusters, slower convergence, and a higher chance of getting stuck in bad local minima [20]. Fortunately, all of these drawbacks except the ﬁrst one can be remedied by using an adaptive initialization method (IM).
+In this study, we investigate some of the most popular IMs developed for the k-means algorithm. Our motivation is three-fold. First, a large number of IMs have been proposed in the literature and thus a systematic study that reviews and compares these methods is desirable. Second, these IMs can be used to initialize other partitional clustering algorithms such as fuzzy c-means and its variants and expectation maximization. Third, most of these IMs can be used independently of k-means as standalone clustering algorithms.
+This study diﬀers from earlier studies of a similar nature [21, 22] in several respects: (i) a more comprehensive overview of the existing IMs is provided, (ii) the experiments involve a larger set of methods and a signiﬁcantly more diverse collection of data sets, (iii) in addition to clustering eﬀectiveness, computational eﬃciency is used as a performance criterion, and (iv) the experimental results are analyzed more thoroughly using non-parametric statistical tests.
+The rest of the paper is organized as follows. Section 2 presents a survey of k-means IMs. Section 3 describes the experimental setup. Section 4 presents the experimental results, while Section 5 gives the conclusions.
+2. Initialization Methods for K-Means
+In this section, we brieﬂy review some of the commonly used IMs with an emphasis on their time complexity (with respect to N ). In each complexity class, methods are presented in chronologically ascending order.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+
+2.1. Linear Time-Complexity Initialization Methods
+
+Forgy’s method [23] assigns each point to one of the K clusters uniformly at random. The centers are then
+
+given by the centroids of these initial clusters. This method has no theoretical basis, as such random clusters have
+
+no internal homogeneity [24].
+
+Jancey’s method [25] assigns to each center a synthetic point randomly generated within the data space. Unless
+
+the data set ﬁlls the space, some of these centers may be quite distant from any of the points [24], which might lead
+
+to the formation of empty clusters.
+
+MacQueen [26] proposed two diﬀerent methods. The ﬁrst one, which is the default option in the Quick Cluster
+
+procedure of IBM SPSS Statistics [27], takes the ﬁrst K points in X as the centers. An obvious drawback of this
+
+method is its sensitivity to data ordering. The second method chooses the centers randomly from the data points.
+
+The rationale behind this method is that random selection is likely to pick points from dense regions, i.e., points
+
+that are good candidates to be centers. However, there is no mechanism to avoid choosing outliers or points that
+
+are too close to each other [24]. Multiple runs of this method is the standard way of initializing k-means [8]. It
+
+should be noted that this second method is often mistakenly attributed to Forgy [23].
+
+Ball and Hall’s method [28] takes the centroid of X , i.e., X¯ = 1/N j=1 N xj, as the ﬁrst center. It then traverses the points in arbitrary order and takes a point as a center if it is at least T units apart from the previously selected
+
+centers until K centers are obtained. The purpose of the distance threshold T is to ensure that the seed points are
+
+well separated. However, it is diﬃcult to decide on an appropriate value for T . In addition, the method is sensitive
+
+to data ordering.
+
+The Simple Cluster Seeking method [29] is identical to Ball and Hall’s method with the exception that the ﬁrst
+
+point in X is taken as the ﬁrst center. This method is used in the FASTCLUS procedure of SAS [30].
+
+Spa¨th’s method [31] is similar to Forgy’s method with the exception that the points are assigned to the clusters
+
+in a cyclical fashion, i.e., the j-th (j ∈ {1, 2, . . . , N }) point is assigned to the (j − 1 (mod K) + 1)-th cluster. In
+
+contrast to Forgy’s method, this method is sensitive to data ordering.
+
+Maximin method [32, 33] chooses the ﬁrst center c1 arbitrarily and the i-th (i ∈ {2, 3, . . . , K}) center ci is chosen
+
+to be the point that has the greatest minimum-distance to the previously selected centers, i.e., c1, c2, . . . , ci−1. This
+
+method was originally developed as a 2-approximation to the K-center clustering problem1. It should be noted
+
+that, motivated by a vector quantization application, Katsavounidis et al.’s variant [33] takes the point with the
+
+greatest Euclidean norm as the ﬁrst center.
+
+Al-Daoud’s density-based method [34] ﬁrst uniformly partitions the data space into M disjoint hypercubes. It
+
+then randomly selects KNm/N points from hypercube m (m ∈ {1, 2, . . . , M }) to obtain a total of K centers (Nm
+
+is the number of points in hypercube m). There are two main disadvantages associated with this method. First,
+
+it is diﬃcult to decide on an appropriate value for M . Second, the method has a storage complexity of O(2BD),
+
+where B is the number of bits allocated to each attribute.
+
+Bradley and Fayyad’s method [8] starts by randomly partitioning the data set into J subsets. These subsets are
+
+clustered using k-means initialized by MacQueen’s second method producing J sets of intermediate centers each
+
+with K points. These center sets are combined into a superset, which is then clustered by k-means J times, each
+
+time initialized with a diﬀerent center set. Members of the center set that give the least SSE are then taken as the
+
+ﬁnal centers.
+
+Pizzuti et al. [35] improved upon Al-Daoud’s density-based method using a multiresolution grid approach. Their
+
+method starts with 2D hypercubes and iteratively splits these as the number of points they receive increases. Once
+
+the splitting phase is completed, the centers are chosen from the densest hypercubes.
+
+The k-means++ method [36] interpolates between MacQueen’s second method and the maximin method. It
+
+chooses the ﬁrst center randomly and the i-th (i ∈ {2, 3, . . . , K}) center is chosen to be x′ ∈ X with a probability of
+
+md(x′)2 , where md(x) denotes the minimum-distance from a point x to the previously selected centers. This
+
+N j=1
+
+md(xj
+
+)2
+
+method yields an Θ(log K) approximation to the MSSC problem. The greedy k-means++ method probabilistically
+
+selects log(K) centers in each round and then greedily selects the center that most reduces the SSE. This modiﬁcation
+
+aims to avoid the unlikely event of choosing two centers that are close to each other.
+
+The PCA-Part method [37] uses a divisive hierarchical approach based on PCA (Principal Component Analysis)
+
+[38]. Starting from an initial cluster that contains the entire data set, the method iteratively selects the cluster with
+
+the greatest SSE and divides it into two subclusters using a hyperplane that passes through the cluster centroid
+
+and is orthogonal to the principal eigenvector of the cluster covariance matrix. This procedure is repeated until K
+
+1Given a set of N points in a metric space, the goal of K-center clustering is to ﬁnd K representative points (centers) such that the maximum distance of a point to a center is minimized.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+clusters are obtained. The centers are then given by the centroids of these clusters. The Var-Part method [37] is an approximation to PCA-Part, where the covariance matrix of the cluster to be split is assumed to be diagonal. In this case, the splitting hyperplane is orthogonal to the coordinate axis with the greatest variance.
+Lu et al.’s method [39] uses a two-phase pyramidal approach. The attributes of each point are ﬁrst encoded as integers using 2Q-level quantization, where Q is a resolution parameter. These integer points are considered to be at level 0 of the pyramid. In the bottom-up phase, starting from level 0, neighboring data points at level k (k ∈ {0, 1, . . .}) are averaged to obtain weighted points at level k + 1 until at least 20K points are obtained. Data points at the highest level are reﬁned using k-means initialized with the K points with the largest weights. In the top-down phase, starting from the highest level, centers at level k + 1 are projected onto level k and then used to initialize the k-th level clustering. The top-down phase terminates when level 0 is reached. The centers at this level are then inverse quantized to obtain the ﬁnal centers. The performance of this method degrades with increasing dimensionality [39].
+Onoda et al.’s method [40] ﬁrst calculates K Independent Components (ICs) [41] of X and then chooses the i-th (i ∈ {1, 2, . . . , K}) center as the point that has the least cosine distance from the i-th IC.
+2.2. Loglinear Time-Complexity Initialization Methods Hartigan’s method [42] ﬁrst sorts the points according to their distances to X¯. The i-th (i ∈ {1, 2, . . . , K})
+center is then chosen to be the (1 + (i − 1)N/K)-th point. This method is an improvement over MacQueen’s ﬁrst method in that it is invariant to data ordering and is more likely to produce seeds that are well separated. The computational cost of this method is dominated by the complexity of sorting, which is O(N log N ).
+Al-Daoud’s variance-based method [43] ﬁrst sorts the points on the attribute with the greatest variance and then partitions them into K groups along the same dimension. The centers are then chosen to be the points that correspond to the medians of these groups. Note that this method disregards all attributes but one and therefore is likely to be eﬀective only for data sets in which the variability is mostly on one dimension.
+Redmond and Heneghan’s method [44] ﬁrst constructs a kd-tree of the data points to perform density estimation and then uses a modiﬁed maximin method to select K centers from densely populated leaf buckets. The computational cost of this method is dominated by the complexity of kd-tree construction, which is O(N log N ).
+The ROBIN (ROBust INitialization) method [45] uses a local outlier factor (LOF) [46] to avoid selecting outlier points as centers. In iteration i (i ∈ {1, 2, . . . , K}), the method ﬁrst sorts the data points in decreasing order of their minimum-distance to the previously selected centers. It then traverses the points in sorted order and selects the ﬁrst point that has an LOF value close to 1 as the i-th center. The computational cost of this method is dominated by the complexity of sorting, which is O(N log N ).
+2.3. Quadratic-Complexity Initialization Methods
+Astrahan’s method [47] uses two distance thresholds d1 and d2. It ﬁrst calculates the density of each point as the number of points within a distance of d1. The points are sorted in decreasing order by their densities and the highest density point is chosen as the ﬁrst center. Subsequent centers are chosen in order of decreasing density subject to the condition that each new center be at least at a distance of d2 from the previously selected centers. This procedure is continued until no more centers can be chosen. Finally, if more than K centers are chosen, hierarchical clustering is used to group the centers until only K of them remain. The main problem with this method is that it is very sensitive to the values of d1 and d2. For example, if d1 is too small there may be many isolated points with zero density whereas if it is too large a few centers will cover the entire data set [24].
+Lance and Williams [48] suggested that the output of a hierarchical clustering algorithm can be used to initialize k-means. Despite the fact that such algorithms often have quadratic or higher complexity, this method is highly recommended in the statistics literature [49] possibly due to the limited size of the data sets in this ﬁeld.
+Kaufman and Rousseeuw’s method [3] takes X¯ as the ﬁrst center and the i-th (i ∈ {2, 3, . . . , K}) center is chosen to be the point that most reduces the SSE. Since pairwise distances between the data points need to be calculated in each iteration, the time complexity of this method is O(N 2).
+Cao et al. [50] formalized Astrahan’s density-based method within the framework of a neighborhood-based rough set model. In this model, the ε-neighborhood of a point is deﬁned as the set of points within ε distance from it according to a particular distance measure. Based on this neighborhood model, the concepts of cohesion and coupling are deﬁned. The former is a measure of the centrality of a point with respect to its neighborhood; whereas the latter is a measure of separation between two neighborhoods. The method ﬁrst sorts the data points in decreasing order of their cohesion and takes the point with the greatest cohesion as the ﬁrst center. It then traverses the points in sorted order and takes the ﬁrst point that has a coupling of less than ε with the previously selected centers as the i-th (i ∈ {2, 3, . . . , K}) center. The computational cost of this method is dominated by the complexity of the ε-neighborhood calculations, which is O(N 2).
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+2.4. Other Initialization Methods The binary-splitting method [51] takes X¯ as the ﬁrst center. In iteration t (t ∈ {1, 2, . . . , log2 K}), each of the
+existing 2t−1 centers is split into two new centers by subtracting and adding a ﬁxed perturbation vector ǫ, i.e., ci − ǫ and ci + ǫ (i ∈ {1, 2, . . . , 2t−1}). These 2t new centers are then reﬁned using k-means. There are two main disadvantages associated with this method. First, there is no guidance on the selection of a proper value for ǫ, which determines the direction of the split [52]. Second, the method is computationally demanding since after each iteration k-means has to be run for the entire data set.
+The directed-search binary-splitting method [52] is an improvement over the binary-splitting method in that it determines the value of ǫ using PCA. However, it has even higher computational requirements due to the calculation of the principal eigenvector in each iteration.
+The global k-means method [53] takes X¯ as the ﬁrst center. In iteration i (i ∈ {1, 2, . . . , K − 1}) it considers each of the N points in turn as a candidate for the (i + 1)-st center and runs k-means with i + 1 centers on the entire data set. This method is computationally prohibitive for large data sets as it involves N (K − 1) runs of k-means on the entire data set.
+It should be noted that the two splitting methods and the global k-means method are not initialization methods per se. These methods can be considered as complete clustering methods that utilize k-means as a local search procedure. For this reason, to the best of our knowledge, none of the initialization studies to date included these methods in their comparisons.
+We should also mention IMs based on metaheuristics such as simulated annealing [54] and genetic algorithms [55]. These algorithms start from a random initial conﬁguration (population) and use k-means to evaluate their solutions in each iteration (generation). There are two main disadvantages associated with these methods. First, they involve numerous parameters that are diﬃcult to tune (initial temperature, cooling schedule, population size, crossover/mutation probability, etc.) [1]. Second, due to the large search space, they often require a large number of iterations, which renders them computationally prohibitive for all but the smallest data sets. Interestingly, with the recent developments in combinatorial optimization algorithms, it is now feasible to obtain globally minimum SSE clusterings for small data sets without resorting to metaheuristics [56].
+2.5. Linear vs. Superlinear Initialization Methods
+Based on the descriptions given above, it can be seen that superlinear methods often have more elaborate designs when compared to linear ones. An interesting feature of the superlinear methods is that they are often deterministic, which can be considered as an advantage especially when dealing with large data sets. In contrast, linear methods are often non-deterministic and/or order-sensitive. As a result, it is common practice to perform multiple runs of such methods and take the output of the run that produces the least SSE [8].
+A frequently cited advantage of the more elaborate methods is that they often lead to faster k-means convergence, i.e., require fewer iterations, and as a result the time gained during the clustering phase can oﬀset the time lost during the initialization phase [37, 44, 45]. This may be true when a standard implementation of k-means is used. However, convergence speed may not be as important when a fast k-means variant is used as such methods often require signiﬁcantly less time compared to a standard k-means implementation. In this study, we utilize a fast k-means variant based on triangle inequality [57] and partial distance elimination [58] techniques. As will be seen in §4, this fast and exact k-means implementation will diminish the computational eﬃciency diﬀerences among various IMs. In other words, we will demonstrate that elaborate methods that lead to faster k-means convergence are not necessarily more eﬃcient than simple methods with slower convergence.
+3. Experimental Setup
+3.1. Data Set Descriptions
+In order to obtain a comprehensive evaluation of various IMs, we conducted two sets of experiments. The ﬁrst experiment involved 32 commonly used real data sets with sizes ranging from 214 to 1, 904, 711 points. Most of these data sets were obtained from the UCI Machine Learning Repository [59] (see Table 1.) The second experiment involved a large number of synthetic data sets with varying clustering complexity. We used a recent algorithm proposed by Maitra and Melnykov [60] to generate these data sets. This algorithm involves the calculation of the exact overlap (ω) between each cluster pair, measured in terms of their total probability of misclassiﬁcation, and guided simulation of Gaussian mixture components satisfying prespeciﬁed overlap characteristics. The algorithm was used with the following parameters: mean overlap (ω¯ ∈ {0.025, 0.05, 0.1, 0.2}), number of points (N ∈ {1024, 4096, 16384, 65536}), number of attributes (D ∈ {2, 4, 8, 16, 32, 64}), and number of classes (K′ ∈ {2, 4, 6, 8, 10, 12}).
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+
+The parameter ω¯ denotes the mean overlap between pairs of clusters. However, we observed that two synthetic data sets with the same ω¯ can have considerably diﬀerent clustering complexity. Therefore, we quantiﬁed clustering complexity using the following indirect approach. For each data set, we executed the k-means algorithm initialized with the “true” centers given by the cluster generation algorithm and calculated the RAND, VD, and VI measures (see §3.3) upon convergence. The average of these measures, Ω, was taken as a quantitative indicator of clustering complexity. Note that each of these normalized measures takes values from the [0, 1] interval. For RAND larger values are better, whereas for VD and VI smaller values are better. Therefore, we inverted the RAND values by subtracting them from 1 to make this measure compatible with the other two. Finally, using the aforementioned complexity quantiﬁcation scheme, we generated 4, 096 synthetic data sets from each of the following complexity classes: easy (0 ≤ Ω ≤ 0.25), moderate (0.25 < Ω ≤ 0.5), and diﬃcult (0.5 < Ω ≤ 1). The total number of synthetic data sets was thus 3 × 4, 096 = 12, 288. Figure 1 shows sample data sets with K = 6 clusters from each complexity class.
+
+1.0 0.8 0.6 0.4 0.2 0.0
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+(a) Easy (Ω = .103)
+
+1.5
+
+1.0
+
+0.5
+
+0.0
+
+0.0
+
+0.5
+
+1.0
+
+1.0 0.5 0.0
+0.0
+
+0.5
+
+1.0
+
+(b) Moderate (Ω = .369) Figure 1: Synthetic data sets with K = 6 clusters
+
+(c) Diﬃcult (Ω = .569)
+
+3.2. Attribute Normalization In clustering tasks, normalization is a common preprocessing step that is necessary to prevent attributes with
+large ranges from dominating the distance calculations and also to avoid numerical instabilities in the computations. Two commonly used normalization schemes are linear scaling to unit range (min-max normalization) and linear scaling to unit variance (z-score normalization). Several studies revealed that the former scheme is preferable to the latter since the latter is likely to eliminate valuable between-cluster variation [63, 37]. As a result, we used min-max normalization to map the attributes of each real data set to the [0, 1] interval. Note that attributes of the synthetic data sets were already normalized by the cluster generation algorithm.
+3.3. Performance Criteria The performance of the IMs was measured using ﬁve eﬀectiveness (quality) and two eﬃciency (speed) criteria:
+⊲ Initial SSE: This is the SSE value calculated after the initialization phase, before the clustering phase. It gives us a measure of the eﬀectiveness of an IM by itself.
+⊲ Final SSE: This is the SSE value calculated after the clustering phase. It gives us a measure of the eﬀectiveness of an IM when its output is reﬁned by k-means. Note that this is the objective function of the k-means algorithm, i.e., (1).
+⊲ Normalized Rand (RAND) [64], van Dongen (VD) [65], and Variation of Information [66] criteria (VI): These are external validity measures that quantify the extent to which the clustering structure discovered by a clustering algorithm matches some external structure, e.g., one speciﬁed by the given class labels [67, 68]. In a recent comprehensive study, these three measures were found to be the best among 16 external validity measures [67]. Note that each of these normalized measures takes values from the [0, 1] interval.
+⊲ Number of Iterations: This is the number of iterations that k-means requires until reaching convergence when initialized by a particular IM. It is an eﬃciency measure independent of programming language, implementation style, compiler, and CPU architecture.
+⊲ CPU Time: This is the total CPU time taken by the initialization and clustering phases. This criterion is reported only for the real data sets.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+
+ID Data Set
+
+Table 1: Descriptions of Real Data Sets
+# Points (N ) # Attributes (D) # Classes (K′)
+
+1 Breast Cancer Wisconsin (Original) 2 Cloud Cover (DB1) 3 Concrete Compressive Strength 4 Corel Image Features 5 Covertype 6 Ecoli 7 Steel Plates Faults 8 Glass Identiﬁcation 9 Heart Disease 10 Ionosphere 11 ISOLET 12 Landsat Satellite (Statlog) 13 Letter Recognition 14 MAGIC Gamma Telescope 15 Multiple Features (Fourier) 16 MiniBooNE Particle Identiﬁcation 17 Musk (Clean2) 18 Optical Digits 19 Page Blocks Classiﬁcation 20 Parkinsons 21 Pen Digits 22 Person Activity 23 Pima Indians Diabetes 24 Image Segmentation 25 Shuttle (Statlog) 26 SPECTF Heart 27 Telugu Vowels [61] 28 Vehicle Silhouettes (Statlog) 29 Wall-Following Robot Navigation 30 Wine Quality 31 World TSP [62] 32 Yeast
+
+683 1,024 1,030 68,040 581,012
+336 1,941
+214 297 351 7,797 6,435 20,000 19,020 2,000 130,064 6598 5,620 5,473 5,875 10,992 164,860 768 2,310 58,000 267 871 846 5,456 6,497 1,904,711 1,484
+
+9
+
+2
+
+10
+
+8†
+
+9
+
+8†
+
+25
+
+16†
+
+10
+
+7
+
+7
+
+8
+
+27
+
+7
+
+9
+
+6
+
+13
+
+5
+
+34
+
+2
+
+617
+
+26
+
+36
+
+6
+
+16
+
+26
+
+10
+
+2
+
+76
+
+10
+
+50
+
+2
+
+166
+
+2
+
+64
+
+10
+
+10
+
+5
+
+18
+
+42†
+
+16
+
+10
+
+3
+
+11
+
+8
+
+2
+
+19
+
+7
+
+9
+
+7
+
+44
+
+2
+
+3
+
+6
+
+18
+
+4
+
+24
+
+4
+
+11
+
+7
+
+2
+
+7†
+
+8
+
+10
+
+† Due to the unavailability of class labels, for data sets #2, #3, and #4, K′ was chosen arbitrarily, whereas for #20 and #31, it was determined based on domain knowledge.
+
+All of the methods were implemented in the C language, compiled with the gcc v4.4.3 compiler, and executed on an Intel Xeon E5520 2.26GHz machine. Time measurements were performed using the getrusage function, which is capable of measuring CPU time to an accuracy of a microsecond. The MT19937 variant of the Mersenne Twister algorithm was used to generate high-quality pseudorandom numbers [69].
+The convergence of k-means was controlled by the disjunction of two criteria: the number of iterations reaches a maximum of 100 or the relative improvement in SSE between two consecutive iterations drops below a threshold, i.e., (SSEi−1 − SSEi)/SSEi ≤ ε, where SSEi denotes the SSE value at the end of the i-th (i ∈ {1, 2, . . . , 100}) iteration. The convergence threshold was set to ε = 10−6.
+
+4. Experimental Results and Discussion
+In this study, we focus on IMs that have time complexity linear in N . This is because k-means itself has linear complexity, which is perhaps the most important reason for its popularity. Therefore, an IM for k-means should not diminish this advantage of the algorithm. Eight commonly used, order-invariant IMs were included in the experiments: Forgy’s method (F), MacQueen’s second method (M), maximin (X), Bradley and Fayyad’s method (B) with J = 10, k-means++ (K), greedy k-means++ (G), Var-Part (V), and PCA-Part (P). It should be noted that among these methods only V and P are deterministic.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+
+In the experiments, each non-deterministic method was executed a 100 times and statistics such as minimum, mean, and standard deviation were collected for the eﬀectiveness criteria. In each run, the number of clusters (K) was set equal to the number of classes (K′), as commonly seen in the related literature [8, 35, 22, 36, 37, 45, 50].
+Tables 2 and 3 give the Final SSE and CPU time (in milliseconds) results for the real data sets, respectively. Note that, due to space limitations, only mean values are reported for the CPU time criterion. In order to determine if there are any statistically signiﬁcant diﬀerences among the methods, we employed two non-parametric statistical tests [70]: the Friedman test [71] and Iman & Davenport test [72]. These tests are alternatives to the parametric two-way analysis of variance (ANOVA) test. Their advantage over ANOVA is that they do not require normality or homoscedasticity, assumptions that are often violated in machine learning studies [73, 74].
+Given B blocks (subjects) and T treatments (measurements), the null hypothesis (H0) of the Friedman test is that populations within a block are identical. The alternative hypothesis (H1) is that at least one treatment tends to yield larger (or smaller) values than at least one other treatment. The test statistic is calculated as follows [75]. In the ﬁrst step, the observations within each block are ranked separately, so each block contains a separate set of T ranks. If ties occur, the tied observations are given the mean of the rank positions for which they are tied. If H0 is true, the ranks in each block should be randomly distributed over the columns (treatments). Otherwise, we expect a lack of randomness in this distribution. For example, if a particular treatment is better than the others, we expect large (or small) ranks to ‘favor’ that column. In the second step, the ranks in each column are summed. If H0 is true, we expect the sums to be fairly close — so close that we can attribute diﬀerences to chance. Otherwise, we expect to see at least one diﬀerence between pairs of rank sums so large that we cannot reasonably attribute it to sampling variability. The test statistic is given as:
+
+2 12 2 T
+
+χr =
+
+Rj − 3B(T + 1)
+
+(3)
+
+BT (T + 1)
+
+j=1
+
+where
+
+Rj
+
+(j
+
+∈
+
+{1, 2, . . . , T })
+
+is
+
+the
+
+rank
+
+sum
+
+of
+
+the
+
+j-th
+
+column.
+
+χ2
+r
+
+is
+
+approximately
+
+chi-square
+
+with
+
+T
+
+−1
+
+degrees
+
+of freedom. H0 is rejected at the α level of signiﬁcance if the value of (3) is greater than or equal to the critical
+
+chi-square value for T − 1 degrees of freedom. Iman and Davenport [72] proposed the following statistic:
+
+(B − 1)χ2r
+
+Fr =
+
+2
+
+(4)
+
+B(T − 1) − χr
+
+which is distributed according to the F-distribution with T − 1 and (T − 1)(B − 1) degrees of freedom. When compared to χ2r, this statistic is not only less conservative, but also more accurate for small sample sizes [72].
+In this study, blocks and treatments correspond to data sets and initialization methods, respectively. Our goal is
+to determine whether or not there is at least one method that is signiﬁcantly better than at least one other method at the α = 0.05 level. If this is the case, we will conduct a post-hoc (multiple comparison) test to determine which
+pairs of methods diﬀer signiﬁcantly. For this purpose, we will use the Bergmann-Hommel test [76], a powerful
+post-hoc procedure that has been used successfully in various machine learning studies [70, 77].
+
+4.1. Real Data Sets
+Table 4 gives the Final SSE rankings of the IMs for the real data sets as determined by the Bergmann-Hommel procedure using data given in Table 2. Here, a notation such as C < {D, E} indicates that there is no statistically signiﬁcant diﬀerence between methods D and E and these two methods are signiﬁcantly better than method C. From Table 4 it can be seen that the methods cannot be distinguished from each other reliably. This was expected since even nonparametric post-hoc tests lack discrimination power in small sample cases (recall that only 32 data sets were used) with a large number of ties (see Table 2). For example, with respect to the minimum statistic, the performances of F, M, B, K, and G are statistically indistinguishable. In other words, if we initialize k-means with each of these non-deterministic methods and execute it until convergence, the resulting clusterings over R = 100 runs will have very similar minimum Final SSE values. Similar trends were observed for the RAND, VD, and VI criteria (data not shown). Given the abundance of local minima even in data sets of moderate size and/or dimensionality and the gradient descent nature of k-means, it is not surprising that the deterministic methods V and P are outperformed by most of the non-deterministic methods as the former methods were executed only once, whereas the latter ones were executed R = 100 times.
+As mentioned earlier, the minimum statistic is meaningful only when it is practical to execute k-means multiple times. Otherwise, the mean statistic is more meaningful. The analysis of mean Final SSE results using the Bergmann-Hommel procedure reveals that deterministic methods V and P are the preferred choices in this case.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+This is not surprising since non-deterministic methods, in particular those that are ad hoc in nature, often produce highly variable results across multiple runs.
+The standard deviation statistic characterizes the reliability of a non-deterministic IM with respect to a particular performance criterion. In other words, if a non-deterministic IM obtains low mean and standard deviation with respect to an eﬀectiveness criterion, we do not have to execute this method a large number of times to obtain good results. The analysis of Final SSE standard deviations reveals two overlapping groups of methods. Once again this is not necessarily because the members of each group are in fact indistinguishable with respect to their reliability, but due to the relatively small sample size used. In summary, due to the necessarily small number of real-world data sets available for clustering studies, it may not be possible to distinguish among various IMs. Therefore, it is crucial that these IMs be tested on a large number of synthetic data sets (see §4.2).
+As for computational eﬃciency, it can be seen from Table 3 that, in general, the IMs have similar computational requirements per run. However, in practice, a non-deterministic method is typically executed R times and the output of the run that gives the least SSE is taken as the result. Therefore, the total computational cost of a non-deterministic method is often signiﬁcantly higher than that of a deterministic method. As predicted in §2.5, simple methods such as M require about the same CPU time as elaborate methods such as G. This is because simple methods often lead to more k-means iterations, whereas elaborate ones compensate for their computational overhead by requiring fewer k-means iterations. It should be noted that eﬃciency diﬀerences among the methods can be further reduced by using faster k-means variants such as those described in [11, 12].
+4.2. Synthetic Data Sets Table 5 gives the ranking of the IMs with respect to the minimum statistic. It can be seen that despite variations
+in rankings across the performance criteria, some general trends emerge:
+⊲ Non-deterministic methods outperform the deterministic ones, i.e., V and P, except in the case of Initial SSE. As explained in §4.1, this is due to the fact that the non-deterministic methods were executed R = 100 times, whereas the deterministic ones were executed only once. The reason why deterministic methods have good Initial SSE performance is because these methods are approximate (divisive hierarchical) clustering methods by themselves and thus they give reasonable results even without k-means reﬁnement.
+⊲ Method B consistently appears in the best performing group, whereas methods F and X are often among the worst non-deterministic methods.
+⊲ Method M exhibits moderate-to-good performance except in the case of Initial SSE. Recall that this method randomly selects the K initial centers from among the data points and therefore it cannot be expected to perform well without k-means reﬁnement.
+⊲ Methods K and G generally perform well. In some cases the latter outperforms the former, whereas in others they have comparable performance.
+Table 6 gives the ranking of the IMs with respect to the mean statistic. It can be seen that despite variations in rankings across the performance criteria, some general trends emerge:
+⊲ Deterministic methods, i.e., V and P, generally outperform the non-deterministic ones. As explained in §4.1, this is due to the fact that the non-deterministic methods can produce highly variable results across multiple runs. Method B is highly competitive with the deterministic methods.
+⊲ Methods M and X are often among the worst performers, whereas methods F and K exhibit moderate-to-bad performance.
+⊲ Method G is often signiﬁcantly better than all non-deterministic methods but B.
+Table 7 gives the ranking of the non-deterministic IMs with respect to the standard deviation statistic. It can be seen that despite variations in rankings across the performance criteria, some general trends emerge:
+⊲ Method B consistently appears in the best performing group, whereas method M is often among the worst performers.
+⊲ Methods X and K exhibit moderate-to-bad performance.
+⊲ Method F and G are signiﬁcantly better than all methods but B.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+4.3. Recommendations for Practitioners Based on the statistical analyses presented in the previous section, the following recommendations can be made:
+⊲ In general, methods F, M, and X should not be used. These methods are easy to understand and implement, but they are often ineﬀective and unreliable. Furthermore, despite their low overhead, these methods do not oﬀer signiﬁcant time savings since they often result in slower k-means convergence.
+⊲ In time-critical applications that involve large data sets or applications that demand determinism, methods V or P should be used. These methods need to be executed only once and they lead to very fast k-means converge. The eﬃciency diﬀerence between the two is noticeable only on high dimensional data sets. This is because method V calculates the direction of split by determining the coordinate axis with the greatest variance (in O(D) time), whereas method P achieves this by calculating the principal eigenvector of the covariance matrix (in O(D2) time using the power method [38]). Note that despite its higher computational complexity, method P can, in some cases, be more eﬃcient than method V (see Table 3). This is because the former converges signiﬁcantly faster than the latter (see Table 6). The main disadvantage of these methods is that they are more complicated to implement due to their hierarchical formulation.
+⊲ In applications that involve small data sets, e.g., N < 10, 000, methods B or G should be used. It is computationally feasible to run these methods hundreds of times on such data sets given that one such run takes only a few milliseconds.
+⊲ In applications where an approximate clustering of the data set is desired, methods B, G, V, or P should be used. These methods produce very good initial clusterings (see Tables 5 and 6), which makes it possible to use them as standalone clustering algorithms.
+5. Conclusions
+In this paper we presented an overview of k-means initialization methods with an emphasis on their computational eﬃciency. We then compared eight commonly used linear time initialization methods on a large and diverse collection of real and synthetic data sets using various performance criteria. Finally, we analyzed the experimental results using non-parametric statistical tests and provided recommendations for practitioners. Our statistical analyses revealed that popular initialization methods such as forgy, macqueen, and maximin often perform poorly and that there are signiﬁcantly better alternatives to these methods that have comparable computational requirements.
+6. Acknowledgments
+This publication was made possible by grants from the Louisiana Board of Regents (LEQSF2008-11-RD-A-12) and National Science Foundation (0959583, 1117457). The authors are grateful to D. Arthur, S. Vassilvitskii, J.G. Dy, S.J. Redmond, J.F. Lu, and M. Al Hasan for clarifying various points about their papers.
+References
+[1] A. K. Jain, M. N. Murty, P. J. Flynn, Data Clustering: A Review, ACM Computing Surveys 31 (3) (1999) 264–323.
+[2] A. K. Jain, Data Clustering: 50 Years Beyond K-means, Pattern Recognition Letters 31 (8) (2010) 651–666.
+[3] L. Kaufman, P. Rousseeuw, Finding Groups in Data: An Introduction to Cluster Analysis, Wiley-Interscience, 1990.
+[4] D. Aloise, A. Deshpande, P. Hansen, P. Popat, NP-Hardness of Euclidean Sum-of-Squares Clustering, Machine Learning 75 (2) (2009) 245–248.
+[5] M. Mahajan, P. Nimbhorkar, K. Varadarajan, The Planar k-Means Problem is NP-hard, Theoretical Computer Science 442 (2012) 13–21.
+[6] A. Tarsitano, A Computational Study of Several Relocation Methods for K-Means Algorithms, Pattern Recognition 36 (12) (2003) 2955–2966.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+[7] S. Lloyd, Least Squares Quantization in PCM, IEEE Trans. on Information Theory 28 (2) (1982) 129–136.
+[8] P. S. Bradley, U. Fayyad, Reﬁning Initial Points for K-Means Clustering, in: Proc. of the 15th Int. Conf. on Machine Learning, 1998, pp. 91–99.
+[9] M. Dash, H. Liu, X. Xu, ’1 + 1 > 2’: Merging Distance and Density Based Clustering, in: Proc. of the 7th Int. Conf. on Database Systems for Advanced Applications, 2001, pp. 32–39.
+[10] W. Y. Chen, Y. Song, H. Bai, C. J. Lin, E. Y. Chang, Parallel Spectral Clustering in Distributed Systems, IEEE Trans. on Pattern Analysis and Machine Intelligence 33 (3) (2011) 568–586.
+[11] T. Kanungo, D. Mount, N. Netanyahu, C. Piatko, R. Silverman, A. Wu, An Eﬃcient K-Means Clustering Algorithm: Analysis and Implementation, IEEE Trans. on Pattern Analysis and Machine Intelligence 24 (7) (2002) 881–892.
+[12] G. Hamerly, Making k-means Even Faster, in: Proc. of the 2010 SIAM Int. Conf. on Data Mining, 2010, pp. 130–140.
+[13] T. W. Chen, S. Y. Chien, Bandwidth Adaptive Hardware Architecture of K-Means Clustering for Video Analysis, IEEE Trans. on Very Large Scale Integration (VLSI) Systems 18 (6) (2010) 957–966.
+[14] C. Ordonez, E. Omiecinski, Eﬃcient Disk-Based K-Means Clustering for Relational Databases, IEEE Trans. on Knowledge and Data Engineering 16 (8) (2004) 909–921.
+[15] S. Z. Selim, M. A. Ismail, K-Means-Type Algorithms: A Generalized Convergence Theorem and Characterization of Local Optimality, IEEE Trans. on Pattern Analysis and Machine Intelligence 6 (1) (1984) 81–87.
+[16] L. Bottou, Y. Bengio, Advances in Neural Information Processing Systems 7, MIT Press, 1995, Ch. Convergence Properties of the K-Means Algorithms, pp. 585–592.
+[17] L. Vendramin, R. J. G. B. Campello, E. R. Hruschka, Relative Clustering Validity Criteria: A Comparative Overview, Statistical Analysis and Data Mining 3 (4) (2010) 209–235.
+[18] J. Mao, A. K. Jain, A Self-Organizing Network for Hyperellipsoidal Clustering (HEC), IEEE Trans. on Neural Networks 7 (1) (1996) 16–29.
+[19] J. S. Zhang, Y.-W. Leung, Robust Clustering by Pruning Outliers, IEEE Trans. on Systems, Man, and Cybernetics – Part B 33 (6) (2003) 983–999.
+[20] M. E. Celebi, Improving the Performance of K-means for Color Quantization, Image and Vision Computing 29 (4) (2011) 260–271.
+[21] J. M. Pena, J. A. Lozano, P. Larranaga, An Empirical Comparison of Four Initialization Methods for the K-Means Algorithm, Pattern Recognition Letters 20 (10) (1999) 1027–1040.
+[22] J. He, M. Lan, C. L. Tan, S. Y. Sung, H. B. Low, Initialization of Cluster Reﬁnement Algorithms: A Review and Comparative Study, in: Proc. of the 2004 IEEE Int. Joint Conf. on Neural Networks, 2004, pp. 297–302.
+[23] E. Forgy, Cluster Analysis of Multivariate Data: Eﬃciency vs. Interpretability of Classiﬁcation, Biometrics 21 (1965) 768.
+[24] M. R. Anderberg, Cluster Analysis for Applications, Academic Press, 1973.
+[25] R. C. Jancey, Multidimensional Group Analysis, Australian Journal of Botany 14 (1) (1966) 127–130.
+[26] J. MacQueen, Some Methods for Classiﬁcation and Analysis of Multivariate Observations, in: Proc. of the 5th Berkeley Symposium on Mathematical Statistics and Probability, 1967, pp. 281–297.
+[27] M. J. Noruˇsis, IBM SPSS Statistics 19 Statistical Procedures Companion, Addison Wesley, 2011.
+[28] G. H. Ball, D. J. Hall, A Clustering Technique for Summarizing Multivariate Data, Behavioral Science 12 (2) (1967) 153–155.
+[29] J. T. Tou, R. C. Gonzales, Pattern Recognition Principles, Addison-Wesley, 1974.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+[30] SAS Institute Inc., SAS/STAT 9.2 User’s Guide, SAS Publishing, 2009.
+[31] H. Spa¨th, Computational Experiences with the Exchange Method: Applied to Four Commonly Used Partitioning Cluster Analysis Criteria, European Journal of Operational Research 1 (1) (1977) 23–31.
+[32] T. Gonzalez, Clustering to Minimize the Maximum Intercluster Distance, Theoretical Computer Science 38 (2– 3) (1985) 293–306.
+[33] I. Katsavounidis, C.-C. J. Kuo, Z. Zhang, A New Initialization Technique for Generalized Lloyd Iteration, IEEE Signal Processing Letters 1 (10) (1994) 144–146.
+[34] M. Al-Daoud, S. Roberts, New Methods for the Initialisation of Clusters, Pattern Recognition Letters 17 (5) (1996) 451–455.
+[35] C. Pizzuti, D. Talia, G. Vonella, A Divisive Initialisation Method for Clustering Algorithms, in: Proc. of the 3rd European Conf. on Principles and Practice of Knowledge Discovery in Databases, 1999, pp. 484–491.
+[36] D. Arthur, S. Vassilvitskii, k-means++: The Advantages of Careful Seeding, in: Proc. of the 18th Annual ACM-SIAM Symposium on Discrete Algorithms, 2007, pp. 1027–1035.
+[37] T. Su, J. G. Dy, In Search of Deterministic Methods for Initializing K-Means and Gaussian Mixture Clustering, Intelligent Data Analysis 11 (4) (2007) 319–338.
+[38] H. Hotelling, Simpliﬁed Calculation of Principal Components, Psychometrika 1 (1) (1936) 27–35.
+[39] J. F. Lu, J. B. Tang, Z. M. Tang, J. Y. Yang, Hierarchical Initialization Approach for K-Means Clustering, Pattern Recognition Letters 29 (6) (2008) 787–795.
+[40] T. Onoda, M. Sakai, S. Yamada, Careful Seeding Method based on Independent Components Analysis for k-means Clustering, Journal of Emerging Technologies in Web Intelligence 4 (1) (2012) 51–59.
+[41] A. Hyv¨arinen, Fast and Robust Fixed-Point Algorithms for Independent Component Analysis, IEEE Trans. on Neural Networks 10 (3) (1999) 626–634.
+[42] J. A. Hartigan, M. A. Wong, Algorithm AS 136: A K-Means Clustering Algorithm, Journal of the Royal Statistical Society C 28 (1) (1979) 100–108.
+[43] M. Al-Daoud, A New Algorithm for Cluster Initialization, in: Proc. of the 2nd World Enformatika Conf., 2005, pp. 74–76.
+[44] S. J. Redmond, C. Heneghan, A Method for Initialising the K-means Clustering Algorithm Using kd-trees, Pattern Recognition Letters 28 (8) (2007) 965–973.
+[45] M. Al Hasan, V. Chaoji, S. Salem, M. Zaki, Robust Partitional Clustering by Outlier and Density Insensitive Seeding, Pattern Recognition Letters 30 (11) (2009) 994–1002.
+[46] M. M. Breunig, H. P. Kriegel, R. T. Ng, J. Sander, LOF: Identifying Density-Based Local Outliers, ACM SIGMOD Record 29 (2) (2000) 93–104.
+[47] M. M. Astrahan, Speech Analysis by Clustering, or the Hyperphoneme Method, Tech. Rep. AIM-124, Stanford University (1970).
+[48] G. N. Lance, W. T. Williams, A General Theory of Classiﬁcatory Sorting Strategies - II. Clustering Systems, The Computer Journal 10 (3) (1967) 271–277.
+[49] G. W. Milligan, An Examination of the Eﬀect of Six Types of Error Perturbation on Fifteen Clustering Algorithms, Psychometrika 45 (3) (1980) 325–342.
+[50] F. Cao, J. Liang, G. Jiang, An Initialization Method for the K-Means Algorithm Using Neighborhood Model, Computers and Mathematics with Applications 58 (3) (2009) 474–483.
+[51] Y. Linde, A. Buzo, R. Gray, An Algorithm for Vector Quantizer Design, IEEE Trans. on Communications 28 (1) (1980) 84–95.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+[52] C. M. Huang, R. W. Harris, A Comparison of Several Vector Quantization Codebook Generation Approaches, IEEE Trans. on Image Processing 2 (1) (1993) 108–112.
+[53] A. Likas, N. Vlassis, J. Verbeek, The Global K-Means Clustering Algorithm, Pattern Recognition 36 (2) (2003) 451–461.
+[54] G. Babu, M. Murty, Simulated Annealing for Selecting Optimal Initial Seeds in the K-Means Algorithm, Indian Journal of Pure and Applied Mathematics 25 (1–2) (1994) 85–94.
+[55] G. P. Babu, M. N. Murty, A Near-Optimal Initial Seed Value Selection in K-Means Algorithm Using a Genetic Algorithm, Pattern Recognition Letters 14 (10) (1993) 763–769.
+[56] D. Aloise, P. Hansen, L. Liberti, An Improved Column Generation Algorithm for Minimum Sum-of-Squares Clustering, Mathematical Programming (2010) 1–26.
+[57] S. H. Huang, S. H. Chen, Fast Encoding Algorithm for VQ-based Image Coding, Electronics Letters 26 (19) (1990) 1618–1619.
+[58] C. D. Bei, R. M. Gray, An Improvement of the Minimum Distortion Encoding Algorithm for Vector Quantization, IEEE Trans. on Communications 33 (10) (1985) 1132–1133.
+[59] A. Frank, A. Asuncion, UCI Machine Learning Repository, http://archive.ics.uci.edu/ml, University of California, Irvine, School of Information and Computer Sciences (2011).
+[60] R. Maitra, V. Melnykov, Simulating Data to Study Performance of Finite Mixture Modeling and Clustering Algorithms, Journal of Computational and Graphical Statistics 19 (2) (2010) 354–376.
+[61] S. K. Pal, D. D. Majumder, Fuzzy Sets and Decision Making Approaches in Vowel and Speaker Recognition, IEEE Trans. on Systems, Man, and Cybernetics 7 (8) (1977) 625–629, http://www.isical.ac.in/~sushmita/patterns/vowel.dat.
+[62] W. Cook, World TSP, http://www.tsp.gatech.edu/world, Georgia Institute of Technology (2011).
+[63] G. Milligan, M. C. Cooper, A Study of Standardization of Variables in Cluster Analysis, Journal of Classiﬁcation 5 (2) (1988) 181–204.
+[64] L. Hubert, P. Arabie, Comparing Partitions, Journal of Classiﬁcation 2 (1) (1985) 193–218.
+[65] S. van Dongen, Performance Criteria for Graph Clustering and Markov Cluster Experiments, Tech. Rep. INSR0012, Centrum voor Wiskunde en Informatica (2000).
+[66] M. Meil˘a, Comparing Clusterings — An Information Based Distance, Journal of Multivariate Analysis 98 (5) (2007) 873–895.
+[67] J. Wu, H. Xiong, J. Chen, Adapting the Right Measures for K-means Clustering, in: Proc. of the 15th ACM SIGKDD Int. Conf. on Knowledge Discovery and Data Mining, 2009, pp. 877–885.
+[68] J. Wu, J. Chen, H. Xiong, M. Xie, External Validation Measures for K-Means Clustering: A Data Distribution Perspective, Expert Systems With Applications 36 (3) (2009) 6050–6061.
+[69] M. Matsumoto, T. Nishimura, Mersenne Twister: A 623-Dimensionally Equidistributed Uniform PseudoRandom Number Generator, ACM Trans. on Modeling and Computer Simulation 8 (1) (1998) 3–30.
+[70] S. Garcia, F. Herrera, An Extension on ”Statistical Comparisons of Classiﬁers over Multiple Data Sets” for all Pairwise Comparisons, Journal of Machine Learning Research 9 (2008) 2677–2694.
+[71] M. Friedman, The Use of Ranks to Avoid the Assumption of Normality Implicit in the Analysis of Variance, Journal of the American Statistical Association 32 (200) (1937) 675–701.
+[72] R. L. Iman, J. M. Davenport, Approximations of the Critical Region of the Friedman Statistic, Communications in Statistics - Theory and Methods 9 (6) (1980) 571–595.
+[73] J. Luengo, S. Garcia, F. Herrera, A Study on the Use of Statistical Tests for Experimentation with Neural Networks: Analysis of Parametric Test Conditions and Non-Parametric Tests, Expert Systems With Applications 36 (4) (2009) 7798–7808.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+[74] S. Garcia, A. Fernandez, J. Luengo, F. Herrera, A Study of Statistical Techniques and Performance Measures for Genetics-Based Machine Learning: Accuracy and Interpretability, Soft Computing 13 (10) (2009) 959–977.
+[75] W. W. Daniel, Applied Nonparametric Statistics, Duxbury Press, 2000. [76] B. Bergmann, G. Hommel, Multiple Hypotheses Testing, Springer, 1988, Ch. Improvements of General Multiple
+Test Procedures for Redundant Systems of Hypotheses, pp. 100–115. [77] T. Voss, N. Hansen, C. Igel, Improved Step Size Adaptation for the MO-CMA-ES, in: Proc. of the 12th Annual
+Conf. on Genetic and Evolutionary Computation, 2010, pp. 487–494.
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+
+Table 2: Final SSE (Real Data Sets)
+
+F
+
+M
+
+X
+
+B
+
+K
+
+G
+
+V
+
+P
+
+1 min mean
+
+239 239±0
+
+239 239±0
+
+239 239±0
+
+239 239±0
+
+239 239±0
+
+239 239±0
+
+239 239±0
+
+239 239±0
+
+2 min mean
+
+38 44±4
+
+38 40±1
+
+41 45±3
+
+38 39±1
+
+38 39±1
+
+38 39±1
+
+39 39±0
+
+38 38±0
+
+3 min mean
+
+167 176±8
+
+167 176±7
+
+167 172±6
+
+167 171±4
+
+167 174±5
+
+167 173±4
+
+173 173±0
+
+167 167±0
+
+4 min mean
+
+10057 10115±79
+
+10057 10080±20
+
+10057 10077±15
+
+10057 10076±18
+
+10058 10083±23
+
+10058 10080±18
+
+10101 10101±0
+
+10100 10100±0
+
+5 min
+
+66224
+
+mean
+
+66990±890
+
+66224 67196±1048
+
+66224 67350±834
+
+66224 66431±360
+
+66224 66948±876
+
+66224 66930±773
+
+66238 66238±0
+
+66238 66238±0
+
+6 min mean
+
+17 19±2
+
+17 19±3
+
+19 20±1
+
+17 18±1
+
+17 18±1
+
+17 18±1
+
+17 17±0
+
+18 18±0
+
+7 min mean
+
+1167 1231±83
+
+1167 1250±103
+
+1267 1303±53
+
+1167 1184±25
+
+1167 1230±61
+
+1167 1198±35
+
+1167 1167±0
+
+1168 1168±0
+
+8 min mean
+
+18 20±1
+
+18 20±2
+
+19 22±2
+
+18 20±1
+
+18 20±2
+
+18 20±1
+
+19 19±0
+
+19 19±0
+
+9 min mean
+
+243 251±8
+
+243 252±8
+
+243 253±8
+
+243 251±7
+
+243 252±8
+
+243 249±7
+
+248 248±0
+
+243 243±0
+
+10 min mean
+
+629 629±0
+
+629 633±28
+
+629 671±81
+
+629 637±39
+
+629 635±34
+
+629 635±35
+
+629 629±0
+
+629 629±0
+
+11 min 117891 117924 120898 117863 117719 117995 118495 118386 mean 119931±1060 119655±1061 123388±1264 119050±699 119538±894 119176±710 118495±0 118386±0
+
+12 min mean
+
+1742 1742±0
+
+1742 1742±0
+
+1742 1742±0
+
+1742 1742±0
+
+1742 1744±28
+
+1742 1747±41
+
+1742 1742±0
+
+1742 1742±0
+
+13 min mean
+
+2723 2775±28
+
+2718 2756±22
+
+2721 2765±17
+
+2719 2742±15
+
+2718 2754±18
+
+2715 2752±17
+
+2735 2735±0
+
+2745 2745±0
+
+14 min mean
+
+2923 2923±0
+
+2923 2923±0
+
+2923 2923±0
+
+2923 2923±0
+
+2923 2923±0
+
+2923 2923±0
+
+2923 2923±0
+
+2923 2923±0
+
+15 min mean
+
+3127 3164±30
+
+3128 3168±28
+
+3180 3247±22
+
+3127 3157±29
+
+3128 3173±33
+
+3127 3149±20
+
+3137 3137±0
+
+3214 3214±0
+
+16 min mean
+
+2802 8229±8685
+
+2802 12518±9667
+
+2802 2802±0
+
+2802 11935±9656
+
+2802 5722±6944
+
+2802 3774±4236
+
+21983 21983±0
+
+2802 2802±0
+
+17 min mean
+
+36373 37755±2829
+
+36373 37046±916
+
+36373 36738±754
+
+36373 37152±1340
+
+36373 37440±1906
+
+36373 37103±1639
+
+36373 36373±0
+
+36373 36373±0
+
+18 min mean
+
+14559 14653±140
+
+14559 14763±273
+
+14559 14774±293
+
+14559 14627±66
+
+14559 14735±234
+
+14559 14719±214
+
+14581 14581±0
+
+14807 14807±0
+
+19 min mean
+
+215 217±4
+
+215 217±4
+
+230 254±32
+
+215 219±6
+
+215 219±10
+
+215 217±4
+
+227 227±0
+
+215 215±0
+
+20 min mean
+
+235 251±7
+
+219 224±2
+
+233 241±3
+
+218 222±2
+
+217 220±2
+
+217 219±1
+
+220 220±0
+
+219 219±0
+
+21 min mean
+
+4930 5130±131
+
+4930 5091±110
+
+4930 5036±106
+
+4930 5012±70
+
+4930 5111±116
+
+4930 5046±75
+
+4930 4930±0
+
+5004 5004±0
+
+22 min mean
+
+1177 1179±10
+
+1177 1187±18
+
+1195 1204±25
+
+1177 1182±12
+
+1177 1193±27
+
+1177 1183±14
+
+1182 1182±0
+
+1177 1177±0
+
+23 min mean
+
+121 121±2
+
+121 122±5
+
+121 122±3
+
+121 122±3
+
+121 122±5
+
+121 122±5
+
+121 121±0
+
+121 121±0
+
+24 min mean
+
+387 407±23
+
+387 414±20
+
+411 430±21
+
+387 402±16
+
+387 410±19
+
+387 402±13
+
+410 410±0
+
+405 405±0
+
+25 min mean
+
+235 307±39
+
+235 275±23
+
+411 930±105
+
+235 244±18
+
+235 271±39
+
+235 246±21
+
+235 235±0
+
+274 274±0
+
+26 min mean
+
+214 214±0
+
+214 214±0
+
+214 214±0
+
+214 214±0
+
+214 214±0
+
+214 214±0
+
+214 214±0
+
+214 214±0
+
+27 min mean
+
+22 23±2
+
+22 23±1
+
+22 23±0
+
+22 23±1
+
+22 23±1
+
+22 23±0
+
+23 23±0
+
+23 23±0
+
+28 min mean
+
+223 224±2
+
+223 226±4
+
+224 237±1
+
+223 228±6
+
+223 226±5
+
+223 225±3
+
+224 224±0
+
+224 224±0
+
+29 min mean
+
+7772 7798±91
+
+7772 7808±102
+
+7772 7854±160
+
+7772 7773±1
+
+7772 7831±140
+
+7772 7811±106
+
+7774 7774±0
+
+7774 7774±0
+
+30 min mean
+
+334 335±2
+
+334 336±2
+
+348 374±17
+
+334 337±5
+
+334 336±3
+
+334 336±3
+
+335 335±0
+
+334 334±0
+
+31 min mean
+
+11039 14041±1686
+
+11039 12367±1057
+
+11039 11714±627
+
+11039 11128±231
+
+11039 11773±872
+
+11039 11493±626
+
+11483 11483±0
+
+12422 12422±0
+
+32 min mean
+
+58 64±5
+
+58 70±6
+
+61 61±1
+
+58 66±6
+
+58 63±5
+
+58 59±1
+
+69 69±0
+
+59 59±0
+
+Table 3: CPU Time (Real Data Sets)
+
+F
+
+M
+
+X
+
+B
+
+K
+
+G
+
+V
+
+P
+
+1
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+2
+
+3
+
+3
+
+2
+
+4
+
+3
+
+2
+
+10
+
+0
+
+3
+
+2
+
+2
+
+2
+
+4
+
+2
+
+2
+
+0
+
+10
+
+4
+
+2295
+
+2248
+
+2173
+
+3624
+
+2332
+
+2459
+
+1900
+
+2540
+
+5
+
+2183
+
+2229
+
+2714
+
+3604
+
+2273
+
+2274
+
+1730
+
+2120
+
+6
+
+0
+
+0
+
+0
+
+1
+
+0
+
+0
+
+0
+
+0
+
+7
+
+8
+
+8
+
+7
+
+12
+
+9
+
+9
+
+0
+
+20
+
+8
+
+0
+
+0
+
+0
+
+1
+
+0
+
+0
+
+0
+
+0
+
+9
+
+0
+
+1
+
+0
+
+1
+
+0
+
+1
+
+0
+
+0
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+
+10
+
+0
+
+0
+
+0
+
+1
+
+0
+
+0
+
+0
+
+0
+
+11
+
+3730
+
+3469
+
+2469
+
+4063
+
+3537
+
+3915
+
+6940
+
+12200
+
+12
+
+28
+
+32
+
+40
+
+40
+
+34
+
+32
+
+40
+
+50
+
+13
+
+700
+
+693
+
+729
+
+852
+
+698
+
+693
+
+950
+
+800
+
+14
+
+20
+
+19
+
+28
+
+30
+
+21
+
+19
+
+30
+
+20
+
+15
+
+54
+
+56
+
+62
+
+70
+
+57
+
+58
+
+30
+
+70
+
+16
+
+252
+
+283
+
+58
+
+417
+
+112
+
+96
+
+230
+
+570
+
+17
+
+22
+
+20
+
+24
+
+34
+
+25
+
+26
+
+20
+
+220
+
+18
+
+112
+
+116
+
+131
+
+137
+
+121
+
+125
+
+60
+
+140
+
+19
+
+9
+
+10
+
+7
+
+12
+
+8
+
+10
+
+10
+
+10
+
+20
+
+109
+
+100
+
+110
+
+150
+
+97
+
+118
+
+60
+
+70
+
+21
+
+59
+
+53
+
+52
+
+67
+
+56
+
+59
+
+30
+
+50
+
+22
+
+430
+
+524
+
+314
+
+718
+
+469
+
+513
+
+730
+
+480
+
+23
+
+1
+
+1
+
+1
+
+1
+
+1
+
+0
+
+0
+
+0
+
+24
+
+6
+
+5
+
+7
+
+8
+
+6
+
+7
+
+10
+
+0
+
+25
+
+84
+
+82
+
+19
+
+122
+
+79
+
+81
+
+100
+
+80
+
+26
+
+0
+
+0
+
+0
+
+1
+
+0
+
+0
+
+10
+
+0
+
+27
+
+1
+
+1
+
+0
+
+1
+
+1
+
+1
+
+0
+
+0
+
+28
+
+3
+
+2
+
+1
+
+3
+
+2
+
+3
+
+10
+
+10
+
+29
+
+20
+
+20
+
+20
+
+28
+
+19
+
+21
+
+10
+
+20
+
+30
+
+38
+
+38
+
+24
+
+51
+
+36
+
+38
+
+60
+
+40
+
+31
+
+748
+
+949
+
+1377
+
+2439
+
+918
+
+1044
+
+580
+
+840
+
+32
+
+5
+
+6
+
+5
+
+9
+
+6
+
+6
+
+0
+
+0
+
+Statistic
+
+Table 4:
+
+Minimum Mean Standard Deviation
+
+Final SSE Rankings (Real Data Sets)
+IM Ranking
+{X, V, P} < {F, M, B, K, G} {F, M, X, K} < {F, B, G} < {G, V} < {V, P}
+{F, M, X, B, K} < {X, B, G}
+
+Table 5: Minimum (Synthetic Data Sets)
+
+Data Set Complexity
+
+IM Ranking
+
+Easy Moderate Diﬃcult
+
+Initial SSE X < {F, M} < K < G < V < P < B X < {F, M, K} < G < V < P < B X < {M, K} < F < G < V < P < B
+
+Easy Moderate Diﬃcult
+
+Final SSE {V, P} < {F, X} < {M, B, K, G}
+{V, P} < {F, X} < {F, M, B, K} < {M, B, K, G} V < P < {F, X} < {M, X, B, K, G}
+
+Easy Moderate Diﬃcult
+
+Final RAND {V, P} < X < F < {M, K} < G < B {V, P} < X < {F, M, K} < {M, K, G} < {B, G} V < P < {F, X} < {F, K, G} < {M, K, G} < {M, B, K}
+
+Easy Moderate Diﬃcult
+
+Final VD {V, P} < X < {F, M} < {K, G} < B {V, P} < X < {F, M} < {M, K} < {B, K, G} V < P < {F, X, G} < {M, K, G} < {M, B, K}
+
+Easy Moderate Diﬃcult
+
+Final VI {V, P} < X < {F, M, K, G} < B {V, P} < X < F < {M, B, K, G} V < P < {F, X} < {X, G} < {M, B, K, G}
+
+Easy Moderate Diﬃcult
+
+Number of Iterations V < F < M < {X, K} < P < G < B V < P < F < M < K < {X, G} < B V<P<F<M<K<G<X<B
+
+Expert Systems with Applications, 40(1): 200–210, 2013
+
+Table 6: Mean (Synthetic Data Sets)
+
+Data Set Complexity
+
+IM Ranking
+
+Easy Moderate Diﬃcult
+Easy Moderate Diﬃcult
+Easy Moderate Diﬃcult
+Easy Moderate Diﬃcult
+Easy Moderate Diﬃcult
+Easy Moderate Diﬃcult
+
+Initial SSE X < M < K < F < G < V < {B, P} X < {M, K} < F < G < V < {B, P} X<K<M<F<G<V<B<P Final SSE {M, X} < K < F < G < B < {V, P} X < {M, K} < F < G < B < V < P F < {M, K} < X < G < B < V < P Final RAND {M, X} < K < F < G < B < {V, P} X < {M, K} < {F, G} < B < {V, P} {F, K} < {X, K, G} < M < V < B < P Final VD {M, X} < K < F < G < B < {V, P} X < {M, K} < F < G < B < V < P
+F < {M, X, K, G} < V < B < P Final VI {M, X} < K < F < G < B < {V, P} {M, X, K} < F < G < B < V < P F < {M, K, G} < {X, G} < V < B < P Number of Iterations M<X<K<F<G<V<P<B {F, M} < {X, K} < G < V < P < B F<M<K<G<X<V<P<B
+
+Table 7: Standard Deviation (Synthetic Data Sets)
+
+Data Set Complexity
+
+IM Ranking
+
+Easy Moderate Diﬃcult
+Easy Moderate Diﬃcult
+Easy Moderate Diﬃcult
+Easy Moderate Diﬃcult
+Easy Moderate Diﬃcult
+Easy Moderate Diﬃcult
+
+Initial SSE X<M<K<G<F<B Same as Easy X < M < K < G < {F, B}
+Final SSE M < {X, K} < G < F < B {M, K} < X < {F, G} < B {M, K} < {F, X, G} < B
+Final RAND M < {X, K} < G < F < B {M, X, K} < {F, G} < B {M, K} < {F, X, G} < B
+Final VD M < {X, K} < G < F < B {M, K} < X < {F, G} < B
+{M, K} < {K, G} < {F, G} < X < B Final VI M < {X, K} < {F, G} < B {M, K} < X < {F, G} < B {F, M, K, G} < X < B
+Number of Iterations M < K < {X, G} < F < B {M, K} < X < {F, G} < B {F, M, X, K, G} < B
+

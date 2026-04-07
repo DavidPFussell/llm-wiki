@@ -1,0 +1,639 @@
+Unknown Intent Detection Using Gaussian Mixture Model with an Application to Zero-shot Intent Classiﬁcation
+Guangfeng Yan1∗ Lu Fan1∗ Qimai Li1∗ Han Liu1 Xiaotong Zhang1 Xiao-Ming Wu1† Albert Y.S. Lam2 Department of Computing, The Hong Kong Polytechnic University, Hong Kong S.A.R.1
+Fano Labs, Hong Kong S.A.R.2 {csgfyan, cslfan, csqmli}@comp.polyu.edu.hk {cshliu, csxtzhang, csxmwu}@comp.polyu.edu.hk, albert@fano.ai
+
+Abstract
+User intent classiﬁcation plays a vital role in dialogue systems. Since user intent may frequently change over time in many realistic scenarios, unknown (new) intent detection has become an essential problem, where the study has just begun. This paper proposes a semantic-enhanced Gaussian mixture model (SEG) for unknown intent detection. In particular, we model utterance embeddings with a Gaussian mixture distribution and inject dynamic class semantic information into Gaussian means, which enables learning more classconcentrated embeddings that help to facilitate downstream outlier detection. Coupled with a density-based outlier detection algorithm, SEG achieves competitive results on three real task-oriented dialogue datasets in two languages for unknown intent detection. On top of that, we propose to integrate SEG as an unknown intent identiﬁer into existing generalized zero-shot intent classiﬁcation models to improve their performance. A case study on a state-of-the-art method, ReCapsNet, shows that SEG can push the classiﬁcation performance to a signiﬁcantly higher level.
+1 Introduction
+Understanding user intent is crucial for developing conversational and dialogue systems. It is essential to accurately identify the intent behind a user utterance to better guide downstream decisions and policies. With the advent of conversational AI, dialogue systems are becoming central tools in many applications such as mobile apps, companion bots, virtual assistants and so on. Since user interests may change frequently over time, the AI agents may continuously see unknown (new) user intents. Manual annotation can hardly catch up with such rapid development, which motivates the problem
+∗Equal contribution. † Corresponding author.
+
+of unknown intent detection that has recently attracted increasing interest from both academia and industry.
+While there have been some pioneering works studying the open-world classiﬁcation problem in natural language processing (Fei and Liu, 2016; Shu et al., 2017), very few methods are designed for unknown intent detection. To our knowledge, the ﬁrst work is by Lin and Xu (2019), in which the authors use large margin cosine loss (LMCL) to learn deep discriminative features and then feed them to a density-based outlier detection algorithm to identify unknown intents. Although this method performs well on some benchmark datasets, it has two limitations. (1) In training, LMCL ignores the prior knowledge of class labels, while it has been shown that label correlations captured in the embedding space can improve prediction performance, especially in the zero-shot learning scenarios (Palatucci et al., 2009; Ma et al., 2016). (2) LMCL computes the cosine distance between embeddings in the feature space and trains with a softmax cross-entropy loss, making the embedding distribution of each class long and narrow (Wan et al., 2018), which may be less suitable for applying density-based anomaly detection algorithms to detect unknown intents.
+In this paper, we aim to address these limitations and propose a novel semantic-enhanced Gaussian mixture model (SEG) for unknown intent detection. In contrast to the softmax function, the Gaussian mixture model enforces embeddings to form ball-like dense clusters in the feature space, which may be more desirable for outlier detection, especially when using density-based outlier detection algorithms. Furthermore, we propose to inject the semantic information of class labels into the Gaussian mixture distribution by assigning the embeddings of class labels or descriptions to be the means of the Gaussians. This enables SEG to learn
+
+1050
+Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics, pages 1050–1060 July 5 - 10, 2020. c 2020 Association for Computational Linguistics
+
+more class-concentrated embeddings that can beneﬁt downstream outlier detection. We further use a large margin loss to make SEG learn more discriminative features and employ a density-based outlier detection algorithm LOF (Breunig et al., 2000) to detect unknown intents.
+Identifying unknown intents is not enough for some application scenarios where it is important to know what exactly the new intents are, e.g., zero-shot intent classiﬁcation. Current generalized zero-shot intent classiﬁcation methods (Chen et al., 2016; Kumar et al., 2017; Xia et al., 2018; Liu et al., 2019) attempt to classify test instances directly by making predictions in the pool of all the seen and unseen intents. However, their prediction performances are quite low, and they are still far from practical use. In this work, we propose to integrate SEG as an unknown intent identiﬁer into the generalized zero-shot intent classiﬁcation pipeline. The basic idea is that correctly identifying if the intent of an utterance is known or unknown will make the subsequent intent classiﬁcation task much easier. We conduct a case study on a state-of-the-art zero-shot intent classiﬁcation method ReCapsNet (Liu et al., 2019). The results show that incorporating SEG successfully improves the performance of ReCapsNet by a large margin. It even pushes the performance to a practical level on the SNIPS dataset (Coucke et al., 2018).
+The main contributions of this paper are summarized as follows.
+• We propose a semantic-enhanced Gaussian mixture model (SEG) for unknown intent detection by incorporating class semantic information into a Gaussian mixture distribution.
+• We explore to improve existing generalized zero-shot intent classiﬁcation systems with an unknown intent identiﬁer. To the best of our knowledge, this is the ﬁrst attempt to apply unknown intent detection in this task.
+• We conduct extensive experiments on three real-world datasets to validate the effectiveness of the proposed SEG model for unknown intent detection and its application in generalized zero-shot intent classiﬁcation.
+The rest of the paper is organized as follows. In Section 2, we review related works on intent classiﬁcation and open-world classiﬁcation. In Section 3, we discuss the proposed SEG model in details.
+
+In Section 4, we present experimental results on unknown intent detection. In Section 5, we apply SEG to improve generalized zero-shot intent classiﬁcation and conduct a case study. Finally, Section 6 concludes the paper.
+2 Related Work
+2.1 Intent Classiﬁcation
+User intent classiﬁcation is an important component of dialogue systems. Great effort has been made to understand user intent across various domains, ranging from search engine questions (Hu et al., 2009) to medical queries (Zhang et al., 2016). Deep learning models including convolutional neural networks (CNN) (Xu and Sarikaya, 2013) and attention-based recurrent neural networks (RNN) (Ravuri and Stolcke, 2015; Liu and Lane, 2016) are commonly used for intent classiﬁcation. CNN based methods build sentence embeddings by aggregating embeddings of adjacent words, while RNN based methods extract sentence embeddings via encoding word embeddings sequentially. Both types of methods have shown promising results in practice (Yin et al., 2017).
+Traditional intent classiﬁcation methods require considerable amount of labeled data for each class to train a discriminative classiﬁer, while zero-shot intent classiﬁcation (Sappadla et al., 2016; Zhang et al., 2019) addresses the problem that not all intent categories are seen during the training phase, which is an important task in natural language understanding as novel intents may continuously emerge in dialogue systems (Liu and Lane, 2016; Nam et al., 2016; Xu and Sarikaya, 2013). Zeroshot intent classiﬁcation aims to generalize knowledge and concepts learned from seen intents to recognize unseen intents. Early methods (Ferreira et al., 2015a,b; Yazdani and Henderson, 2015) explore the relationship between seen and unseen intents by introducing external resources such as manually deﬁned attributes or label ontologies, but they are usually expensive to obtain. To deal with this, some methods (Chen et al., 2016; Kumar et al., 2017) map the utterances and intent labels to an embedding space and then model their relations in the space. Recently, IntentCapsNet-ZS (Xia et al., 2018) extends capsule networks (Sabour et al., 2017) for zero-shot intent classiﬁcation by transferring the prediction vectors from seen classes to unseen classes. ReCapsNet (Liu et al., 2019) shows that IntentCapsNet-ZS hardly recognizes
+
+1051
+
+Figure 1: Illustration of the proposed framework for unknown intent classiﬁcation. The backbone network is a selfattention Bi-LSTM encoder, which is trained by the proposed semantic-enhanced large margin Gaussian mixture loss (SEG classiﬁer). In the testing phase, LOF is employed to detect outliers. The predicted outliers will be considered as unseen intent class instances, while the inliers will be classiﬁed by the SEG classiﬁer.
+
+utterances from unseen intents in the generalized zero-shot classiﬁcation scenario, and proposes to solve this issue by transferring the transformation matrices from seen intents to unseen intents. In this paper, we use ReCapsNet as an example to show that incorporating an unknown intent identiﬁer in the generalized zero-shot classiﬁcation pipeline can signiﬁcantly improve the prediction performance on unseen intents and the overall performance.
+2.2 Open-world Classiﬁcation
+Most of existing classiﬁcation methods make the closed-world assumption, that is, no new classes can appear in testing. However, the real world is open and dynamic, and in many applications, the AI agent cannot expect it sees everything in training, which makes open-world learning or classiﬁcation an important problem.
+There are two major approaches to tackle openworld classiﬁcation. One is to use the classiﬁer to output an additional conﬁdence score to measure the probability that a test sample is seen or unseen. cbsSVM (Fei and Liu, 2016) proposes a center-based similarity (CBS) learning strategy and employs SVM to build 1-vs-rest CBS classiﬁers. MSP (Hendrycks and Gimpel, 2017) proposes to use the maximum softmax probability as the conﬁdence score. Instead of using Softmax as the ﬁnal output layer, DOC (Shu et al., 2017) builds a multiclass classiﬁer with a 1-vs-rest ﬁnal layer which contains a sigmoid function for each seen class to reduce the open space risk.
+The other approach is to treat the open-world classiﬁcation as an outlier detection problem by ex-
+
+ploiting anomaly detection methods such as robust covariance estimators (Rousseeuw and Driessen, 1999), one-class SVM (Scho¨lkopf et al., 2001), isolation forest (Liu et al., 2008) and local outlier factor (Breunig et al., 2000). Robust covariance estimators assume data follows a Gaussian mixture distribution. Based on this, it tries to ﬁt an elliptic envelope, and outliers can be deﬁned as points standing far enough from the ﬁt shape. One-class SVM ﬁnds a hyperplane that circles the positive samples as the decision boundary. Isolation forest uses a binary search tree (isolated tree) to isolate samples. Due to the small number of outliers and their alienation from most samples, outliers will be isolated earlier and be closer to the root node of the isolated tree. Local outlier factor (LOF) is a density-based algorithm, which compares the density of a point and its neighbors to determine whether it is an abnormal point. Lower density means it is more likely to be identiﬁed as an abnormal point. In addition, to facilitate anomaly detection, some methods (Lin and Xu, 2019; Wan et al., 2018) use large margin loss functions to learn more discriminative feature representations.
+3 Our Approach
+3.1 Feature Extraction
+Given an utterance x = {w1, w2, . . . , wT } with T words, where wt ∈ Rdw is the embedding of the t-th word. Each word can be further encoded sequentially using a bidirectional LSTM (BiLSTM),
+
+1052
+
+i.e.,
+
+→−
+
+→−
+
+h t = LSTMfw(wt, h t−1),
+
+←−
+
+←−
+
+(1)
+
+h t = LSTMbw(wt, h t+1),
+
+→− ←−
+
+dh
+
+where h t, h t ∈ R are the hidden states of
+
+the word wt by forward LSTMfw and backward
+
+LSTMbw respectively. The word wt is encoded
+
+as the entire hidden state, which is represented by
+
+→−
+
+←−
+
+→− ←−
+
+concatenating h t and h t, i.e. ht = [ h t; h t],
+
+and the hidden state matrix of the utterance can be represented as H = [h1, h2, . . . , hT ] ∈ R2dh×T . Furthermore, we use the self-attention mechanism
+
+to obtain the sentence embedding. Speciﬁcally,
+
+a = softmax (Ws2tanh(Ws1H)) , (2)
+z = W Ha,
+
+where N (z; µk, Σk) is the Gaussian distribution. For the embedding zi of any training sample xi,
+the posterior probability that zi belongs to its class yi can be expressed as
+p(yi|zi) = N (zi; µyi, Σyi)p(yi) . (4) k N (zi; µk, Σk)p(k)
+The cross-entropy loss of zi between the true class label yi and the inference p(yi|zi) can then be computed as:
+
+Lce,i = − log p(yi|zi),
+
+(5)
+
+and the total loss of N training samples is
+
+1N Lce = N Lce,i. (6)
+i=1
+
+where a ∈ RT is the self-attention weight vector, Ws1 ∈ Rda×2dh and Ws2 ∈ R1×Da are trainable parameters, W ∈ Rdz×2dh is also trainable feedforward weight parameter, and z ∈ Rdz is the ﬁnal representation of the utterance x.
+
+Let dk be the Mahalanobis distance between zi and µk, i.e.,
+dk = (zi − µk) Σ−1 k (zi − µk)/2. (7)
+Then Lce,i can be expressed as
+
+3.2 Semantic-Enhanced Large Margin Gaussian Mixture Loss
+The softmax cross-entropy loss is widely used in many machine learning problems. However, the embedding distribution of each class learned by the softmax cross-entropy loss tends to be long, narrow, and radiating from the center, with different classes distributed next to each other closely (Wan et al., 2018). Such embedding distribution may not be ideal for detecting new intent classes, as there might not be much space for new classes. Nevertheless, the Gaussian mixture loss can enforce each class to gather into a dense and small cluster, which may be more desirable for detecting new intents. Here, we design a semantic-enhanced large margin Gaussian mixture loss for embedding learning.
+Large-Margin Cross-Entropy Loss Given a Kway classiﬁcation task, we assume the extracted feature vector (embedding) z of the training samples follows a Gaussian mixture distribution, where µk and Σk are the mean and covariance of class k in the embedding space respectively and p(k) is the prior probability of class k. The probability density function of z is given by
+
+p(z) = N (z; µk, Σk)p(k),
+
+(3)
+
+k
+
+p
+
+(yi
+
+)|
+
+Σy
+
+i
+
+|−
+
+1 2
+
+e−
+
+dyi
+
+Lce,i = − log
+
+1 . (8)
+
+k p(k)|Σk|− 2 e−dk
+
+Consider a simpliﬁed case where p(k) and Σk are identical for all classes. In this case, the model will give a correct prediction of zi if the distance of zi to its class mean µyi is less than or equal to its distance to any other class mean.
+In general, large margin loss helps to improve classiﬁcation performance. Here, we also introduce a classiﬁcation margin m ∈ [1, +∞) into the crossentropy loss, which then becomes:
+
+N
+
+1
+
+m
+
+Lmce = N Lce,i,
+
+i=1
+
+1
+
+(9)
+
+m
+
+p(yi)|Σyi |− 2 e−mdyi
+
+Lce,i = − log
+
+1
+
+.
+
+k p(k)|Σk|− 2 e−dk
+
+With the large margin loss, zi is correctly classiﬁed
+
+only when its distance to class mean µyi is signiﬁ-
+
+cantly
+
+less
+
+than
+
+(no
+
+more
+
+than
+
+1 m
+
+of)
+
+its
+
+distance
+
+to
+
+any other class mean.
+
+Semantic Enhancement via Class Description This is one of the key features of our proposed method. We inject the semantic information of each class into the Gaussian mixture model by assigning
+
+1053
+
+the embedding learned from the text description dk of class k to be the class centroid µk. The text description dk can either be a single-word class name or a sentence or paragraph that describes the class. That is,
+
+µk = feature extract(dk),
+
+(10)
+
+Dataset
+Vocab Size Avg. Length # of Samples # of Classes
+
+SNIPS
+11642 9.05 13802
+7
+
+ATIS
+938 11.37 6371
+18
+
+SMP-2018
+3189 4.87 2460 30
+
+Table 1: Dataset statistics.
+
+where feature extract(·) indicates the feature extraction module in Section 3.1.
+Generation Loss In addition to the cross-entropy loss, we want to maximize the observed likelihood of the embeddings with the Gaussian mixture distribution. Speciﬁcally, we minimize the following negative logarithm likelihood,
+
+N
+
+Lg = − log N (zi; µyi , Σyi )
+i=1
+
+1N
+
+(11)
+
+=
+
+(zi − µyi ) Σyi −1(zi − µyi )
+
+2
+
+i=1
+
++ const,
+
+where const means a constant number. As shown in Eq. (11), the generation loss Lg encourages the embedding zi to be close to its class centroid µyi, which facilitaes learning a more class-concentrated embedding distribution that may beneﬁt the downstream outlier detection task.
+By combining the cross-entropy loss and the generation loss, the total objective function is:
+
+where Nk(z) denotes the set of k-nearest neighbors of z, and “lrd” denotes the local reachability density which measures the local density around an object. The local reachability density is deﬁned as the inverse of the average reachability distance between z and its neighbors, i.e.,
+
+lrdk(z) =
+
+|Nk(z)|
+
+. (14)
+
+o∈Nk(z) reach-distk(z, o)
+
+Here, the reachability distance reach-distk(z, o) is deﬁned as
+
+reach-distk(z, o) = max {k-dist(o), d(z, o)} , (15)
+where k-dist(o) denotes the distance of the object o to its k-th nearest neighbor, and d(z, o) is the distance between z and o.
+If the LOF factor of an utterance is much larger than 1, it has substantially lower local density than its neighbors’, which means the utterance embedding is relatively distant from its neighbors. Hence, it can be inferred the utterance is likely to belong to an unknown intent class.
+
+3.4 Overall Procedures
+
+L = Lcem + λLg,
+
+(12)
+
+where λ is a trade-off parameter.
+
+3.3 Outlier Detection
+By the above feature learning procedure, each utterance x can be encoded as an embedding z. Then, the embedding z is fed to a well-known outlier detection algorithm LOF (Breunig et al., 2000) to detect new or unknown intents (outliers). LOF is an unsupervised density-based anomaly detection method based on the following intuition. By comparing the local density of an object to those of its neighbors, it can identify regions of similar density. The objects with substantially lower density than their neighbors’ are considered to be outliers.
+LOF deﬁnes the local outlier factor of an object z as
+
+Figure 1 illustrates the overall training and testing procedures of the proposed framework for unknown intent detection. The backbone network is a self-attention Bi-LSTM encoder. In the training phase, the encoder is trained by minimizing the semantic-enhanced large margin Gaussian mixture loss (SEG classiﬁer) as in Eq. (12) on the training samples (seen intent class instances). In the testing phase, user utterances may come from both seen and unseen intent classes. Given an utterance, we ﬁrst obtain its feature representation z with the trained encoder, then we use LOF to decide whether z is an outlier or not. If z is an outlier, we take it as an instance of some new intent class. Otherwise, we classify z to one of the seen intent classes using the SEG classiﬁer.
+4 Experiments
+
+1 LOFk(z) = |Nk(z)|
+
+lrdk(o) , (13) o∈Nk(z) lrdk(z)
+
+In this section, we present experimental results on unknown intent detection. Formally, we train an
+
+1054
+
+Dataset
+
+SNIPS
+
+ATIS
+
+SMP-2018
+
+% of known intents 25% 50% 75% 25% 50% 75% 25% 50% 75%
+
+MSP DOC Softmax LMCL
+
+0.5543 0.8060 0.8585 0.6848 0.5158 0.3853 0.6132 0.7089 0.7716 0.5462 0.7962 0.8564 0.7007 0.5073 0.3659 0.6095 0.7197 0.7642 0.5508 0.8036 0.8393 0.6597 0.6310 0.5732 0.5818 0.6860 0.7351 0.5489 0.8041 0.8458 0.6763 0.6778 0.6110 0.6059 0.7094 0.7580
+
+SEG/o SEG
+
+0.5440 0.8067 0.8474 0.6768 0.6699 0.5918 0.6734 0.7676 0.8128 0.5599 0.8193 0.8612 0.6410 0.6700 0.6466 0.6966 0.7895 0.8205
+
+Table 2: Macro F1-score of unknown intent detection with different proportion of seen classes. The top 2 results for each metric are marked in bold.
+
+unknown intent detection system with training data Dtr = (Xtr, Y tr), where Y tr ∈ {l1, · · · , lK } = Cseen (the set of seen intent classes). For test utterances of seen intents, the unknown intent detection system aims to assign correct intent labels to them. For test utterances of unseen intents, the system is expected to identify them as outliers.
+4.1 Datasets and Baselines
+We evaluate our method SEG for unknown intent detection on 3 real task-oriented dialogue datasets: SNIPS (Coucke et al., 2018), ATIS (Hemphill et al., 1990) and SMP-2018 (Zhang et al., 2017). SNIPS is an open-source single-turn English corpus, which contains 7 types of user intents across different domains. ATIS is also an English dataset, which contains 18 types of user intent in the airline travel domain. SMP-2018 is a Chinese dialogue corpus for user intent recognition, which contains 30 different types of user intents. The statistics of the datasets are summarized in Table 1.
+We compare SEG with the following unknown intent detection methods.
+• Maximum Softmax Probability (MSP) (Hendrycks and Gimpel, 2017) considers the maximum softmax probability of a sample as the conﬁdence score to measure the probability that it belongs to a seen intent. The smaller the conﬁdence score is, the more likely it belongs to an unknown intent.
+• DOC (Shu et al., 2017) builds m 1-vs-rest sigmoid classiﬁers for m seen classes respectively. The maximum probability is considered as the conﬁdence of whether the sample belongs to the seen intent.
+• Softmax. It can be considered as an ablation study of our method SEG, which uses softmax
+
+instead of Gaussian mixture distribution to learn discriminative features.
+• LMCL (Lin and Xu, 2019) uses large margin cosine loss instead of Gaussian mixture distribution to learn discriminative embeddings.
+• SEG/o. A variant of our method SEG. It does not inject the class semantic information into the Gaussian mixture model.
+4.2 Experimental Setup
+We follow the setting in LCML (Lin and Xu, 2019) for unknown intent detection. Considering that some datasets may be unbalanced, we randomly select seen intents by a weighted random sampling over the entire intent set. The rest of the intents are regarded as unknown. We randomly select 30% samples of each intent to form the test set. The rest of each seen intent is added to the training set. We also follow LMCL to use macro f1-score as the evaluation metric, which makes sense because the ATIS dataset is extremely unbalanced.
+For SNIPS, ATIS and SMP-2018, we use 300dim embeddings pre-trained on Fasttext, Glove, and Chinese-Word-Vectors respectively. For BiLSTM, we set the number of layers as 2 and the output dimension as 128. In the self-attention layer, we set the attention dimension da=10. After the self-attention layer, we project the feature vector to a dz-dimension vector via a linear layer. We set dz=12 for SNIPS and SMP-2018, and dz=4 for ATIS. We report the average results over 10 runs. For the loss function, we set the margin m = 1 and the trade-off parameter λ = 0.5.
+For MSP, we set the threshold as 0.5 following Lin and Xu (2019). For DOC, we set the threshold as 0.5 as used in the original paper. During training of MSP and DOC, we clip the gradient norm to avoid gradient exploding. For LMCL, we follow
+
+1055
+
+the original paper to set the scaling factor s = 30 and the cosine margin m = 0.35. Softmax, LMCL, SEG/o and SEG all use LOF as the outlier detector, and we use the same set of parameters for LOF.
+4.3 Result Analysis
+From Table 2, it can be seen that our method SEG outperforms the baselines in most cases. Especially, on the most challenging dataset SMP-2018, SEG and SEG/o outperfom others by a large margin, demonstrating its high effectiveness. Moreover, we can make the following observations:
+(1) SEG consistently outperforms SEG/o in most cases, which proves the effectiveness of the proposed semantic enhancement mechanism.
+(2) SEG/o generally has higher scores than Softmax and LMCL, especially on the more complex dataset SMP-2018, where signiﬁcant gaps can be observed. The results indicate the advantage of Gaussian mixture model over Softmax and the variant LMCL for learning class-concentrated embeddings, which are more suitable to be coupled with the outlier detector LOF.
+(3) All the methods work well on SNIPS, which is a simple dataset. MSP and DOC outperform other methods on ATIS with only 25% seen classes. However, as the proportion of seen class increases, we can see a signiﬁcant decline in their performance. This is because ATIS is severely imbalanced where one intent accounts for 96% of the entire data. When there are many seen classes, DOC and MSP cannot learn an effective supervised classiﬁer due to the dominance of one class.
+5 Application in Generalized Zero-shot Intent Classiﬁcation
+In this section, we apply our method SEG to an extended application of unknown intent classiﬁcation – zero-shot intent classiﬁcation. It aims to discriminate unseen intents, which is beyond only detecting their existence. Speciﬁcally, given the training data Dtr = (Xtr, Y tr) where Y tr ∈ Cseen, a zero-shot classiﬁcation system is trained to predict the label yˆte of any test sample which may belong to an unseen class, using the knowledge transferred from the seen data. There are two common settings for zero-shot learning, generalized zero-shot classiﬁcation, where yˆte ∈ {Cseen, Cunseen}, and standard zero-shot classiﬁcation, where yˆte ∈ Cunseen. Here, Cunseen is the set of unseen intent classes.
+Previous attempts try to tackle the challenge of
+
+Figure 2: A typical generalized zero-shot intent classiﬁcation pipeline.
+
+zero-shot intent classiﬁcation from three directions. (1) What prior knowledge is more supportive, such as morphology (character-level embedding), class descriptions, and knowledge-based entity attributes (Ferreira et al., 2015a,b; Chen et al., 2016; Kumar et al., 2017). (2) How to better utilize these prior knowledge to extract more informative semantic representations, such as data augmentation and hierarchical representations learned by capsule networks (Xia et al., 2018). (3) With the extracted semantic features, how to design a better zero-shot learning strategy, such as reconstructing weight matrix for unseen intents through relation learning (Liu et al., 2019).
+In this work, we improve generalized zero-shot intent classiﬁcation by integrating the proposed SEG model as a binary unknown intent identiﬁer into the original pipeline. We explore multiple ways of integration and conduct a case study based on a state-of-the-art method ReCapsNet (Liu et al., 2019).
+
+5.1 Integrating Unknown Intent Identiﬁer
+
+As shown in Figure 2, a typical generalized zero-
+
+shot classiﬁcation framework can be abstracted into
+
+two layers, the encoder layer and the zero-shot clas-
+
+siﬁer layer. In the encoder layer, a user utterance
+
+x in the text format needs to be ﬁrst mapped to
+
+the
+
+semantic
+
+representation
+
+zZS.
+x
+
+In addition, it
+
+is common to encode class information as S for
+
+better semantic learning or knowledge transfer. In
+
+order to learn better semantic representation, prior
+
+knowledge is usually incorporated at this stage.
+
+Then, the learned representation will be fed to the
+
+zero-shot classiﬁer layer. Various zero-shot classi-
+
+ﬁcation strategies have been proposed to transfer
+
+knowledge to new categories. Finally, the system outputs the prediction yˆte ∈ {Cseen, Cunseen} for the utterance x.
+
+We integrate SEG into the pipeline between the
+
+encoder layer and the classiﬁer layer as shown in
+
+Figure 3. With the semantic feature zx, we predict if the utterance x is an outlier via:
+
+p(g|zx), g ∈ {“seen”, “unseen”}. (16)
+
+1056
+
+Figure 3: Integration of the new intent identiﬁer (SEG) into the generalized zero-shot intent classiﬁcation pipeline.
+
+For the case g = “seen”, the intent of the utterance is considered to be a seen one. We then predict the intent by p(y|zx, y ∈ Cseen, Xtr, θ) where θ denotes the parameters of the original framework. Otherwise, the intent of the utterance is considered to be unseen, and we predict it via p(y|zx, y ∈ Cunseen, Xtr, θ).
+Feature Assemble We adopt two ways “Separate” and “Combine” to assemble features for the following outlier detection task.
+
+• Separate (Sep). We directly feed the output of
+
+the
+
+pre-trained
+
+SEG
+
+encoder
+
+zSEG
+x
+
+to
+
+LOF
+
+for
+
+outlier detection, i.e.,
+
+zx = zxSEG.
+
+(17)
+
+• Combine. To take advantage of the original
+
+model, we ﬁrst obtain the original semantic fea-
+
+ture
+
+representation
+
+zZS
+x
+
+and
+
+deﬁne
+
+a
+
+transform
+
+function f . Then, f (zxZS) is concatenated with
+
+the
+
+pre-trained
+
+features
+
+by
+
+SEG,
+
+zSEG,
+x
+
+to
+
+make
+
+a combined feature representation:
+
+zx = [zxSEG||f (zxZS)].
+
+(18)
+
+5.2 A Case Study on ReCapsNet
+ReCapsNet Recently, ReCapsNet-ZS (Liu et al., 2019) demonstrates state-of-the-art performance in generalized zero-shot intent classiﬁcation. In this section, we conduct a case study on integrating the new intent identiﬁer into ReCapsNet.
+The framework of ReCapsNet is illustrated in Figure 4. In the encoder layer, each utterance x is encoded with R semantic capsules [m1, m2, ..., mR] as the representations in R different semantic spaces. In addition, the training set Dtr and class labels L are encoded as Str and
+
+Figure 4: The framework of ReCapsNet.
+
+SC, respectively. In the zero-shot classiﬁer layer,
+
+zZS
+x
+
+is
+
+fed
+
+to
+
+a
+
+capsule
+
+network
+
+to
+
+make
+
+prediction.
+
+Each seen class k has R transformation matrices
+
+{Wkr}Rr=1. In the testing phase, ReCapsNet re-
+
+constructs the r-th transformation matrix for each
+
+unseen class l as Wlr = k qlkWkr, where qlk is the relation between unseen class l and seen class k learned from (Str, Y tr) and SC by metric learn-
+
+ing.
+
+For the variant “Combine”, to exploit the prop-
+
+erty that each utterance is variously represented in
+
+different semantic spaces as discussed in Liu et al.
+
+(2019), we deﬁne the semantic feature representa-
+
+tion of ReCapsNet as
+
+f (zxZS) = [ m1 2 , m2 2 , · · · , mR 2]. (19)
+
+Experimental Setup We integrate SEG into the ReCapsNet pipeline with both “Sep” and “Combine” variants and test the performance of generalized zero-shot classiﬁcation.
+Following the settings of generalized zero-shot classiﬁcation in Liu et al. (2019), we test our methods on two datasets SNIPS (Coucke et al., 2018) and SMP-2018 (Zhang et al., 2017) and report the micro-averaged recall (accuracy) and F1 scores. The baselines include DeVISE (Frome et al., 2013), CMT (Socher et al., 2013), CDSSM (Chen et al., 2016), Zero-shot DNN (Kumar et al., 2017), Intent-
+
+1057
+
+Method
+
+SNIPS
+
+SMP-2018
+
+Seen
+
+Unseen
+
+Overall
+
+Seen
+
+Unseen
+
+Overall
+
+Acc F1 Acc F1 Acc F1 Acc F1 Acc F1 Acc F1
+
+DeViSE CMT CDSSM Zero-shot DNN IntentCapsNet ReCapsNet
+
+0.9481 0.9755 0.9549 0.9432 0.9741 0.9511
+
+0.6536 0.6648 0.7033 0.6679 0.6517 0.6777
+
+0.0211 0.0397 0.0111 0.0682 0.0000 0.0994
+
+0.0398 0.0704 0.0218 0.1041 0.0000 0.1594
+
+0.4215 0.4438 0.4234 0.4488 0.4200 0.4705
+
+0.3049 0.3271 0.3194 0.3493 0.2810 0.3826
+
+0.8040 0.8314 0.6653 0.7323 0.8850 0.8107
+
+0.6740 0.7221 0.5540 0.6116 0.7281 0.7417
+
+0.0270 0.0798 0.1436 0.0590 0.0000 0.1959
+
+0.0310 0.1069 0.1200 0.0869 0.0000 0.1727
+
+0.5030 0.5398 0.4864 0.5013 0.5375 0.5692
+
+0.4250 0.4834 0.4052 0.4316 0.4423 0.5182
+
+SEG (Sep / o)
+
+0.9308 0.7501 0.3523 0.4514 0.6014 0.5800 0.7066 0.7391 0.3848 0.3038 0.5802 0.5681
+
+SEG (Combine / o) 0.9217 0.7924 0.4642 0.5321 0.6612 0.6441 0.7054 0.7326 0.3888 0.3116 0.5811 0.5672
+
+SEG (Sep / w)
+
+0.7898 0.8335 0.6728 0.6420 0.7232 0.7245 0.6624 0.7243 0.4779 0.3627 0.5899 0.5823
+
+SEG (Combine / w) 0.8644 0.8658 0.6961 0.6931 0.7685 0.7674 0.6821 0.7359 0.4848 0.3806 0.6046 0.5963
+
+Table 3: Results of generalized zero-shot intent classiﬁcation equipped with our new intent identiﬁer SEG. “Seen”, “Unseen” and “Overall” respectively denote the prediction performance on the utterances from seen intents, unseen intents, and both seen and unseen intents. The sufﬁxes ”/w” and ”/o” stand for with and without semantic enhancement, respectively. The top 2 results for each metric are marked in bold.
+
+CapsNet (Xia et al., 2018), and ReCapsNet (Liu et al., 2019). The average results over 10 runs of our methods and ReCapsNet are reported in Table 3, where the results of other baselines are taken from Liu et al. (2019).
+We use the same setting and hyper-parameters as in ReCapsNet (Liu et al., 2019). We set dz=4 for SNIPS and dz=12 for SMP-2018. The rest of the parameters of SEG are the same as those used in Section 4.2. In addition, we also conduct an ablation study to demonstrate the effectiveness of the proposed semantic enhancement mechanism by testing two variants of our integration (“Sep / o” and “Combine / o”) without using it.
+Result Analysis From the results in Table 3, we can make the following observations:
+(1) All variants of our integration achieve a signiﬁcant boost in the overall accuracy and F1 scores on the two datasets, especially on SNIPS, where the performance increase is huge. Each variant leads to a qualitative leap in the performance on unseen intents. The prediction accuracy (microaveraged recall) on seen intents may be reduced compared to ReCapsNet and other baselines, since some utterances of seen intents are classiﬁed to unseen intents. However, the F1 score on seen intents increases signiﬁcantly, indicating that it has much higher precision than that of the baselines.
+(2) The variants of our integration with semantic enhancement signiﬁcantly outperform those without using it on predicting unseen intents by very large margins. Although their accuracy scores on seen intents are lower, their overall accuracy and F1 scores are consistently better, which conﬁrms
+
+the effectiveness of semantic enhancement. (3) It can be seen that the “Combine” variants
+generally perform much better than the “Sep” variants, especially the one with semantic enhancement (“Combine / w”), which performs outstandingly. It surpasses the performance of “Sep / w” in every metric, demonstrating the usefulness of the simple feature assemble strategy of concatenating the feature representations of ReCapsNet and SEG.
+6 Conclusion
+In this paper, we have proposed SEG, a semanticenhanced Gaussian mixture model coupled with a LOF outlier detector, for unknown (new) intent detection. We empirically veriﬁed the effectiveness of SEG for unknown intent detection on real dialogue datasets in English and Chinese. Furthermore, we successfully applied SEG to improve generalized zero-shot intent classiﬁcation and achieved remarkable performance gain over a most recent competitive method ReCapsNet. In future work, we plan to conduct more empirical studies on SEG and further improve its performance on new intent identiﬁcation. We also plan to conduct more case studies in applying SEG to boost the performance of current zero-shot intent classiﬁcation methods.
+Acknowledgments
+We would like to thank the anonymous reviewers for their helpful comments. This research was supported by the grant HK ITF UIM/377.
+
+1058
+
+References
+Markus M Breunig, Hans-Peter Kriegel, Raymond T Ng, and Jo¨rg Sander. 2000. Lof: identifying densitybased local outliers. In ACM SIGMOD RECORD, volume 29, pages 93–104.
+Yun-Nung Chen, Dilek Z. Hakkani-Tu¨r, and Xiaodong He. 2016. Zero-shot learning of intent embeddings for expansion by convolutional deep structured semantic models. In IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), pages 6045–6049.
+Alice Coucke, Alaa Saade, Adrien Ball, The´odore Bluche, Alexandre Caulier, David Leroy, Cle´ment Doumouro, Thibault Gisselbrecht, Francesco Caltagirone, Thibaut Lavril, Mae¨l Primet, and Joseph Dureau. 2018. Snips voice platform: an embedded spoken language understanding system for privateby-design voice interfaces. arXiv, abs/1805.10190.
+Geli Fei and Bing Liu. 2016. Breaking the closed world assumption in text classiﬁcation. In Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (NAACL-HLT), pages 506–514.
+Emmanuel Ferreira, Bassam Jabaian, and Fabrice Lefe`vre. 2015a. Online adaptative zero-shot learning spoken language understanding using wordembedding. In IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), pages 5321–5325.
+Emmanuel Ferreira, Bassam Jabaian, and Fabrice Lefe`vre. 2015b. Zero-shot semantic parser for spoken language understanding. In Annual Conference of the International Speech Communication Association (INTERSPEECH), pages 1403–1407.
+Andrea Frome, Gregory S. Corrado, Jonathon Shlens, Samy Bengio, Jeffrey Dean, Marc’Aurelio Ranzato, and Tomas Mikolov. 2013. Devise: A deep visualsemantic embedding model. In Advances in Neural Information Processing Systems (NeurIPS), pages 2121–2129.
+Charles T. Hemphill, John J. Godfrey, and George R. Doddington. 1990. The ATIS spoken language systems pilot corpus. In Speech and Natural Language: Proceedings of a Workshop Held at Hidden Valley, Pennsylvania, USA, June 24-27, 1990. Morgan Kaufmann.
+Dan Hendrycks and Kevin Gimpel. 2017. A baseline for detecting misclassiﬁed and out-of-distribution examples in neural networks. In International Conference on Learning Representations (ICLR).
+Jian Hu, Gang Wang, Fred Lochovsky, Jian-tao Sun, and Zheng Chen. 2009. Understanding user’s query intent with wikipedia. In International Conference on World Wide Web (WWW), pages 471–480.
+
+Anjishnu Kumar, Pavankumar Reddy Muddireddy, Markus Dreyer, and Bjo¨rn Hoffmeister. 2017. Zeroshot learning across heterogeneous overlapping domains. In Annual Conference of the International Speech Communication Association (INTERSPEECH), pages 2914–2918.
+Ting-En Lin and Hua Xu. 2019. Deep unknown intent detection with margin loss. In Annual Meeting of the Association for Computational Linguistics (ACL), pages 5491–5496. Association for Computational Linguistics.
+Bing Liu and Ian Lane. 2016. Attention-based recurrent neural network models for joint intent detection and slot ﬁlling. In Annual Conference of the International Speech Communication Association (INTERSPEECH), pages 685–689.
+Fei Tony Liu, Kai Ming Ting, and Zhi-Hua Zhou. 2008. Isolation forest. In IEEE International Conference on Data Mining (ICDM), pages 413–422.
+Han Liu, Xiaotong Zhang, Lu Fan, Xuandi Fu, Qimai Li, Xiao-Ming Wu, and Albert YS Lam. 2019. Reconstructing capsule networks for zero-shot intent classiﬁcation. In Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 4798–4808.
+Yukun Ma, Erik Cambria, and Sa Gao. 2016. Label embedding for zero-shot ﬁne-grained named entity typing. In International Conference on Computational Linguistics (COLING), pages 171–180.
+Jinseok Nam, Eneldo Loza Menc’ia, and Johannes Fu¨rnkranz. 2016. All-in text: Learning document, label, and word representations jointly. In AAAI Conference on Artiﬁcial Intelligence (AAAI), pages 1948–1954.
+Mark Palatucci, Dean Pomerleau, Geoffrey E. Hinton, and Tom M. Mitchell. 2009. Zero-shot learning with semantic output codes. In Advances in Neural Information Processing Systems (NeurIPS), pages 1410– 1418.
+Suman Ravuri and Andreas Stolcke. 2015. Recurrent neural network and lstm models for lexical utterance classiﬁcation. In Annual Conference of the International Speech Communication Association (INTERSPEECH), pages 135–139.
+Peter J Rousseeuw and Katrien Van Driessen. 1999. A fast algorithm for the minimum covariance determinant estimator. Technometrics, 41(3):212–223.
+Sara Sabour, Nicholas Frosst, and Geoffrey E. Hinton. 2017. Dynamic routing between capsules. In Advances in Neural Information Processing Systems (NeurIPS), pages 3859–3869.
+Prateek Veeranna Sappadla, Jinseok Nam, Eneldo Loza Menc’ia, and Johannes Fu¨rnkranz. 2016. Using semantic similarity for multi-label zero-shot classiﬁcation of text documents. In European Symposium on Artiﬁcial Neural Networks (ESANN).
+
+1059
+
+Bernhard Scho¨lkopf, John C Platt, John Shawe-Taylor, Alex J Smola, and Robert C Williamson. 2001. Estimating the support of a high-dimensional distribution. Neural Computation, 13(7):1443–1471.
+Lei Shu, Hu Xu, and Bing Liu. 2017. DOC: deep open classiﬁcation of text documents. In Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 2911–2916. Association for Computational Linguistics.
+Richard Socher, Milind Ganjoo, Christopher D. Manning, and Andrew Y. Ng. 2013. Zero-shot learning through cross-modal transfer. In Advances in Neural Information Processing Systems (NeurIPS), pages 935–943.
+Weitao Wan, Yuanyi Zhong, Tianpeng Li, and Jiansheng Chen. 2018. Rethinking feature distribution for loss functions in image classiﬁcation. In IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pages 9117–9126.
+Congying Xia, Chenwei Zhang, Xiaohui Yan, Yi Chang, and Philip S. Yu. 2018. Zero-shot user intent detection via capsule neural networks. In Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 3090–3099.
+Puyang Xu and Ruhi Sarikaya. 2013. Convolutional neural network based triangular CRF for joint intent detection and slot ﬁlling. In IEEE Workshop on Automatic Speech Recognition and Understanding (ASRU Workshop), pages 78–83.
+Majid Yazdani and James Henderson. 2015. A model of zero-shot learning of spoken language understanding. In Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 244–249.
+Wenpeng Yin, Katharina Kann, Mo Yu, and Hinrich Schu¨tze. 2017. Comparative study of CNN and RNN for natural language processing. arXiv, abs/1702.01923.
+Chenwei Zhang, Wei Fan, Nan Du, and Philip S. Yu. 2016. Mining user intentions from medical queries: A neural network based heterogeneous jointly modeling approach. In International Conference on World Wide Web (WWW), pages 1373–1384.
+Jingqing Zhang, Piyawat Lertvittayakumjorn, and Yike Guo. 2019. Integrating semantic knowledge to tackle zero-shot text classiﬁcation. In Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (NAACL-HLT), pages 1031–1040.
+Weinan Zhang, Zhigang Chen, Wanxiang Che, Guoping Hu, and Ting Liu. 2017. The ﬁrst evaluation of chinese human-computer dialogue technology. arXiv, abs/1709.10217.
+1060
+

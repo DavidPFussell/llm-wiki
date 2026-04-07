@@ -1,0 +1,2165 @@
+Machine Learning in Automated Text Categorization
+FABRIZIO SEBASTIANI
+Consiglio Nazionale delle Ricerche, Italy
+
+The automated categorization (or classiﬁcation) of texts into predeﬁned categories has witnessed a booming interest in the last 10 years, due to the increased availability of documents in digital form and the ensuing need to organize them. In the research community the dominant approach to this problem is based on machine learning techniques: a general inductive process automatically builds a classiﬁer by learning, from a set of preclassiﬁed documents, the characteristics of the categories. The advantages of this approach over the knowledge engineering approach (consisting in the manual deﬁnition of a classiﬁer by domain experts) are a very good effectiveness, considerable savings in terms of expert labor power, and straightforward portability to different domains. This survey discusses the main approaches to text categorization that fall within the machine learning paradigm. We will discuss in detail issues pertaining to three different problems, namely, document representation, classiﬁer construction, and classiﬁer evaluation.
+Categories and Subject Descriptors: H.3.1 [Information Storage and Retrieval]: Content Analysis and Indexing—Indexing methods; H.3.3 [Information Storage and Retrieval]: Information Search and Retrieval—Information ﬁltering; H.3.4 [Information Storage and Retrieval]: Systems and Software—Performance evaluation (efﬁciency and effectiveness); I.2.6 [Artiﬁcial Intelligence]: Learning— Induction
+General Terms: Algorithms, Experimentation, Theory
+Additional Key Words and Phrases: Machine learning, text categorization, text classiﬁcation
+
+1. INTRODUCTION
+In the last 10 years content-based document management tasks (collectively known as information retrieval—IR) have gained a prominent status in the information systems ﬁeld, due to the increased availability of documents in digital form and the ensuing need to access them in ﬂexible ways. Text categorization (TC— a.k.a. text classiﬁcation, or topic spotting), the activity of labeling natural language
+
+texts with thematic categories from a predeﬁned set, is one such task. TC dates back to the early ’60s, but only in the early ’90s did it become a major subﬁeld of the information systems discipline, thanks to increased applicative interest and to the availability of more powerful hardware. TC is now being applied in many contexts, ranging from document indexing based on a controlled vocabulary, to document ﬁltering, automated metadata generation, word sense disambiguation, population of
+
+Author’s address: Istituto di Elaborazione dell’Informazione, Consiglio Nazionale delle Ricerche, Via G. Moruzzi 1, 56124 Pisa, Italy; e-mail: fabrizio@iei.pi.cnr.it.
+Permission to make digital/hard copy of part or all of this work for personal or classroom use is granted without fee provided that the copies are not made or distributed for proﬁt or commercial advantage, the copyright notice, the title of the publication, and its date appear, and notice is given that copying is by permission of the ACM, Inc. To copy otherwise, to republish, to post on servers, or to redistribute to lists, requires prior speciﬁc permission and/or a fee. c 2002 ACM 0360-0300/02/0300-0001 $5.00
+ACM Computing Surveys, Vol. 34, No. 1, March 2002, pp. 1–47.
+
+2
+
+Sebastiani
+
+hierarchical catalogues of Web resources, and in general any application requiring document organization or selective and adaptive document dispatching.
+Until the late ’80s the most popular approach to TC, at least in the “operational” (i.e., real-world applications) community, was a knowledge engineering (KE) one, consisting in manually deﬁning a set of rules encoding expert knowledge on how to classify documents under the given categories. In the ’90s this approach has increasingly lost popularity (especially in the research community) in favor of the machine learning (ML) paradigm, according to which a general inductive process automatically builds an automatic text classiﬁer by learning, from a set of preclassiﬁed documents, the characteristics of the categories of interest. The advantages of this approach are an accuracy comparable to that achieved by human experts, and a considerable savings in terms of expert labor power, since no intervention from either knowledge engineers or domain experts is needed for the construction of the classiﬁer or for its porting to a different set of categories. It is the ML approach to TC that this paper concentrates on.
+Current-day TC is thus a discipline at the crossroads of ML and IR, and as such it shares a number of characteristics with other tasks such as information/ knowledge extraction from texts and text mining [Knight 1999; Pazienza 1997]. There is still considerable debate on where the exact border between these disciplines lies, and the terminology is still evolving. “Text mining” is increasingly being used to denote all the tasks that, by analyzing large quantities of text and detecting usage patterns, try to extract probably useful (although only probably correct) information. According to this view, TC is an instance of text mining. TC enjoys quite a rich literature now, but this is still fairly scattered.1 Although two international journals have devoted special issues to
+1 A fully searchable bibliography on TC created and maintained by this author is available at http:// liinwww.ira.uka.de/bibliography/Ai/automated.text. categorization.html.
+
+this topic [Joachims and Sebastiani 2002; Lewis and Hayes 1994], there are no systematic treatments of the subject: there are neither textbooks nor journals entirely devoted to TC yet, and Manning and Schu¨ tze [1999, Chapter 16] is the only chapter-length treatment of the subject. As a note, we should warn the reader that the term “automatic text classiﬁcation” has sometimes been used in the literature to mean things quite different from the ones discussed here. Aside from (i) the automatic assignment of documents to a predeﬁned set of categories, which is the main topic of this paper, the term has also been used to mean (ii) the automatic identiﬁcation of such a set of categories (e.g., Borko and Bernick [1963]), or (iii) the automatic identiﬁcation of such a set of categories and the grouping of documents under them (e.g., Merkl [1998]), a task usually called text clustering, or (iv) any activity of placing text items into groups, a task that has thus both TC and text clustering as particular instances [Manning and Schu¨ tze 1999].
+This paper is organized as follows. In Section 2 we formally deﬁne TC and its various subcases, and in Section 3 we review its most important applications. Section 4 describes the main ideas underlying the ML approach to classiﬁcation. Our discussion of text classiﬁcation starts in Section 5 by introducing text indexing, that is, the transformation of textual documents into a form that can be interpreted by a classiﬁer-building algorithm and by the classiﬁer eventually built by it. Section 6 tackles the inductive construction of a text classiﬁer from a “training” set of preclassiﬁed documents. Section 7 discusses the evaluation of text classiﬁers. Section 8 concludes, discussing open issues and possible avenues of further research for TC.
+2. TEXT CATEGORIZATION
+2.1. A Deﬁnition of Text Categorization
+Text categorization is the task of assigning a Boolean value to each pair d j , ci ∈ D × C, where D is a domain of documents and
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+3
+
+C = {c1, . . . , c|C|} is a set of predeﬁned categories. A value of T assigned to d j , ci indicates a decision to ﬁle d j under ci, while a value of F indicates a decision not to ﬁle d j under ci. More formally, the task is to approximate the unknown target function ˘ : D × C → {T, F } (that describes how documents ought to be classiﬁed) by means of a function : D × C → {T, F } called the classiﬁer (aka rule, or hypothesis, or model) such that ˘ and “coincide as much as possible.” How to precisely deﬁne and measure this coincidence (called effectiveness) will be discussed in Section 7.1. From now on we will assume that:
+—The categories are just symbolic labels, and no additional knowledge (of a procedural or declarative nature) of their meaning is available.
+—No exogenous knowledge (i.e., data provided for classiﬁcation purposes by an external source) is available; therefore, classiﬁcation must be accomplished on the basis of endogenous knowledge only (i.e., knowledge extracted from the documents). In particular, this means that metadata such as, for example, publication date, document type, publication source, etc., is not assumed to be available.
+The TC methods we will discuss are thus completely general, and do not depend on the availability of special-purpose resources that might be unavailable or costly to develop. Of course, these assumptions need not be veriﬁed in operational settings, where it is legitimate to use any source of information that might be available or deemed worth developing [D´ıaz Esteban et al. 1998; Junker and Abecker 1997]. Relying only on endogenous knowledge means classifying a document based solely on its semantics, and given that the semantics of a document is a subjective notion, it follows that the membership of a document in a category (pretty much as the relevance of a document to an information need in IR [Saracevic 1975]) cannot be decided deterministically. This is exempliﬁed by the
+
+phenomenon of inter-indexer inconsistency [Cleverdon 1984]: when two human experts decide whether to classify document d j under category ci, they may disagree, and this in fact happens with relatively high frequency. A news article on Clinton attending Dizzy Gillespie’s funeral could be ﬁled under Politics, or under Jazz, or under both, or even under neither, depending on the subjective judgment of the expert.
+2.2. Single-Label Versus Multilabel
+Text Categorization
+Different constraints may be enforced on the TC task, depending on the application. For instance we might need that, for a given integer k, exactly k (or ≤ k, or ≥ k) elements of C be assigned to each d j ∈ D. The case in which exactly one category must be assigned to each d j ∈ D is often called the single-label (a.k.a. nonoverlapping categories) case, while the case in which any number of categories from 0 to |C| may be assigned to the same d j ∈ D is dubbed the multilabel (aka overlapping categories) case. A special case of singlelabel TC is binary TC, in which each d j ∈ D must be assigned either to category ci or to its complement c¯i.
+From a theoretical point of view, the binary case (hence, the single-label case, too) is more general than the multilabel, since an algorithm for binary classiﬁcation can also be used for multilabel classiﬁcation: one needs only transform the problem of multilabel classiﬁcation under {c1, . . . , c|C|} into |C| independent problems of binary classiﬁcation under {ci, c¯i}, for i = 1, . . . , |C|. However, this requires that categories be stochastically independent of each other, that is, for any c , c , the value of ˘ (d j , c ) does not depend on the value of ˘ (d j , c ) and vice versa; this is usually assumed to be the case (applications in which this is not the case are discussed in Section 3.5). The converse is not true: an algorithm for multilabel classiﬁcation cannot be used for either binary or single-label classiﬁcation. In fact, given a document d j to classify, (i) the classiﬁer might attribute k > 1 categories to d j , and it might not be obvious how to
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+4
+
+Sebastiani
+
+choose a “most appropriate” category from them; or (ii) the classiﬁer might attribute to d j no category at all, and it might not be obvious how to choose a “least inappropriate” category from C.
+In the rest of the paper, unless explicitly mentioned, we will deal with the binary case. There are various reasons for this:
+—The binary case is important in itself because important TC applications, including ﬁltering (see Section 3.3), consist of binary classiﬁcation problems (e.g., deciding whether d j is about Jazz or not). In TC, most binary classiﬁcation problems feature unevenly populated categories (e.g., much fewer documents are about Jazz than are not) and unevenly characterized categories (e.g., what is about Jazz can be characterized much better than what is not).
+—Solving the binary case also means solving the multilabel case, which is also representative of important TC applications, including automated indexing for Boolean systems (see Section 3.1).
+—Most of the TC literature is couched in terms of the binary case.
+—Most techniques for binary classiﬁcation are just special cases of existing techniques for the single-label case, and are simpler to illustrate than these latter.
+This ultimately means that we will view classiﬁcation under C = {c1, . . . , c|C|} as consisting of |C| independent problems of classifying the documents in D under a given category ci, for i = 1, . . . , |C|. A classiﬁer for ci is then a function i : D → {T, F } that approximates an unknown target function ˘ i : D → {T, F }.
+2.3. Category-Pivoted Versus Document-Pivoted Text Categorization
+There are two different ways of using a text classiﬁer. Given d j ∈ D, we might want to ﬁnd all the ci ∈ C under which it should be ﬁled (document-pivoted categorization—DPC); alternatively, given ci ∈ C, we might want to ﬁnd all the d j ∈ D that should be ﬁled under it (category-pivoted
+
+categorization—CPC). This distinction is more pragmatic than conceptual, but is important since the sets C and D might not be available in their entirety right from the start. It is also relevant to the choice of the classiﬁer-building method, as some of these methods (see Section 6.9) allow the construction of classiﬁers with a deﬁnite slant toward one or the other style.
+DPC is thus suitable when documents become available at different moments in time, e.g., in ﬁltering e-mail. CPC is instead suitable when (i) a new category c|C|+1 may be added to an existing set C = {c1, . . . , c|C|} after a number of documents have already been classiﬁed under C, and (ii) these documents need to be reconsidered for classiﬁcation under c|C|+1 (e.g., Larkey [1999]). DPC is used more often than CPC, as the former situation is more common than the latter.
+Although some speciﬁc techniques apply to one style and not to the other (e.g., the proportional thresholding method discussed in Section 6.1 applies only to CPC), this is more the exception than the rule: most of the techniques we will discuss allow the construction of classiﬁers capable of working in either mode.
+2.4. “Hard” Categorization Versus
+Ranking Categorization
+While a complete automation of the TC task requires a T or F decision for each pair d j , ci , a partial automation of this process might have different requirements.
+For instance, given d j ∈ D a system might simply rank the categories in C = {c1, . . . , c|C|} according to their estimated appropriateness to d j , without taking any “hard” decision on any of them. Such a ranked list would be of great help to a human expert in charge of taking the ﬁnal categorization decision, since she could thus restrict the choice to the category (or categories) at the top of the list, rather than having to examine the entire set. Alternatively, given ci ∈ C a system might simply rank the documents in D according to their estimated appropriateness to ci; symmetrically, for
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+5
+
+classiﬁcation under ci a human expert would just examine the top-ranked documents instead of the entire document set. These two modalities are sometimes called category-ranking TC and documentranking TC [Yang 1999], respectively, and are the obvious counterparts of DPC and CPC.
+Semiautomated, “interactive” classiﬁcation systems [Larkey and Croft 1996] are useful especially in critical applications in which the effectiveness of a fully automated system may be expected to be signiﬁcantly lower than that of a human expert. This may be the case when the quality of the training data (see Section 4) is low, or when the training documents cannot be trusted to be a representative sample of the unseen documents that are to come, so that the results of a completely automatic classiﬁer could not be trusted completely.
+In the rest of the paper, unless explicitly mentioned, we will deal with “hard” classiﬁcation; however, many of the algorithms we will discuss naturally lend themselves to ranking TC too (more details on this in Section 6.1).
+3. APPLICATIONS OF TEXT CATEGORIZATION
+TC goes back to Maron’s [1961] seminal work on probabilistic text classiﬁcation. Since then, it has been used for a number of different applications, of which we here brieﬂy review the most important ones. Note that the borders between the different classes of applications listed here are fuzzy and somehow artiﬁcial, and some of these may be considered special cases of others. Other applications we do not explicitly discuss are speech categorization by means of a combination of speech recognition and TC [Myers et al. 2000; Schapire and Singer 2000], multimedia document categorization through the analysis of textual captions [Sable and Hatzivassiloglou 2000], author identiﬁcation for literary texts of unknown or disputed authorship [Forsyth 1999], language identiﬁcation for texts of unknown language [Cavnar and Trenkle 1994],
+
+automated identiﬁcation of text genre [Kessler et al. 1997], and automated essay grading [Larkey 1998].
+3.1. Automatic Indexing for Boolean Information Retrieval Systems
+The application that has spawned most of the early research in the ﬁeld [Borko and Bernick 1963; Field 1975; Gray and Harley 1971; Heaps 1973; Maron 1961] is that of automatic document indexing for IR systems relying on a controlled dictionary, the most prominent example of which is Boolean systems. In these latter each document is assigned one or more key words or key phrases describing its content, where these key words and key phrases belong to a ﬁnite set called controlled dictionary, often consisting of a thematic hierarchical thesaurus (e.g., the NASA thesaurus for the aerospace discipline, or the MESH thesaurus for medicine). Usually, this assignment is done by trained human indexers, and is thus a costly activity.
+If the entries in the controlled vocabulary are viewed as categories, text indexing is an instance of TC, and may thus be addressed by the automatic techniques described in this paper. Recalling Section 2.2, note that this application may typically require that k1 ≤ x ≤ k2 key words are assigned to each document, for given k1, k2. Document-pivoted TC is probably the best option, so that new documents may be classiﬁed as they become available. Various text classiﬁers explicitly conceived for document indexing have been described in the literature; see, for example, Fuhr and Knorz [1984], Robertson and Harding [1984], and Tzeras and Hartmann [1993].
+Automatic indexing with controlled dictionaries is closely related to automated metadata generation. In digital libraries, one is usually interested in tagging documents by metadata that describes them under a variety of aspects (e.g., creation date, document type or format, availability, etc.). Some of this metadata is thematic, that is, its role is to describe the semantics of the document by means of
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+6
+
+Sebastiani
+
+bibliographic codes, key words or key phrases. The generation of this metadata may thus be viewed as a problem of document indexing with controlled dictionary, and thus tackled by means of TC techniques.
+3.2. Document Organization
+Indexing with a controlled vocabulary is an instance of the general problem of document base organization. In general, many other issues pertaining to document organization and ﬁling, be it for purposes of personal organization or structuring of a corporate document base, may be addressed by TC techniques. For instance, at the ofﬁces of a newspaper incoming “classiﬁed” ads must be, prior to publication, categorized under categories such as Personals, Cars for Sale, Real Estate, etc. Newspapers dealing with a high volume of classiﬁed ads would beneﬁt from an automatic system that chooses the most suitable category for a given ad. Other possible applications are the organization of patents into categories for making their search easier [Larkey 1999], the automatic ﬁling of newspaper articles under the appropriate sections (e.g., Politics, Home News, Lifestyles, etc.), or the automatic grouping of conference papers into sessions.
+3.3. Text Filtering
+Text ﬁltering is the activity of classifying a stream of incoming documents dispatched in an asynchronous way by an information producer to an information consumer [Belkin and Croft 1992]. A typical case is a newsfeed, where the producer is a news agency and the consumer is a newspaper [Hayes et al. 1990]. In this case, the ﬁltering system should block the delivery of the documents the consumer is likely not interested in (e.g., all news not concerning sports, in the case of a sports newspaper). Filtering can be seen as a case of single-label TC, that is, the classiﬁcation of incoming documents into two disjoint categories, the relevant and the irrelevant. Additionally,
+
+a ﬁltering system may also further classify the documents deemed relevant to the consumer into thematic categories; in the example above, all articles about sports should be further classiﬁed according to which sport they deal with, so as to allow journalists specialized in individual sports to access only documents of prospective interest for them. Similarly, an e-mail ﬁlter might be trained to discard “junk” mail [Androutsopoulos et al. 2000; Drucker et al. 1999] and further classify nonjunk mail into topical categories of interest to the user.
+A ﬁltering system may be installed at the producer end, in which case it must route the documents to the interested consumers only, or at the consumer end, in which case it must block the delivery of documents deemed uninteresting to the consumer. In the former case, the system builds and updates a “proﬁle” for each consumer [Liddy et al. 1994], while in the latter case (which is the more common, and to which we will refer in the rest of this section) a single proﬁle is needed.
+A proﬁle may be initially speciﬁed by the user, thereby resembling a standing IR query, and is updated by the system by using feedback information provided (either implicitly or explicitly) by the user on the relevance or nonrelevance of the delivered messages. In the TREC community [Lewis 1995c], this is called adaptive ﬁltering, while the case in which no userspeciﬁed proﬁle is available is called either routing or batch ﬁltering, depending on whether documents have to be ranked in decreasing order of estimated relevance or just accepted/rejected. Batch ﬁltering thus coincides with single-label TC under |C| = 2 categories; since this latter is a completely general TC task, some authors [Hull 1994; Hull et al. 1996; Schapire et al. 1998; Schu¨ tze et al. 1995], somewhat confusingly, use the term “ﬁltering” in place of the more appropriate term “categorization.”
+In information science, document ﬁltering has a tradition dating back to the ’60s, when, addressed by systems of various degrees of automation and dealing with the multiconsumer case discussed
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+7
+
+above, it was called selective dissemination of information or current awareness (see Korfhage [1997, Chapter 6]). The explosion in the availability of digital information has boosted the importance of such systems, which are nowadays being used in contexts such as the creation of personalized Web newspapers, junk e-mail blocking, and Usenet news selection.
+Information ﬁltering by ML techniques is widely discussed in the literature: see Amati and Crestani [1999], Iyer et al. [2000], Kim et al. [2000], Tauritz et al. [2000], and Yu and Lam [1998].
+3.4. Word Sense Disambiguation
+Word sense disambiguation (WSD) is the activity of ﬁnding, given the occurrence in a text of an ambiguous (i.e., polysemous or homonymous) word, the sense of this particular word occurrence. For instance, bank may have (at least) two different senses in English, as in the Bank of England (a ﬁnancial institution) or the bank of river Thames (a hydraulic engineering artifact). It is thus a WSD task to decide which of the above senses the occurrence of bank in Last week I borrowed some money from the bank has. WSD is very important for many applications, including natural language processing, and indexing documents by word senses rather than by words for IR purposes. WSD may be seen as a TC task (see Gale et al. [1993]; Escudero et al. [2000]) once we view word occurrence contexts as documents and word senses as categories. Quite obviously, this is a single-label TC case, and one in which document-pivoted TC is usually the right choice.
+WSD is just an example of the more general issue of resolving natural language ambiguities, one of the most important problems in computational linguistics. Other examples, which may all be tackled by means of TC techniques along the lines discussed for WSD, are context-sensitive spelling correction, prepositional phrase attachment, part of speech tagging, and word choice selection in machine translation; see Roth [1998] for an introduction.
+
+3.5. Hierarchical Categorization
+of Web Pages
+TC has recently aroused a lot of interest also for its possible application to automatically classifying Web pages, or sites, under the hierarchical catalogues hosted by popular Internet portals. When Web documents are catalogued in this way, rather than issuing a query to a generalpurpose Web search engine a searcher may ﬁnd it easier to ﬁrst navigate in the hierarchy of categories and then restrict her search to a particular category of interest.
+Classifying Web pages automatically has obvious advantages, since the manual categorization of a large enough subset of the Web is infeasible. Unlike in the previous applications, it is typically the case that each category must be populated by a set of k1 ≤ x ≤ k2 documents. CPC should be chosen so as to allow new categories to be added and obsolete ones to be deleted.
+With respect to previously discussed TC applications, automatic Web page categorization has two essential peculiarities:
+(1) The hypertextual nature of the documents: Links are a rich source of information, as they may be understood as stating the relevance of the linked page to the linking page. Techniques exploiting this intuition in a TC context have been presented by Attardi et al. [1998], Chakrabarti et al. [1998b], Fu¨ rnkranz [1999], Go¨vert et al. [1999], and Oh et al. [2000] and experimentally compared by Yang et al. [2002].
+(2) The hierarchical structure of the category set: This may be used, for example, by decomposing the classiﬁcation problem into a number of smaller classiﬁcation problems, each corresponding to a branching decision at an internal node. Techniques exploiting this intuition in a TC context have been presented by Dumais and Chen [2000], Chakrabarti et al. [1998a], Koller and Sahami [1997], McCallum et al. [1998], Ruiz and Srinivasan [1999], and Weigend et al. [1999].
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+8
+
+Sebastiani
+
+if
+
+((wheat & farm)
+
+or
+
+(wheat & commodity)
+
+or
+
+(bushels & export)
+
+or
+
+(wheat & tonnes)
+
+or
+
+(wheat & winter & ¬ soft)) then WHEAT else ¬ WHEAT
+
+Fig. 1. Rule-based classiﬁer for the WHEAT category; key words are indicated in italic, categories are indicated in SMALL CAPS (from Apte´ et al. [1994]).
+
+4. THE MACHINE LEARNING APPROACH TO TEXT CATEGORIZATION
+In the ’80s, the most popular approach (at least in operational settings) for the creation of automatic document classiﬁers consisted in manually building, by means of knowledge engineering (KE) techniques, an expert system capable of taking TC decisions. Such an expert system would typically consist of a set of manually deﬁned logical rules, one per category, of type
+if DNF formula then category .
+A DNF (“disjunctive normal form”) formula is a disjunction of conjunctive clauses; the document is classiﬁed under category iff it satisﬁes the formula, that is, iff it satisﬁes at least one of the clauses. The most famous example of this approach is the CONSTRUE system [Hayes et al. 1990], built by Carnegie Group for the Reuters news agency. A sample rule of the type used in CONSTRUE is illustrated in Figure 1.
+The drawback of this approach is the knowledge acquisition bottleneck well known from the expert systems literature. That is, the rules must be manually deﬁned by a knowledge engineer with the aid of a domain expert (in this case, an expert in the membership of documents in the chosen set of categories): if the set of categories is updated, then these two professionals must intervene again, and if the classiﬁer is ported to a completely different domain (i.e., set of categories), a different domain expert needs to intervene and the work has to be repeated from scratch.
+On the other hand, it was originally suggested that this approach can give very good effectiveness results: Hayes et al. [1990] reported a .90 “breakeven” result (see Section 7) on a subset of the Reuters test collection, a ﬁgure that outperforms
+
+even the best classiﬁers built in the late ’90s by state-of-the-art ML techniques. However, no other classiﬁer has been tested on the same dataset as CONSTRUE, and it is not clear whether this was a randomly chosen or a favorable subset of the entire Reuters collection. As argued by Yang [1999], the results above do not allow us to state that these effectiveness results may be obtained in general.
+Since the early ’90s, the ML approach to TC has gained popularity and has eventually become the dominant one, at least in the research community (see Mitchell [1996] for a comprehensive introduction to ML). In this approach, a general inductive process (also called the learner) automatically builds a classiﬁer for a category ci by observing the characteristics of a set of documents manually classiﬁed under ci or c¯i by a domain expert; from these characteristics, the inductive process gleans the characteristics that a new unseen document should have in order to be classiﬁed under ci. In ML terminology, the classiﬁcation problem is an activity of supervised learning, since the learning process is “supervised” by the knowledge of the categories and of the training instances that belong to them.2
+The advantages of the ML approach over the KE approach are evident. The engineering effort goes toward the construction not of a classiﬁer, but of an automatic builder of classiﬁers (the learner). This means that if a learner is (as it often is) available off-the-shelf, all that is needed is the inductive, automatic construction of a classiﬁer from a set of manually classiﬁed documents. The same happens if a
+2 Within the area of content-based document management tasks, an example of an unsupervised learning activity is document clustering (see Section 1).
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+9
+
+classiﬁer already exists and the original set of categories is updated, or if the classiﬁer is ported to a completely different domain.
+In the ML approach, the preclassiﬁed documents are then the key resource. In the most favorable case, they are already available; this typically happens for organizations which have previously carried out the same categorization activity manually and decide to automate the process. The less favorable case is when no manually classiﬁed documents are available; this typically happens for organizations that start a categorization activity and opt for an automated modality straightaway. The ML approach is more convenient than the KE approach also in this latter case. In fact, it is easier to manually classify a set of documents than to build and tune a set of rules, since it is easier to characterize a concept extensionally (i.e., to select instances of it) than intensionally (i.e., to describe the concept in words, or to describe a procedure for recognizing its instances).
+Classiﬁers built by means of ML techniques nowadays achieve impressive levels of effectiveness (see Section 7), making automatic classiﬁcation a qualitatively (and not only economically) viable alternative to manual classiﬁcation.
+4.1. Training Set, Test Set, and
+Validation Set
+The ML approach relies on the availability of an initial corpus = {d1, . . . , d| |} ⊂ D of documents preclassiﬁed under C = {c1, . . . , c|C|}. That is, the values of the total function ˘ : D × C → {T, F } are known for every pair d j , ci ∈ × C. A document d j is a positive example of ci if ˘ (d j , ci) = T , a negative example of ci if ˘ (d j , ci) = F .
+In research settings (and in most operational settings too), once a classiﬁer has been built it is desirable to evaluate its effectiveness. In this case, prior to classiﬁer construction the initial corpus is split in two sets, not necessarily of equal size:
+—a training(-and-validation) set T V = {d1, . . . , d|T V |}. The classiﬁer for categories C = {c1, . . . , c|C|} is inductively
+
+built by observing the characteristics of these documents;
+—a test set Te = {d|T V |+1, . . . , d| |}, used for testing the effectiveness of the classiﬁers. Each d j ∈ Te is fed to the classiﬁer, and the classiﬁer decisions (d j , ci) are compared with the expert decisions ˘ (d j , ci). A measure of classiﬁcation effectiveness is based on how often the (d j , ci) values match the ˘ (d j , ci) values.
+The documents in T e cannot participate in any way in the inductive construction of the classiﬁers; if this condition were not satisﬁed, the experimental results obtained would likely be unrealistically good, and the evaluation would thus have no scientiﬁc character [Mitchell 1996, page 129]. In an operational setting, after evaluation has been performed one would typically retrain the classiﬁer on the entire initial corpus, in order to boost effectiveness. In this case, the results of the previous evaluation would be a pessimistic estimate of the real performance, since the ﬁnal classiﬁer has been trained on more data than the classiﬁer evaluated.
+This is called the train-and-test approach. An alternative is the k-fold crossvalidation approach (see Mitchell [1996], page 146), in which k different classiﬁers 1, . . . , k are built by partitioning the initial corpus into k disjoint sets T e1, . . . , T ek and then iteratively applying the train-and-test approach on pairs T Vi = −Tei, Tei . The ﬁnal effectiveness ﬁgure is obtained by individually computing the effectiveness of 1, . . . , k, and then averaging the individual results in some way.
+In both approaches, it is often the case that the internal parameters of the classiﬁers must be tuned by testing which values of the parameters yield the best effectiveness. In order to make this optimization possible, in the train-and-test approach the set {d1, . . . , d|T V |} is further split into a training set Tr = {d1, . . . , d|Tr|}, from which the classiﬁer is built, and a validation set Va = {d|Tr|+1, . . . , d|T V |} (sometimes called a hold-out set), on which the repeated tests of the classiﬁer aimed
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+10
+
+Sebastiani
+
+at parameter optimization are performed; the obvious variant may be used in the k-fold cross-validation case. Note that, for the same reason why we do not test a classiﬁer on the documents it has been trained on, we do not test it on the documents it has been optimized on: test set and validation set must be kept separate.3
+Given a corpus , one may deﬁne the generality g (ci) of a category ci as the percentage of documents that belong to ci, that is:
+
+g (ci) = |{d j ∈
+
+| ˘ (d j , ci) = T }| || .
+
+The training set generality gTr(ci), validation set generality gVa(ci), and test set generality gTe(ci) of ci may be deﬁned in the obvious way.
+
+4.2. Information Retrieval Techniques and Text Categorization
+Text categorization heavily relies on the basic machinery of IR. The reason is that TC is a content-based document management task, and as such it shares many characteristics with other IR tasks such as text search.
+IR techniques are used in three phases of the text classiﬁer life cycle:
+(1) IR-style indexing is always performed on the documents of the initial corpus and on those to be classiﬁed during the operational phase;
+(2) IR-style techniques (such as document-request matching, query reformulation, . . .) are often used in the inductive construction of the classiﬁers;
+(3) IR-style evaluation of the effectiveness of the classiﬁers is performed.
+The various approaches to classiﬁcation differ mostly for how they tackle (2), although in a few cases nonstandard
+
+3 From now on, we will take the freedom to use the expression “test document” to denote any document not in the training set and validation set. This includes thus any document submitted to the classiﬁer in the operational phase.
+
+approaches to (1) and (3) are also used. Indexing, induction, and evaluation are the themes of Sections 5, 6 and 7, respectively.
+5. DOCUMENT INDEXING AND DIMENSIONALITY REDUCTION
+5.1. Document Indexing
+Texts cannot be directly interpreted by a classiﬁer or by a classiﬁer-building algorithm. Because of this, an indexing procedure that maps a text d j into a compact representation of its content needs to be uniformly applied to training, validation, and test documents. The choice of a representation for text depends on what one regards as the meaningful units of text (the problem of lexical semantics) and the meaningful natural language rules for the combination of these units (the problem of compositional semantics). Similarly to what happens in IR, in TC this latter problem is usually disregarded,4 and a text d j is usually represented as a vector of term weights d j = w1 j , . . . , w|T | j , where T is the set of terms (sometimes called features) that occur at least once in at least one document of Tr, and 0 ≤ wkj ≤ 1 represents, loosely speaking, how much term tk contributes to the semantics of document d j . Differences among approaches are accounted for by
+(1) different ways to understand what a term is;
+(2) different ways to compute term weights.
+A typical choice for (1) is to identify terms with words. This is often called either the set of words or the bag of words approach to document representation, depending on whether weights are binary or not.
+In a number of experiments [Apte´ et al. 1994; Dumais et al. 1998; Lewis 1992a], it has been found that representations more sophisticated than this do not yield signiﬁcantly better effectiveness, thereby conﬁrming similar results from IR
+4 An exception to this is represented by learning approaches based on hidden Markov models [Denoyer et al. 2001; Frasconi et al. 2002].
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+11
+
+[Salton and Buckley 1988]. In particular, some authors have used phrases, rather than individual words, as indexing terms [Fuhr et al. 1991; Schu¨ tze et al. 1995; Tzeras and Hartmann 1993], but the experimental results found to date have not been uniformly encouraging, irrespectively of whether the notion of “phrase” is motivated
+—syntactically, that is, the phrase is such according to a grammar of the language (see Lewis [1992a]); or
+—statistically, that is, the phrase is not grammatically such, but is composed of a set/sequence of words whose patterns of contiguous occurrence in the collection are statistically signiﬁcant (see Caropreso et al. [2001]).
+Lewis [1992a] argued that the likely reason for the discouraging results is that, although indexing languages based on phrases have superior semantic qualities, they have inferior statistical qualities with respect to word-only indexing languages: a phrase-only indexing language has “more terms, more synonymous or nearly synonymous terms, lower consistency of assignment (since synonymous terms are not assigned to the same documents), and lower document frequency for terms” [Lewis 1992a, page 40]. Although his remarks are about syntactically motivated phrases, they also apply to statistically motivated ones, although perhaps to a smaller degree. A combination of the two approaches is probably the best way to go: Tzeras and Hartmann [1993] obtained signiﬁcant improvements by using noun phrases obtained through a combination of syntactic and statistical criteria, where a “crude” syntactic method was complemented by a statistical ﬁlter (only those syntactic phrases that occurred at least three times in the positive examples of a category ci were retained). It is likely that the ﬁnal word on the usefulness of phrase indexing in TC has still to be told, and investigations in this direction are still being actively pursued [Caropreso et al. 2001; Mladenic´ and Grobelnik 1998].
+As for issue (2), weights usually range between 0 and 1 (an exception is
+
+Lewis et al. [1996]), and for ease of exposition we will assume they always do. As a special case, binary weights may be used (1 denoting presence and 0 absence of the term in the document); whether binary or nonbinary weights are used depends on the classiﬁer learning algorithm used. In the case of nonbinary indexing, for determining the weight wkj of term tk in document d j any IR-style indexing technique that represents a document as a vector of weighted terms may be used. Most of the times, the standard tﬁdf function is used (see Salton and Buckley [1988]), deﬁned as
+tﬁdf (tk, d j ) = #(tk, d j ) · log |Tr| , (1) #Tr (tk )
+where #(tk, d j ) denotes the number of times tk occurs in d j , and #Tr(tk) denotes the document frequency of term tk, that is, the number of documents in Tr in which tk occurs. This function embodies the intuitions that (i) the more often a term occurs in a document, the more it is representative of its content, and (ii) the more documents a term occurs in, the less discriminating it is.5 Note that this formula (as most other indexing formulae) weights the importance of a term to a document in terms of occurrence considerations only, thereby deeming of null importance the order in which the terms occur in the document and the syntactic role they play. In other words, the semantics of a document is reduced to the collective lexical semantics of the terms that occur in it, thereby disregarding the issue of compositional semantics (an exception are the representation techniques used for FOIL [Cohen 1995a] and SLEEPING EXPERTS [Cohen and Singer 1999]).
+In order for the weights to fall in the [0,1] interval and for the documents to be represented by vectors of equal length, the weights resulting from tﬁdf are often
+5 There exist many variants of tﬁdf, that differ from each other in terms of logarithms, normalization or other correction factors. Formula 1 is just one of the possible instances of this class; see Salton and Buckley [1988] and Singhal et al. [1996] for variations on this theme.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+12
+
+Sebastiani
+
+normalized by cosine normalization, given by
+
+wkj =
+
+tﬁdf (tk, d j ) . (2) s=1 |T | (tﬁdf (ts, d j ))2
+
+Although normalized tﬁdf is the most popular one, other indexing functions have also been used, including probabilistic techniques [Go¨vert et al. 1999] or techniques for indexing structured documents [Larkey and Croft 1996]. Functions different from tﬁdf are especially needed when Tr is not available in its entirety from the start and #Tr(tk) cannot thus be computed, as in adaptive ﬁltering; in this case, approximations of tﬁdf are usually employed [Dagan et al. 1997, Section 4.3].
+Before indexing, the removal of function words (i.e., topic-neutral words such as articles, prepositions, conjunctions, etc.) is almost always performed (exceptions include Lewis et al. [1996], Nigam et al. [2000], and Riloff [1995]).6 Concerning stemming (i.e., grouping words that share the same morphological root), its suitability to TC is controversial. Although, similarly to unsupervised term clustering (see Section 5.5.1) of which it is an instance, stemming has sometimes been reported to hurt effectiveness (e.g., Baker and McCallum [1998]), the recent tendency is to adopt it, as it reduces both the dimensionality of the term space (see Section 5.3) and the stochastic dependence between terms (see Section 6.2).
+Depending on the application, either the full text of the document or selected parts of it are indexed. While the former option is the rule, exceptions exist. For instance, in a patent categorization application Larkey [1999] indexed only the title, the abstract, the ﬁrst 20 lines of the summary, and the section containing
+
+the claims of novelty of the described invention. This approach was made possible by the fact that documents describing patents are structured. Similarly, when a document title is available, one can pay extra importance to the words it contains [Apte´ et al. 1994; Cohen and Singer 1999; Weiss et al. 1999]. When documents are ﬂat, identifying the most relevant part of a document is instead a nonobvious task.
+5.2. The Darmstadt Indexing Approach
+The AIR/X system [Fuhr et al. 1991] occupies a special place in the literature on indexing for TC. This system is the ﬁnal result of the AIR project, one of the most important efforts in the history of TC: spanning a duration of more than 10 years [Knorz 1982; Tzeras and Hartmann 1993], it has produced a system operatively employed since 1985 in the classiﬁcation of corpora of scientiﬁc literature of O(105) documents and O(104) categories, and has had important theoretical spin-offs in the ﬁeld of probabilistic indexing [Fuhr 1989; Fuhr and Buckely 1991].7
+The approach to indexing taken in AIR/X is known as the Darmstadt Indexing Approach (DIA) [Fuhr 1985]. Here, “indexing” is used in the sense of Section 3.1, that is, as using terms from a controlled vocabulary, and is thus a synonym of TC (the DIA was later extended to indexing with free terms [Fuhr and Buckley 1991]). The idea that underlies the DIA is the use of a much wider set of “features” than described in Section 5.1. All other approaches mentioned in this paper view terms as the dimensions of the learning space, where terms may be single words, stems, phrases, or (see Sections 5.5.1 and 5.5.2) combinations of any of these. In contrast, the DIA considers properties (of terms, documents,
+
+6 One application of TC in which it would be inappropriate to remove function words is author identiﬁcation for documents of disputed paternity. In fact, as noted in Manning and Schu¨ tze [1999], page 589, “it is often the ‘little’ words that give an author away (for example, the relative frequencies of words like because or though).”
+
+7 The AIR/X system, its applications (including the AIR/PHYS system [Biebricher et al. 1988], an application of AIR/X to indexing physics literature), and its experiments have also been richly documented in a series of papers and doctoral theses written in German. The interested reader may consult Fuhr et al. [1991] for a detailed bibliography.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+13
+
+categories, or pairwise relationships among these) as basic dimensions of the learning space. Examples of these are
+—properties of a term tk: e.g. the idf of tk;
+—properties of the relationship between a term tk and a document d j : for example, the t f of tk in d j ; or the location (e.g., in the title, or in the abstract) of tk within dj;
+—properties of a document d j : for example, the length of d j ;
+—properties of a category ci: for example, the training set generality of ci.
+For each possible document-category pair, the values of these features are collected in a so-called relevance description vector rd(d j , ci). The size of this vector is determined by the number of properties considered, and is thus independent of speciﬁc terms, categories, or documents (for multivalued features, appropriate aggregation functions are applied in order to yield a single value to be included in rd(d j , ci)); in this way an abstraction from speciﬁc terms, categories, or documents is achieved.
+The main advantage of this approach is the possibility to consider additional features that can hardly be accounted for in the usual term-based approaches, for example, the location of a term within a document, or the certainty with which a phrase was identiﬁed in a document. The term-category relationship is described by estimates, derived from the training set, of the probability P (ci | tk) that a document belongs to category ci, given that it contains term tk (the DIA association factor).8 Relevance description vectors rd (dj , ci) are then the ﬁnal representations that are used for the classiﬁcation of document d j under category ci.
+The essential ideas of the DIA— transforming the classiﬁcation space by means of abstraction and using a more detailed text representation than the standard bag-of-words approach—have not
+8 Association factors are called adhesion coefﬁcients in many early papers on TC; see Field [1975]; Robertson and Harding [1984].
+
+been taken up by other researchers so far. For new TC applications dealing with structured documents or categorization of Web pages, these ideas may become of increasing importance.
+5.3. Dimensionality Reduction
+Unlike in text retrieval, in TC the high dimensionality of the term space (i.e., the large value of |T |) may be problematic. In fact, while typical algorithms used in text retrieval (such as cosine matching) can scale to high values of |T |, the same does not hold of many sophisticated learning algorithms used for classiﬁer induction (e.g., the LLSF algorithm of Yang and Chute [1994]). Because of this, before classiﬁer induction one often applies a pass of dimensionality reduction (DR), whose effect is to reduce the size of the vector space from |T | to |T | |T |; the set T is called the reduced term set.
+DR is also beneﬁcial since it tends to reduce overﬁtting, that is, the phenomenon by which a classiﬁer is tuned also to the contingent characteristics of the training data rather than just the constitutive characteristics of the categories. Classiﬁers that overﬁt the training data are good at reclassifying the data they have been trained on, but much worse at classifying previously unseen data. Experiments have shown that, in order to avoid overﬁtting a number of training examples roughly proportional to the number of terms used is needed; Fuhr and Buckley [1991, page 235] have suggested that 50– 100 training examples per term may be needed in TC tasks. This means that, if DR is performed, overﬁtting may be avoided even if a smaller amount of training examples is used. However, in removing terms the risk is to remove potentially useful information on the meaning of the documents. It is then clear that, in order to obtain optimal (cost-)effectiveness, the reduction process must be performed with care. Various DR methods have been proposed, either from the information theory or from the linear algebra literature, and their relative merits have been tested by experimentally evaluating the variation
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+14
+
+Sebastiani
+
+in effectiveness that a given classiﬁer undergoes after application of the function to the term space.
+There are two distinct ways of viewing DR, depending on whether the task is performed locally (i.e., for each individual category) or globally:
+—local DR: for each category ci, a set Ti of terms, with |Ti | |T |, is chosen for classiﬁcation under ci (see Apte´ et al. [1994]; Lewis and Ringuette [1994]; Li and Jain [1998]; Ng et al. [1997]; Sable and Hatzivassiloglou [2000]; Schu¨ tze et al. [1995], Wiener et al. [1995]). This means that different subsets of d j are used when working with the different categories. Typical values are 10 ≤ |Ti | ≤ 50.
+—global DR: a set T of terms, with |T | |T |, is chosen for the classiﬁcation under all categories C = {c1, . . . , c|C|} (see Caropreso et al. [2001]; Mladenic´ [1998]; Yang [1999]; Yang and Pedersen [1997]).
+This distinction usually does not impact on the choice of DR technique, since most such techniques can be used (and have been used) for local and global DR alike (supervised DR techniques—see Section 5.5.1—are exceptions to this rule). In the rest of this section, we will assume that the global approach is used, although everything we will say also applies to the local approach.
+A second, orthogonal distinction may be drawn in terms of the nature of the resulting terms:
+—DR by term selection: T is a subset of T ;
+—DR by term extraction: the terms in T are not of the same type of the terms in T (e.g., if the terms in T are words, the terms in T may not be words at all), but are obtained by combinations or transformations of the original ones.
+Unlike in the previous distinction, these two ways of doing DR are tackled by very different techniques; we will address them separately in the next two sections.
+
+5.4. Dimensionality Reduction by Term Selection
+
+Given a predetermined integer r, tech-
+
+niques for term selection (also called term
+
+space reduction—TSR) attempt to select,
+
+from the original set T , the set T of
+
+terms (with |T | |T |) that, when used
+
+for document indexing, yields the highest
+
+effectiveness. Yang and Pedersen [1997]
+
+have shown that TSR may even result in
+
+a moderate (≤5%) increase in effective-
+
+ness, depending on the classiﬁer, on the
+
+aggressivity
+
+|T | |T |
+
+of
+
+the
+
+reduction,
+
+and
+
+on
+
+the TSR technique used.
+
+Moulinier et al. [1996] have used a so-
+
+called wrapper approach, that is, one in
+
+which T is identiﬁed by means of the
+
+same learning method that will be used for
+
+building the classiﬁer [John et al. 1994].
+
+Starting from an initial term set, a new
+
+term set is generated by either adding
+
+or removing a term. When a new term
+
+set is generated, a classiﬁer based on it
+
+is built and then tested on a validation
+
+set. The term set that results in the best
+
+effectiveness is chosen. This approach has
+
+the advantage of being tuned to the learn-
+
+ing algorithm being used; moreover, if lo-
+
+cal DR is performed, different numbers of
+
+terms for different categories may be cho-
+
+sen, depending on whether a category is
+
+or is not easily separable from the others.
+
+However, the sheer size of the space of dif-
+
+ferent term sets makes its cost-prohibitive
+
+for standard TC applications.
+
+A computationally easier alternative is
+
+the ﬁltering approach [John et al. 1994],
+
+that is, keeping the |T | |T | terms that
+
+receive the highest score according to a
+
+function that measures the “importance”
+
+of the term for the TC task. We will explore
+
+this solution in the rest of this section.
+
+5.4.1. Document Frequency. A simple and effective global TSR function is the document frequency #Tr(tk) of a term tk, that is, only the terms that occur in the highest number of documents are retained. In a series of experiments Yang and Pedersen [1997] have shown that with #Tr(tk) it is possible to reduce the dimensionality by a factor of 10 with no loss in effectiveness (a
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+15
+
+reduction by a factor of 100 bringing about just a small loss).
+This seems to indicate that the terms occurring most frequently in the collection are the most valuable for TC. As such, this would seem to contradict a well-known “law” of IR, according to which the terms with low-to-medium document frequency are the most informative ones [Salton and Buckley 1988]. But these two results do not contradict each other, since it is well known (see Salton et al. [1975]) that the large majority of the words occurring in a corpus have a very low document frequency; this means that by reducing the term set by a factor of 10 using document frequency, only such words are removed, while the words from low-to-medium to high document frequency are preserved. Of course, stop words need to be removed in advance, lest only topic-neutral words are retained [Mladenic´ 1998].
+Finally, note that a slightly more empirical form of TSR by document frequency is adopted by many authors, who remove all terms occurring in at most x training documents (popular values for x range from 1 to 3), either as the only form of DR [Maron 1961; Ittner et al. 1995] or before applying another more sophisticated form [Dumais et al. 1998; Li and Jain 1998]. A variant of this policy is removing all terms that occur at most x times in the training set (e.g., Dagan et al. [1997]; Joachims [1997]), with popular values for x ranging from 1 (e.g., Baker and McCallum [1998]) to 5 (e.g., Apte´ et al. [1994]; Cohen [1995a]).
+5.4.2. Other Information-Theoretic Term Selection Functions. Other more sophisticated information-theoretic functions have been used in the literature, among them the DIA association factor [Fuhr et al. 1991], chi-square [Caropreso et al. 2001; Galavotti et al. 2000; Schu¨ tze et al. 1995; Sebastiani et al. 2000; Yang and Pedersen 1997; Yang and Liu 1999], NGL coefﬁcient [Ng et al. 1997; Ruiz and Srinivasan 1999], information gain [Caropreso et al. 2001; Larkey 1998; Lewis 1992a; Lewis and Ringuette 1994; Mladenic´ 1998; Moulinier and Ganascia
+
+1996; Yang and Pedersen 1997, Yang and Liu 1999], mutual information [Dumais et al. 1998; Lam et al. 1997; Larkey and Croft 1996; Lewis and Ringuette 1994; Li and Jain 1998; Moulinier et al. 1996; Ruiz and Srinivasan 1999; Taira and Haruno 1999; Yang and Pedersen 1997], odds ratio [Caropreso et al. 2001; Mladenic´ 1998; Ruiz and Srinivasan 1999], relevancy score [Wiener et al. 1995], and GSS coefﬁcient [Galavotti et al. 2000]. The mathematical deﬁnitions of these measures are summarized for convenience in Table I.9 Here, probabilities are interpreted on an event space of documents (e.g., P (t¯k, ci) denotes the probability that, for a random document x, term tk does not occur in x and x belongs to category ci), and are estimated by counting occurrences in the training set. All functions are speciﬁed “locally” to a speciﬁc category ci; in order to assess the value of a term tk in a “global,” categoryindependent sense, either the sum fsum(tk) = i=1 |C| f (tk, ci), or the weighted sum fwsum(tk) = i=1 |C| P (ci) f (tk, ci), or the maximum fmax(tk) = maxi=1 |C| f (tk, ci) of their category-speciﬁc values f (tk, ci) are usually computed.
+These functions try to capture the intuition that the best terms for ci are the ones distributed most differently in the sets of positive and negative examples of ci. However, interpretations of this principle vary across different functions. For instance, in the experimental sciences χ 2 is used to measure how the results of an observation differ (i.e., are independent) from the results expected according to an initial hypothesis (lower values indicate lower dependence). In DR we measure how independent tk and ci are. The terms tk
+9 For better uniformity Table I views all the TSR functions of this section in terms of subjective probability. In some cases such as χ 2(tk , ci) this is slightly artiﬁcial, since this function is not usually viewed in probabilistic terms. The formulae refer to the “local” (i.e., category-speciﬁc) forms of the functions, which again is slightly artiﬁcial in some cases. Note that the NGL and GSS coefﬁcients are here named after their authors, since they had originally been given names that might generate some confusion if used here.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+16
+
+Sebastiani
+
+Table I. Main Functions Used for Term Space Reduction Purposes. (Information gain is also known as expected mutual information, and is used under this name by Lewis [1992a, page 44] and Larkey [1998]. In the RS(tk , ci ) formula, d is a constant damping factor.)
+
+Function
+
+Denoted by
+
+Mathematical form
+
+DIA association factor
+
+z(tk , ci )
+
+P (ci | tk )
+
+Information gain Mutual information
+Chi-square NGL coefﬁcient Relevancy score
+Odds ratio
+
+IG(tk , ci) MI(tk , ci) χ 2(tk , ci ) NGL(tk , ci) RS(tk , ci) OR(tk , ci)
+
+P (t, c) · log P (t, c) P (t) · P (c)
+c∈{ci ,c¯i } t∈{tk ,t¯k }
+log P (tk , ci) P (tk ) · P (ci)
+|Tr| · [P (tk , ci) · P (t¯k , c¯i) − P (tk , c¯i) · P (t¯k , ci)]2 P (tk ) · P (t¯k ) · P (ci) · P (c¯i)
+|Tr| · [P (tk , ci) · P (t¯k , c¯i) − P (tk , c¯i) · P (t¯k , ci)]
+P (tk ) · P (t¯k ) · P (ci) · P (c¯i) log P (tk | ci) + d P (t¯k | c¯i) + d
+P (tk | ci) · (1 − P (tk | c¯i)) (1 − P (tk | ci)) · P (tk | c¯i)
+
+GSS coefﬁcient
+
+GSS(tk , ci)
+
+P (tk , ci) · P (t¯k , c¯i) − P (tk , c¯i) · P (t¯k , ci)
+
+with the lowest value for χ 2(tk, ci) are thus the most independent from ci; since we are interested in the terms which are not, we select the terms for which χ 2(tk, ci) is highest.
+While each TSR function has its own rationale, the ultimate word on its value is the effectiveness it brings about. Various experimental comparisons of TSR functions have thus been carried out [Caropreso et al. 2001; Galavotti et al. 2000; Mladenic´ 1998; Yang and Pedersen 1997]. In these experiments most functions listed in Table I (with the possible exception of MI) have improved on the results of document frequency. For instance, Yang and Pedersen [1997] have shown that, with various classiﬁers and various initial corpora, sophisticated techniques such as IGsum(tk, ci) or χm2 ax (tk, ci) can reduce the dimensionality of the term space by a factor of 100 with no loss (or even with a small increase) of effectiveness. Collectively, the experiments reported in the above-mentioned papers seem to indicate that {ORsum, NGLsum, GSSmax } > {χm2 ax , IGsum} > {χw2avg} {MImax , MIwsum}, where “>” means “performs better than.”
+
+However, it should be noted that these results are just indicative, and that more general statements on the relative merits of these functions could be made only as a result of comparative experiments performed in thoroughly controlled conditions and on a variety of different situations (e.g., different classiﬁers, different initial corpora, . . . ).
+5.5. Dimensionality Reduction by Term Extraction
+Given a predetermined |T | |T |, term extraction attempts to generate, from the original set T , a set T of “synthetic” terms that maximize effectiveness. The rationale for using synthetic (rather than naturally occurring) terms is that, due to the pervasive problems of polysemy, homonymy, and synonymy, the original terms may not be optimal dimensions for document content representation. Methods for term extraction try to solve these problems by creating artiﬁcial terms that do not suffer from them. Any term extraction method consists in (i) a method for extracting the new terms from the
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+17
+
+old ones, and (ii) a method for converting the original document representations into new representations based on the newly synthesized dimensions. Two term extraction methods have been experimented with in TC, namely term clustering and latent semantic indexing.
+5.5.1. Term Clustering. Term clustering tries to group words with a high degree of pairwise semantic relatedness, so that the groups (or their centroids, or a representative of them) may be used instead of the terms as dimensions of the vector space. Term clustering is different from term selection, since the former tends to address terms synonymous (or near-synonymous) with other terms, while the latter targets noninformative terms.10
+Lewis [1992a] was the ﬁrst to investigate the use of term clustering in TC. The method he employed, called reciprocal nearest neighbor clustering, consists in creating clusters of two terms that are one the most similar to the other according to some measure of similarity. His results were inferior to those obtained by single-word indexing, possibly due to a disappointing performance by the clustering method: as Lewis [1992a, page 48] said, “The relationships captured in the clusters are mostly accidental, rather than the systematic relationships that were hoped for.”
+Li and Jain [1998] viewed semantic relatedness between words in terms of their co-occurrence and co-absence within training documents. By using this technique in the context of a hierarchical clustering algorithm, they witnessed only a marginal effectiveness improvement; however, the small size of their experiment (see Section 6.11) hardly allows any deﬁnitive conclusion to be reached.
+Both Lewis [1992a] and Li and Jain [1998] are examples of unsupervised clustering, since clustering is not affected by the category labels attached to the docu-
+10 Some term selection methods, such as wrapper methods, also address the problem of redundancy.
+
+ments. Baker and McCallum [1998] provided instead an example of supervised clustering, as the distributional clustering method they employed clusters together those terms that tend to indicate the presence of the same category, or group of categories. Their experiments, carried out in the context of a Na¨ıve Bayes classiﬁer (see Section 6.2), showed only a 2% effectiveness loss with an aggressivity of 1,000, and even showed some effectiveness improvement with less aggressive levels of reduction. Later experiments by Slonim and Tishby [2001] have conﬁrmed the potential of supervised clustering methods for term extraction.
+5.5.2. Latent Semantic Indexing. Latent semantic indexing (LSI—[Deerwester et al. 1990]) is a DR technique developed in IR in order to address the problems deriving from the use of synonymous, nearsynonymous, and polysemous words as dimensions of document representations. This technique compresses document vectors into vectors of a lower-dimensional space whose dimensions are obtained as combinations of the original dimensions by looking at their patterns of cooccurrence. In practice, LSI infers the dependence among the original terms from a corpus and “wires” this dependence into the newly obtained, independent dimensions. The function mapping original vectors into new vectors is obtained by applying a singular value decomposition to the matrix formed by the original document vectors. In TC this technique is applied by deriving the mapping function from the training set and then applying it to training and test documents alike.
+One characteristic of LSI is that the newly obtained dimensions are not, unlike in term selection and term clustering, intuitively interpretable. However, they work well in bringing out the “latent” semantic structure of the vocabulary used in the corpus. For instance, Schu¨ tze et al. [1995, page 235] discussed the classiﬁcation under category Demographic shifts in the U.S. with economic impact of a document that was indeed a positive
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+18
+
+Sebastiani
+
+test instance for the category, and that contained, among others, the quite revealing sentence The nation grew to 249.6
+million people in the 1980s as more
+Americans left the industrial and ag-
+ricultural heartlands for the South and West. The classiﬁer decision was incorrect when local DR had been performed by χ 2-based term selection retaining the top original 200 terms, but was correct when the same task was tackled by means of LSI. This well exempliﬁes how LSI works: the above sentence does not contain any of the 200 terms most relevant to the category selected by χ2, but quite possibly the words contained in it have concurred to produce one or more of the LSI higher-order terms that generate the document space of the category. As Schu¨ tze et al. [1995, page 230] put it, “if there is a great number of terms which all contribute a small amount of critical information, then the combination of evidence is a major problem for a term-based classiﬁer.” A drawback of LSI, though, is that if some original term is particularly good in itself at discriminating a category, that discrimination power may be lost in the new vector space.
+Wiener et al. [1995] used LSI in two alternative ways: (i) for local DR, thus creating several category-speciﬁc LSI representations, and (ii) for global DR, thus creating a single LSI representation for the entire category set. Their experiments showed the former approach to perform better than the latter, and both approaches to perform better than simple TSR based on Relevancy Score (see Table I).
+Schu¨ tze et al. [1995] experimentally compared LSI-based term extraction with χ 2-based TSR using three different classiﬁer learning techniques (namely, linear discriminant analysis, logistic regression, and neural networks). Their experiments showed LSI to be far more effective than χ 2 for the ﬁrst two techniques, while both methods performed equally well for the neural network classiﬁer.
+For other TC works that have used LSI or similar term extraction techniques, see Hull [1994], Li and Jain [1998],
+
+Schu¨ tze [1998], Weigend et al. [1999], and Yang [1995].
+6. INDUCTIVE CONSTRUCTION
+OF TEXT CLASSIFIERS
+The inductive construction of text classiﬁers has been tackled in a variety of ways. Here we will deal only with the methods that have been most popular in TC, but we will also brieﬂy mention the existence of alternative, less standard approaches.
+We start by discussing the general form that a text classiﬁer has. Let us recall from Section 2.4 that there are two alternative ways of viewing classiﬁcation: “hard” (fully automated) classiﬁcation and ranking (semiautomated) classiﬁcation.
+The inductive construction of a ranking classiﬁer for category ci ∈ C usually consists in the deﬁnition of a function CSVi : D → [0, 1] that, given a document d j , returns a categorization status value for it, that is, a number between 0 and 1 which, roughly speaking, represents the evidence for the fact that d j ∈ ci. Documents are then ranked according to their CSVi value. This works for “document-ranking TC”; “category-ranking TC” is usually tackled by ranking, for a given document d j , its CSVi scores for the different categories in C = {c1, . . . , c|C|}.
+The CSVi function takes up different meanings according to the learning method used: for instance, in the “Na¨ıve Bayes” approach of Section 6.2 CSVi(d j ) is deﬁned in terms of a probability, whereas in the “Rocchio” approach discussed in Section 6.7 CSVi(d j ) is a measure of vector closeness in |T |-dimensional space.
+The construction of a “hard” classiﬁer may follow two alternative paths. The former consists in the deﬁnition of a function CSVi : D → {T, F }. The latter consists instead in the deﬁnition of a function CSVi : D → [0, 1], analogous to the one used for ranking classiﬁcation, followed by the deﬁnition of a threshold τi such that CSVi(d j ) ≥ τi is interpreted
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+19
+
+as T while CSVi(d j ) < τi is interpreted as F .11
+The deﬁnition of thresholds will be the topic of Section 6.1. In Sections 6.2 to 6.12 we will instead concentrate on the deﬁnition of CSVi, discussing a number of approaches that have been applied in the TC literature. In general we will assume we are dealing with “hard” classiﬁcation; it will be evident from the context how and whether the approaches can be adapted to ranking classiﬁcation. The presentation of the algorithms will be mostly qualitative rather than quantitative, that is, will focus on the methods for classiﬁer learning rather than on the effectiveness and efﬁciency of the classiﬁers built by means of them; this will instead be the focus of Section 7.
+6.1. Determining Thresholds
+There are various policies for determining the threshold τi, also depending on the constraints imposed by the application. The most important distinction is whether the threshold is derived analytically or experimentally.
+The former method is possible only in the presence of a theoretical result that indicates how to compute the threshold that maximizes the expected value of the effectiveness function [Lewis 1995a]. This is typical of classiﬁers that output probability estimates of the membership of d j in ci (see Section 6.2) and whose effectiveness is computed by decision-theoretic measures such as utility (see Section 7.1.3); we thus defer the discussion of this policy (which is called probability thresholding in Lewis [1995a]) to Section 7.1.3.
+When such a theoretical result is not known, one has to revert to the latter method, which consists in testing different values for τi on a validation set and choosing the value which maximizes effectiveness. We call this policy CSV thresholding
+11 Alternative methods are possible, such as training a classiﬁer for which some standard, predeﬁned value such as 0 is the threshold. For ease of exposition we will not discuss them.
+
+[Cohen and Singer 1999; Schapire et al. 1998; Wiener et al. 1995]; it is also called Scut in Yang [1999]. Different τi’s are typically chosen for the different ci’s.
+A second, popular experimental policy is proportional thresholding [Iwayama and Tokunaga 1995; Larkey 1998; Lewis 1992a; Lewis and Ringuette 1994; Wiener et al. 1995], also called Pcut in Yang [1999]. This policy consists in choosing the value of τi for which gVa(ci) is closest to gTr(ci), and embodies the principle that the same percentage of documents of both training and test set should be classiﬁed under ci. For obvious reasons, this policy does not lend itself to documentpivoted TC.
+Sometimes, depending on the application, a ﬁxed thresholding policy (a.k.a. “k-per-doc” thresholding [Lewis 1992a] or Rcut [Yang 1999]) is applied, whereby it is stipulated that a ﬁxed number k of categories, equal for all d j ’s, are to be assigned to each document d j . This is often used, for instance, in applications of TC to automated document indexing [Field 1975; Lam et al. 1999]. Strictly speaking, however, this is not a thresholding policy in the sense deﬁned at the beginning of Section 6, as it might happen that d is classiﬁed under ci, d is not, and CSVi(d ) < CSVi(d ). Quite clearly, this policy is mostly at home with document-pivoted TC. However, it suffers from a certain coarseness, as the fact that k is equal for all documents (nor could this be otherwise) allows no ﬁnetuning.
+In his experiments Lewis [1992a] found the proportional policy to be superior to probability thresholding when microaveraged effectiveness was tested but slightly inferior with macroaveraging (see Section 7.1.1). Yang [1999] found instead CSV thresholding to be superior to proportional thresholding (possibly due to her categoryspeciﬁc optimization on a validation set), and found ﬁxed thresholding to be consistently inferior to the other two policies. The fact that these latter results have been obtained across different classiﬁers no doubt reinforces them.
+In general, aside from the considerations above, the choice of the thresholding
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+20
+
+Sebastiani
+
+policy may also be inﬂuenced by the application; for instance, in applying a text classiﬁer to document indexing for Boolean systems a ﬁxed thresholding policy might be chosen, while a proportional or CSV thresholding method might be chosen for Web page classiﬁcation under hierarchical catalogues.
+6.2. Probabilistic Classiﬁers
+Probabilistic classiﬁers (see Lewis [1998] for a thorough discussion) view CSVi(d j ) in terms of P (ci|d j ), that is, the probability that a document represented by a vector d j = w1 j , . . . , w|T | j of (binary or weighted) terms belongs to ci, and compute this probability by an application of Bayes’ theorem, given by
+P (ci | d j ) = P (ci)P (d j | ci) . (3) P (d j )
+In (3) the event space is the space of documents: P (d j ) is thus the probability that a randomly picked document has vector d j as its representation, and P (ci) the probability that a randomly picked document belongs to ci.
+The estimation of P (d j | ci) in (3) is problematic, since the number of possible vectors d j is too high (the same holds for P (d j ), but for reasons that will be clear shortly this will not concern us). In order to alleviate this problem it is common to make the assumption that any two coordinates of the document vector are, when viewed as random variables, statistically independent of each other; this independence assumption is encoded by the equation
+|T |
+P (d j | ci) = P (wkj | ci). (4)
+k=1
+Probabilistic classiﬁers that use this assumption are called Na¨ıve Bayes classiﬁers, and account for most of the probabilistic approaches to TC in the literature (see Joachims [1998]; Koller and
+
+Sahami [1997]; Larkey and Croft [1996]; Lewis [1992a]; Lewis and Gale [1994]; Li and Jain [1998]; Robertson and Harding [1984]). The “na¨ıve” character of the classiﬁer is due to the fact that usually this assumption is, quite obviously, not veriﬁed in practice.
+One of the best-known Na¨ıve Bayes approaches is the binary independence classiﬁer [Robertson and Sparck Jones 1976], which results from using binary-valued vector representations for documents. In this case, if we write pki as short for P (wkx = 1 | ci), the P (wkj | ci) factors of (4) may be written as
+
+P (wk j | ci) = pkiwkj (1 − pki)1−wkj
+
+pki wkj
+
+=
+
+(1 − pki). (5)
+
+1 − pki
+
+We may further observe that in TC the document space is partitioned into two categories,12 ci and its complement c¯i, such that P (c¯i | d j ) = 1 − P (ci | d j ). If we plug in (4) and (5) into (3) and take logs we obtain
+log P (ci | d j ) |T | pki
+= log P (ci) + wkj log k=1 1 − pki
+|T |
++ log(1 − pki) − log P (d j ) (6)
+k=1
+log(1 − P (ci | d j )) |T | = log(1 − P (c p i)) + wk j log ki¯ k=1 1 − pki¯
+|T |
++ log(1 − pki¯) − log P (d j ), (7)
+k=1
+
+12 Cooper [1995] has pointed out that in this case
+
+the full independence assumption of (4) is not ac-
+
+tually made in the Na¨ıve Bayes classiﬁer; the as-
+
+sumption needed here is instead the weaker linked
+
+dependence assumption, which may be written as
+
+P (d j | ci ) =
+P (d j | c¯i )
+
+|T | P (wk j | ci ) k=1 P (wk j | c¯i ) .
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+21
+
+where we write pki¯ as short for P (wkx = 1 | c¯i). We may convert (6) and (7) into a single equation by subtracting com-
+ponentwise (7) from (6), thus obtaining
+
+log P (ci | d j ) 1 − P (ci | d j )
+
+= log P (ci) |T | + w pki(1 − p k j log ki¯)
+
+1 − P (ci) k=1
+
+pki¯(1 − pki)
+
+|T | + log 1 − pki . (8) k=1 1 − pki¯
+
+Note that P(ci | d j ) is an increasing mono-
+1−P (ci | d j )
+tonic function of P (ci | d j ), and may thus be used directly as CSVi(d j ). Note also that log P(ci) 1−P(ci) and k=1 |T | log 1− pki¯ 1− pki are constant for all documents, and may thus be disregarded.13 Deﬁning a classiﬁer for category ci thus basically requires estimating the 2|T | parameters { p1i, p1i¯, . . . , p|T |i, p|T |i¯} from the training data, which may be done in the obvious way. Note that in general the classiﬁcation of a given document does not require one to compute a sum of |T | factors, as the presence of k=1 |T | wk j log pki¯(1− pki) pki(1− pki¯) would imply; in fact, all the factors for which wkj = 0 may be disregarded, and this accounts for the vast majority of them, since document vectors are usually very sparse.
+The method we have illustrated is just one of the many variants of the Na¨ıve Bayes approach, the common denominator of which is (4). A recent paper by Lewis [1998] is an excellent roadmap on the various directions that research on Na¨ıve Bayes classiﬁers has taken; among these are the ones aiming
+—to relax the constraint that document vectors should be binary-valued. This
+
+13 This is not true, however, if the “ﬁxed thresholding” method of Section 6.1 is adopted. In fact, for a ﬁxed document d j the ﬁrst and third factor in the formula above are different for different categories, and may therefore inﬂuence the choice of the categories under which to ﬁle d j .
+
+looks natural, given that weighted indexing techniques (see Fuhr [1989]; Salton and Buckley [1988]) accounting for the “importance” of tk for d j play a key role in IR.
+—to introduce document length normalization. The value of log P(ci | d j ) tends
+1−P (ci | d j )
+to be more extreme (i.e., very high or very low) for long documents (i.e., documents such that wkj = 1 for many values of k), irrespectively of their semantic relatedness to ci, thus calling for length normalization. Taking length into account is easy in nonprobabilistic approaches to classiﬁcation (see Section 6.7), but is problematic in probabilistic ones (see Lewis [1998], Section 5). One possible answer is to switch from an interpretation of Na¨ıve Bayes in which documents are events to one in which terms are events [Baker and McCallum 1998; McCallum et al. 1998; Chakrabarti et al. 1998a; Guthrie et al. 1994]. This accounts for document length naturally but, as noted by Lewis [1998], has the drawback that different occurrences of the same word within the same document are viewed as independent, an assumption even more implausible than (4).
+—to relax the independence assumption. This may be the hardest route to follow, since this produces classiﬁers of higher computational cost and characterized by harder parameter estimation problems [Koller and Sahami 1997]. Earlier efforts in this direction within probabilistic text search (e.g., vanRijsbergen [1977]) have not shown the performance improvements that were hoped for. Recently, the fact that the binary independence assumption seldom harms effectiveness has also been given some theoretical justiﬁcation [Domingos and Pazzani 1997].
+The quotation of text search in the last paragraph is not casual. Unlike other types of classiﬁers, the literature on probabilistic classiﬁers is inextricably intertwined with that on probabilistic search systems (see Crestani et al. [1998] for a
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+22
+
+Sebastiani
+
+Fig. 2. A decision tree equivalent to the DNF rule of Figure 1. Edges are labeled by terms and leaves are labeled by categories (underlining denotes negation).
+
+review), since these latter attempt to determine the probability that a document falls in the category denoted by the query, and since they are the only search systems that take relevance feedback, a notion essentially involving supervised learning, as central.
+6.3. Decision Tree Classiﬁers
+Probabilistic methods are quantitative (i.e., numeric) in nature, and as such have sometimes been criticized since, effective as they may be, they are not easily interpretable by humans. A class of algorithms that do not suffer from this problem are symbolic (i.e., nonnumeric) algorithms, among which inductive rule learners (which we will discuss in Section 6.4) and decision tree learners are the most important examples.
+A decision tree (DT) text classiﬁer (see Mitchell [1996], Chapter 3) is a tree in which internal nodes are labeled by terms, branches departing from them are labeled by tests on the weight that the term has in the test document, and leafs are labeled by categories. Such a classiﬁer categorizes a test document d j by recursively testing for
+
+the weights that the terms labeling the internal nodes have in vector d j , until a leaf node is reached; the label of this node is then assigned to d j . Most such classiﬁers use binary document representations, and thus consist of binary trees. An example DT is illustrated in Figure 2.
+There are a number of standard packages for DT learning, and most DT approaches to TC have made use of one such package. Among the most popular ones are ID3 (used by Fuhr et al. [1991]), C4.5 (used by Cohen and Hirsh [1998], Cohen and Singer [1999], Joachims [1998], and Lewis and Catlett [1994]), and C5 (used by Li and Jain [1998]). TC efforts based on experimental DT packages include Dumais et al. [1998], Lewis and Ringuette [1994], and Weiss et al. [1999].
+A possible method for learning a DT for category ci consists in a “divide and conquer” strategy of (i) checking whether all the training examples have the same label (either ci or c¯i); (ii) if not, selecting a term tk, partitioning Tr into classes of documents that have the same value for tk, and placing each such class in a separate subtree. The process is recursively repeated on the subtrees until each
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+23
+
+leaf of the tree so generated contains training examples assigned to the same category ci, which is then chosen as the label for the leaf. The key step is the choice of the term tk on which to operate the partition, a choice which is generally made according to an information gain or entropy criterion. However, such a “fully grown” tree may be prone to overﬁtting, as some branches may be too speciﬁc to the training data. Most DT learning methods thus include a method for growing the tree and one for pruning it, that is, for removing the overly speciﬁc branches. Variations on this basic schema for DT learning abound [Mitchell 1996, Section 3].
+DT text classiﬁers have been used either as the main classiﬁcation tool [Fuhr et al. 1991; Lewis and Catlett 1994; Lewis and Ringuette 1994], or as baseline classiﬁers [Cohen and Singer 1999; Joachims 1998], or as members of classiﬁer committees [Li and Jain 1998; Schapire and Singer 2000; Weiss et al. 1999].
+6.4. Decision Rule Classiﬁers
+A classiﬁer for category ci built by an inductive rule learning method consists of a DNF rule, that is, of a conditional rule with a premise in disjunctive normal form (DNF), of the type illustrated in Figure 1.14 The literals (i.e., possibly negated keywords) in the premise denote the presence (nonnegated keyword) or absence (negated keyword) of the keyword in the test document d j , while the clause head denotes the decision to classify d j under ci. DNF rules are similar to DTs in that they can encode any Boolean function. However, an advantage of DNF rule learners is that they tend to generate more compact classiﬁers than DT learners.
+Rule learning methods usually attempt to select from all the possible covering rules (i.e., rules that correctly classify all the training examples) the “best” one
+14 Many inductive rule learning algorithms build decision lists (i.e., arbitrarily nested if-then-else clauses) instead of DNF rules; since the former may always be rewritten as the latter, we will disregard the issue.
+
+according to some minimality criterion. While DTs are typically built by a topdown, “divide-and-conquer” strategy, DNF rules are often built in a bottom-up fashion. Initially, every training example d j is viewed as a clause η1, . . . , ηn → γi, where η1, . . . , ηn are the terms contained in d j and γi equals ci or c¯i according to whether d j is a positive or negative example of ci. This set of clauses is already a DNF classiﬁer for ci, but obviously scores high in terms of overﬁtting. The learner applies then a process of generalization in which the rule is simpliﬁed through a series of modiﬁcations (e.g., removing premises from clauses, or merging clauses) that maximize its compactness while at the same time not affecting the “covering” property of the classiﬁer. At the end of this process, a “pruning” phase similar in spirit to that employed in DTs is applied, where the ability to correctly classify all the training examples is traded for more generality.
+DNF rule learners vary widely in terms of the methods, heuristics and criteria employed for generalization and pruning. Among the DNF rule learners that have been applied to TC are CHARADE [Moulinier and Ganascia 1996], DL-ESC [Li and Yamanishi 1999], RIPPER [Cohen 1995a; Cohen and Hirsh 1998; Cohen and Singer 1999], SCAR [Moulinier et al. 1996], and SWAP-1 [Apte´ 1994].
+While the methods above use rules of propositional logic (PL), research has also been carried out using rules of ﬁrstorder logic (FOL), obtainable through the use of inductive logic programming methods. Cohen [1995a] has extensively compared PL and FOL learning in TC (for instance, comparing the PL learner RIPPER with its FOL version FLIPPER), and has found that the additional representational power of FOL brings about only modest beneﬁts.
+6.5. Regression Methods
+Various TC efforts have used regression models (see Fuhr and Pfeifer [1994]; Ittner et al. [1995]; Lewis and Gale [1994]; Schu¨ tze et al. [1995]). Regression denotes
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+24
+
+Sebastiani
+
+the approximation of a real-valued (in-
+
+stead than binary, as in the case of classiﬁcation) function ˘ by means of a func-
+
+tion that ﬁts the training data [Mitchell
+
+1996, page 236]. Here we will describe one
+
+such model, the Linear Least-Squares Fit
+
+(LLSF) applied to TC by Yang and Chute
+
+[1994]. In LLSF, each document d j has
+
+two vectors associated to it: an input vec-
+
+tor I (d j ) of |T | weighted terms, and an output vector O(d j ) of |C| weights rep-
+
+resenting the categories (the weights for
+
+this latter vector are binary for training
+
+documents, and are nonbinary CSV s for
+
+test documents). Classiﬁcation may thus
+
+be seen as the task of determining an out-
+
+put vector O(d j ) for test document d j ,
+
+given its input vector I (d j ); hence, build-
+
+ing a classiﬁer boils down to computing
+
+a |C| × |T | matrix Mˆ such that Mˆ I(d j ) =
+
+O(d j ).
+
+LLSF computes the matrix from the
+
+training data by computing a linear least-
+
+squares ﬁt that minimizes the error on the training set according to the formula Mˆ =
+
+arg minM MI − O F , where arg minM (x)
+
+stands as usual for the M for which x is
+
+def
+minimum, V F =
+
+|C| |T | 2
+i=1 j =1 vi j rep-
+
+resents the so-called Frobenius norm of a
+
+|C| × |T | matrix, I is the |T | × |Tr| matrix
+
+whose columns are the input vectors of the
+
+training documents, and O is the |C| × |Tr|
+
+matrix whose columns are the output vectors of the training documents. The Mˆ ma-
+
+trix is usually computed by performing a
+
+singular value decomposition on the train-
+
+ing set, and its generic entry mˆ ik repre-
+
+sents the degree of association between
+
+category ci and term tk.
+
+The experiments of Yang and Chute
+
+[1994] and Yang and Liu [1999] indicate
+
+that LLSF is one of the most effective text
+
+classiﬁers known to date. One of its disad-
+
+vantages, though, is that the cost of computing the Mˆ matrix is much higher than
+
+that of many other competitors in the TC
+
+arena.
+
+6.6. On-Line Methods
+A linear classiﬁer for category ci is a vector ci = w1i, . . . , w|T |i belonging to the
+
+same |T |-dimensional space in which documents are also represented, and such that CSVi(d j ) corresponds to the dot product k=1 |T | wkiwk j of d j and ci. Note that when both classiﬁer and document weights are cosine-normalized (see (2)), the dot product between the two vectors corresponds to their cosine similarity, that is:
+
+S(ci, d j ) = cos(α)
+
+= k=1 |T | wki · wk j ,
+
+|T | 2
+
+|T | 2
+
+k=1 wki ·
+
+k=1 wk j
+
+which represents the cosine of the angle α that separates the two vectors. This is the similarity measure between query and document computed by standard vectorspace IR engines, which means in turn that once a linear classiﬁer has been built, classiﬁcation can be performed by invoking such an engine. Practically all search engines have a dot product ﬂavor to them, and can therefore be adapted to doing TC with a linear classiﬁer.
+Methods for learning linear classiﬁers are often partitioned in two broad classes, batch methods and on-line methods.
+Batch methods build a classiﬁer by analyzing the training set all at once. Within the TC literature, one example of a batch method is linear discriminant analysis, a model of the stochastic dependence between terms that relies on the covariance matrices of the categories [Hull 1994; Schu¨ tze et al. 1995]. However, the foremost example of a batch method is the Rocchio method; because of its importance in the TC literature, this will be discussed separately in Section 6.7. In this section we will instead concentrate on on-line methods.
+On-line (a.k.a. incremental) methods build a classiﬁer soon after examining the ﬁrst training document, and incrementally reﬁne it as they examine new ones. This may be an advantage in the applications in which Tr is not available in its entirety from the start, or in which the “meaning” of the category may change in time, as for example, in adaptive
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+25
+
+ﬁltering. This is also apt to applications (e.g., semiautomated classiﬁcation, adaptive ﬁltering) in which we may expect the user of a classiﬁer to provide feedback on how test documents have been classiﬁed, as in this case further training may be performed during the operating phase by exploiting user feedback.
+A simple on-line method is the perceptron algorithm, ﬁrst applied to TC by Schu¨ tze et al. [1995] and Wiener et al. [1995], and subsequently used by Dagan et al. [1997] and Ng et al. [1997]. In this algorithm, the classiﬁer for ci is ﬁrst initialized by setting all weights wki to the same positive value. When a training example
+d j (represented by a vector d j of binary weights) is examined, the classiﬁer built so far classiﬁes it. If the result of the classiﬁcation is correct, nothing is done, while if it is wrong, the weights of the classiﬁer are modiﬁed: if d j was a positive example of ci, then the weights wki of “active terms” (i.e., the terms tk such that wkj = 1) are “promoted” by increasing them by a ﬁxed quantity α > 0 (called learning rate), while if d j was a negative example of ci then the same weights are “demoted” by decreasing them by α. Note that when the classiﬁer has reached a reasonable level of effectiveness, the fact that a weight wki is very low means that tk has negatively contributed to the classiﬁcation process so far, and may thus be discarded from the representation. We may then see the perceptron algorithm (as all other incremental learning methods) as allowing for a sort of “onthe-ﬂy term space reduction” [Dagan et al. 1997, Section 4.4]. The perceptron classiﬁer has shown a good effectiveness in all the experiments quoted above.
+The perceptron is an additive weightupdating algorithm. A multiplicative variant of it is POSITIVE WINNOW [Dagan et al. 1997], which differs from perceptron because two different constants α1 > 1 and 0 < α2 < 1 are used for promoting and demoting weights, respectively, and because promotion and demotion are achieved by multiplying, instead of adding, by α1 and α2. BALANCED WINNOW [Dagan et al. 1997] is a further variant of POSITIVE WINNOW, in which the classiﬁer consists of two weights
+
+wki+ and wki− for each term tk; the ﬁnal weight wki used in computing the dot product is the difference wki+ − wki− . Following the misclassiﬁcation of a positive instance, active terms have their wki+ weight promoted and their wki− weight demoted, whereas in the case of a negative instance it is wki+ that gets demoted while wki− gets promoted (for the rest, promotions and demotions are as in POSITIVE WINNOW). BALANCED WINNOW allows negative wki weights, while in the perceptron and in POSITIVE WINNOW the wki weights are always positive. In experiments conducted by Dagan et al. [1997], POSITIVE WINNOW showed a better effectiveness than perceptron but was in turn outperformed by (Dagan et al.’s own version of) BALANCED WINNOW.
+Other on-line methods for building text classiﬁers are WIDROW-HOFF, a reﬁnement of it called EXPONENTIATED GRADIENT (both applied for the ﬁrst time to TC in [Lewis et al. 1996]) and SLEEPING EXPERTS [Cohen and Singer 1999], a version of BALANCED WINNOW. While the ﬁrst is an additive weight-updating algorithm, the second and third are multiplicative. Key differences with the previously described algorithms are that these three algorithms (i) update the classiﬁer not only after misclassifying a training example, but also after classifying it correctly, and (ii) update the weights corresponding to all terms (instead of just active ones).
+Linear classiﬁers lend themselves to both category-pivoted and documentpivoted TC. For the former the classiﬁer ci is used, in a standard search engine, as a query against the set of test documents, while for the latter the vector d j representing the test document is used as a query against the set of classiﬁers {c1, . . . , c|C|}.
+6.7. The Rocchio Method
+Some linear classiﬁers consist of an explicit proﬁle (or prototypical document) of the category. This has obvious advantages in terms of interpretability, as such a proﬁle is more readily understandable by a human than, say, a neural network
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+26
+
+Sebastiani
+
+classiﬁer. Learning a linear classiﬁer is often preceded by local TSR; in this case, a proﬁle of ci is a weighted list of the terms whose presence or absence is most useful for discriminating ci.
+The Rocchio method is used for inducing linear, proﬁle-style classiﬁers. It relies on an adaptation to TC of the wellknown Rocchio’s formula for relevance feedback in the vector-space model, and it is perhaps the only TC method rooted in the IR tradition rather than in the ML one. This adaptation was ﬁrst proposed by Hull [1994], and has been used by many authors since then, either as an object of research in its own right [Ittner et al. 1995; Joachims 1997; Sable and Hatzivassiloglou 2000; Schapire et al. 1998; Singhal et al. 1997], or as a baseline classiﬁer [Cohen and Singer 1999; Galavotti et al. 2000; Joachims 1998; Lewis et al. 1996; Schapire and Singer 2000; Schu¨ tze et al. 1995], or as a member of a classiﬁer committee [Larkey and Croft 1996] (see Section 6.11).
+Rocchio’s method computes a classiﬁer ci = w1i, . . . , w|T |i for category ci by means of the formula
+
+wki = β ·
+
+wkj −
+
+{d j ∈POSi} |POSi |
+
+γ · wkj , {d j ∈NEGi} |NEGi |
+
+where wkj is the weight of tk in document d j , POSi = {d j ∈ Tr | ˘ (d j , ci) = T }, and NEGi = {d j ∈ Tr | ˘ (d j , ci) = F }. In this formula, β and γ are control parameters that allow setting the relative importance of positive and negative examples. For instance, if β is set to 1 and γ to 0 (as in Dumais et al. [1998]; Hull [1994]; Joachims [1998]; Schu¨ tze et al. [1995]), the proﬁle of ci is the centroid of its positive training examples. A classiﬁer built by means of the Rocchio method rewards the closeness of a test document to the centroid of the positive training examples, and its distance from the centroid of the negative training examples. The role of negative examples is usually deempha-
+
+sized, by setting β to a high value and γ to a low one (e.g., Cohen and Singer [1999], Ittner et al. [1995], and Joachims [1997] use β = 16 and γ = 4).
+This method is quite easy to implement, and is also quite efﬁcient, since learning a classiﬁer basically comes down to averaging weights. In terms of effectiveness, instead, a drawback is that if the documents in the category tend to occur in disjoint clusters (e.g., a set of newspaper articles lebeled with the Sports category and dealing with either boxing or rockclimbing), such a classiﬁer may miss most of them, as the centroid of these documents may fall outside all of these clusters (see Figure 3(a)). More generally, a classiﬁer built by the Rocchio method, as all linear classiﬁers, has the disadvantage that it divides the space of documents linearly. This situation is graphically depicted in Figure 3(a), where documents are classiﬁed within ci if and only if they fall within the circle. Note that even most of the positive training examples would not be classiﬁed correctly by the classiﬁer.
+
+6.7.1. Enhancements to the Basic Rocchio Framework. One issue in the application of the Rocchio formula to proﬁle extraction is whether the set NEGi should be considered in its entirety, or whether a wellchosen sample of it, such as the set NPOSi of near-positives (deﬁned as “the most positive among the negative training examples”), should be selected from it, yielding
+
+wki = β ·
+
+wkj −
+
+{d j ∈POSi} |POSi |
+
+γ · wkj . {d j ∈NPOSi} |NPOSi |
+
+The
+
+{d j ∈NPOSi} |NPOSi| wkj factor is more sig-
+wkj
+
+niﬁcant than {d j ∈NEGi} |NEGi| , since near-
+
+positives are the most difﬁcult documents
+
+to tell apart from the positives. Using
+
+near-positives corresponds to the query
+
+zoning method proposed for IR by Singhal
+
+et al. [1997]. This method originates from
+
+the observation that, when the original
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+27
+
+Fig. 3. A comparison between the TC behavior of (a) the Rocchio classiﬁer, and (b) the k-NN classiﬁer. Small crosses and circles denote positive and negative training instances, respectively. The big circles denote the “inﬂuence area” of the classiﬁer. Note that, for ease of illustration, document similarities are here viewed in terms of Euclidean distance rather than, as is more common, in terms of dot product or cosine.
+
+Rocchio formula is used for relevance feedback in IR, near-positives tend to be used rather than generic negatives, as the documents on which user judgments are available are among the ones that had scored highest in the previous ranking. Early applications of the Rocchio formula to TC (e.g., Hull [1994]; Ittner et al. [1995]) generally did not make a distinction between near-positives and generic negatives. In order to select the nearpositives Schapire et al. [1998] issue a query, consisting of the centroid of the positive training examples, against a document base consisting of the negative training examples; the top-ranked ones are the most similar to this centroid, and are then the near-positives. Wiener et al. [1995] instead equate the near-positives of ci to the positive examples of the sibling categories of ci, as in the application they work on (TC with hierarchically organized category sets) the notion of a “sibling category of ci” is well deﬁned. A similar policy is also adopted by Ng et al. [1997], Ruiz and Srinivasan [1999], and Weigend et al. [1999].
+By using query zoning plus other enhancements (TSR, statistical phrases, and a method called dynamic feedback optimization), Schapire et al. [1998] have found that a Rocchio classiﬁer can achieve
+
+an effectiveness comparable to that of a state-of-the-art ML method such as “boosting” (see Section 6.11.1) while being 60 times quicker to train. These recent results will no doubt bring about a renewed interest for the Rocchio classiﬁer, previously considered an underperformer [Cohen and Singer 1999; Joachims 1998; Lewis et al. 1996; Schu¨ tze et al. 1995; Yang 1999].
+6.8. Neural Networks
+A neural network (NN) text classiﬁer is a network of units, where the input units represent terms, the output unit(s) represent the category or categories of interest, and the weights on the edges connecting units represent dependence relations. For classifying a test document d j , its term weights wkj are loaded into the input units; the activation of these units is propagated forward through the network, and the value of the output unit(s) determines the categorization decision(s). A typical way of training NNs is backpropagation, whereby the term weights of a training document are loaded into the input units, and if a misclassiﬁcation occurs the error is “backpropagated” so as to change the parameters of the network and eliminate or minimize the error.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+28
+
+Sebastiani
+
+The simplest type of NN classiﬁer is the perceptron [Dagan et al. 1997; Ng et al. 1997], which is a linear classiﬁer and as such has been extensively discussed in Section 6.6. Other types of linear NN classiﬁers implementing a form of logistic regression have also been proposed and tested by Schu¨ tze et al. [1995] and Wiener et al. [1995], yielding very good effectiveness.
+A nonlinear NN [Lam and Lee 1999; Ruiz and Srinivasan 1999; Schu¨ tze et al. 1995; Weigend et al. 1999; Wiener et al. 1995; Yang and Liu 1999] is instead a network with one or more additional “layers” of units, which in TC usually represent higher-order interactions between terms that the network is able to learn. When comparative experiments relating nonlinear NNs to their linear counterparts have been performed, the former have yielded either no improvement [Schu¨ tze et al. 1995] or very small improvements [Wiener et al. 1995] over the latter.
+6.9. Example-Based Classiﬁers
+Example-based classiﬁers do not build an explicit, declarative representation of the category ci, but rely on the category labels attached to the training documents similar to the test document. These methods have thus been called lazy learners, since “they defer the decision on how to generalize beyond the training data until each new query instance is encountered” [Mitchell 1996, page 244].
+The ﬁrst application of example-based methods (a.k.a. memory-based reasoning methods) to TC is due to Creecy, Masand and colleagues [Creecy et al. 1992; Masand et al. 1992]; other examples include Joachims [1998], Lam et al. [1999], Larkey [1998], Larkey [1999], Li and Jain [1998], Yang and Pedersen [1997], and Yang and Liu [1999]. Our presentation of the example-based approach will be based on the k-NN (for “k nearest neighbors”) algorithm used by Yang [1994]. For deciding whether d j ∈ ci, k-NN looks at whether the k training documents most similar to d j also are in ci; if the answer is positive for a large enough proportion of them,
+
+a positive decision is taken, and a negative decision is taken otherwise. Actually, Yang’s is a distance-weighted version of k-NN (see [Mitchell 1996, Section 8.2.1]), since the fact that a most similar document is in ci is weighted by its similarity with the test document. Classifying d j by means of k-NN thus comes down to computing
+
+CSVi(d j )
+
+=
+
+RSV(d j , dz ) · [[ ˘ (dz , ci)]],
+
+dz ∈ Trk (d j )
+
+(9)
+
+where Trk(d j ) is the set of the k documents dz which maximize RSV(d j , dz ) and
+
+[[α]] = 1 if α = T . 0 if α = F
+
+The thresholding methods of Section 6.1 can then be used to convert the realvalued CSVi’s into binary categorization decisions. In (9), RSV(d j , dz ) represents some measure or semantic relatedness between a test document d j and a training document dz ; any matching function, be it probabilistic (as used by Larkey and Croft [1996]) or vector-based (as used by Yang [1994]), from a ranked IR system may be used for this purpose. The construction of a k-NN classiﬁer also involves determining (experimentally, on a validation set) a threshold k that indicates how many topranked training documents have to be considered for computing CSVi(d j ). Larkey and Croft [1996] used k = 20, while Yang [1994, 1999] has found 30 ≤ k ≤ 45 to yield the best effectiveness. Anyhow, various experiments have shown that increasing the value of k does not signiﬁcantly degrade the performance.
+Note that k-NN, unlike linear classiﬁers, does not divide the document space linearly, and hence does not suffer from the problem discussed at the end of Section 6.7. This is graphically depicted in Figure 3(b), where the more “local” character of k-NN with respect to Rocchio can be appreciated.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+29
+
+This method is naturally geared toward document-pivoted TC, since ranking the training documents for their similarity with the test document can be done once for all categories. For category-pivoted TC, one would need to store the document ranks for each test document, which is obviously clumsy; DPC is thus de facto the only reasonable way to use k-NN.
+A number of different experiments (see Section 7.3) have shown k-NN to be quite effective. However, its most important drawback is its inefﬁciency at classiﬁcation time: while, for example, with a linear classiﬁer only a dot product needs to be computed to classify a test document, k-NN requires the entire training set to be ranked for similarity with the test document, which is much more expensive. This is a drawback of “lazy” learning methods, since they do not have a true training phase and thus defer all the computation to classiﬁcation time.
+6.9.1. Other Example-Based Techniques. Various example-based techniques have been used in the TC literature. For example, Cohen and Hirsh [1998] implemented an example-based classiﬁer by extending standard relational DBMS technology with “similarity-based soft joins.” In their WHIRL system they used the scoring function
+
+CSVi(d j )
+
+=1−
+
+(1 − RSV(d j , dz ))[[ ˘ (dz ,ci)]]
+
+dz ∈Trk (d j )
+
+as an alternative to (9), obtaining a small but statistically signiﬁcant improvement over a version of WHIRL using (9). In their experiments this technique outperformed a number of other classiﬁers, such as a C4.5 decision tree classiﬁer and the RIPPER CNF rule-based classiﬁer.
+A variant of the basic k-NN approach was proposed by Galavotti et al. [2000], who reinterpreted (9) by redeﬁning [[α]] as
+
+[[α]] =
+
+1 if α = T .
+
+−1 if α = F
+
+The difference from the original k-NN approach is that if a training document dz similar to the test document d j does not belong to ci, this information is not discarded but weights negatively in the decision to classify d j under ci.
+A combination of proﬁle- and examplebased methods was presented in Lam and Ho [1998]. In this work a k-NN system was fed generalized instances (GIs) in place of training documents. This approach may be seen as the result of
+—clustering the training set, thus obtaining a set of clusters Ki = {ki1, . . . , ki| K i | };
+—building a proﬁle G(kiz ) (“generalized instance”) from the documents belonging to cluster kiz by means of some algorithm for learning linear classiﬁers (e.g., Rocchio, WIDROW-HOFF);
+—applying k-NN with proﬁles in place of training documents, that is, computing
+
+def
+CSVi(d j ) =
+
+RSV(d j , G(kiz )) ·
+
+kiz ∈Ki
+
+|{d j ∈ kiz | ˘ (d j , ci) = T }| · |{d j ∈ kiz }|
+
+|{d j ∈ kiz }|
+
+|Tr |
+
+=
+
+RSV(d j , G(kiz )) ·
+
+kiz ∈Ki
+
+|{d j ∈ kiz | ˘ (d j , ci) = T }| , (10) |Tr |
+
+where |{d j ∈kiz }| |{d j ∈kiz | ˘ (d j ,ci)=T }| represents the “degree” to which G(kiz ) is a positive instance of ci, and |Tr| |{d j ∈kiz}| represents its weight within the entire process.
+This exploits the superior effectiveness (see Figure 3) of k-NN over linear classiﬁers while at the same time avoiding the sensitivity of k-NN to the presence of “outliers” (i.e., positive instances of ci that “lie out” of the region where most other positive instances of ci are located) in the training set.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+30
+
+Sebastiani
+
+Fig. 4. Learning support vector classiﬁers. The small crosses and circles represent positive and negative training examples, respectively, whereas lines represent decision surfaces. Decision surface σi (indicated by the thicker line) is, among those shown, the best possible one, as it is the middle element of the widest set of parallel decision surfaces (i.e., its minimum distance to any training example is maximum). Small boxes indicate the support vectors.
+6.10. Building Classiﬁers by Support Vector Machines
+The support vector machine (SVM) method has been introduced in TC by Joachims [1998, 1999] and subsequently used by Drucker et al. [1999], Dumais et al. [1998], Dumais and Chen [2000], Klinkenberg and Joachims [2000], Taira and Haruno [1999], and Yang and Liu [1999]. In geometrical terms, it may be seen as the attempt to ﬁnd, among all the surfaces σ1, σ2, . . . in |T |-dimensional space that separate the positive from the negative training examples (decision surfaces), the σi that separates the positives from the negatives by the widest possible margin, that is, such that the separation property is invariant with respect to the widest possible traslation of σi.
+This idea is best understood in the case in which the positives and the negatives are linearly separable, in which case the decision surfaces are (|T |−1)-hyperplanes. In the two-dimensional case of Figure 4, various lines may be chosen as decision surfaces. The SVM method chooses the
+
+middle element from the “widest” set of parallel lines, that is, from the set in which the maximum distance between two elements in the set is highest. It is noteworthy that this “best” decision surface is determined by only a small set of training examples, called the support vectors.
+The method described is applicable also to the case in which the positives and the negatives are not linearly separable. Yang and Liu [1999] experimentally compared the linear case (namely, when the assumption is made that the categories are linearly separable) with the nonlinear case on a standard benchmark, and obtained slightly better results in the former case.
+As argued by Joachims [1998], SVMs offer two important advantages for TC:
+—term selection is often not needed, as SVMs tend to be fairly robust to overﬁtting and can scale up to considerable dimensionalities;
+—no human and machine effort in parameter tuning on a validation set is needed, as there is a theoretically motivated, “default” choice of parameter settings, which has also been shown to provide the best effectiveness.
+Dumais et al. [1998] have applied a novel algorithm for training SVMs which brings about training speeds comparable to computationally easy learners such as Rocchio.
+6.11. Classiﬁer Committees
+Classiﬁer committees (a.k.a. ensembles) are based on the idea that, given a task that requires expert knowledge to perform, k experts may be better than one if their individual judgments are appropriately combined. In TC, the idea is to apply k different classiﬁers 1, . . . , k to the same task of deciding whether d j ∈ ci, and then combine their outcome appropriately. A classiﬁer committee is then characterized by (i) a choice of k classiﬁers, and (ii) a choice of a combination function.
+Concerning Issue (i), it is known from the ML literature that, in order to guarantee good effectiveness, the classiﬁers
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+31
+
+forming the committee should be as in-
+
+dependent as possible [Tumer and Ghosh
+
+1996]. The classiﬁers may differ for the in-
+
+dexing approach used, or for the inductive
+
+method, or both. Within TC, the avenue
+
+which has been explored most is the latter
+
+(to our knowledge the only example of the
+
+former is Scott and Matwin [1999]).
+
+Concerning Issue (ii), various rules have
+
+been tested. The simplest one is majority
+
+voting (MV), whereby the binary outputs
+
+of the k classiﬁers are pooled together, and
+
+the classiﬁcation decision that reaches the
+
+majority
+
+of
+
+k+1 2
+
+votes
+
+is
+
+taken
+
+(k
+
+obviously
+
+needs to be an odd number) [Li and Jain
+
+1998; Liere and Tadepalli 1997]. This
+
+method is particularly suited to the case
+
+in which the committee includes classi-
+
+ﬁers characterized by a binary decision
+
+function CSVi : D → {T, F }. A second rule
+
+is weighted linear combination (WLC),
+
+whereby a weighted sum of the CSVi’s pro-
+
+duced by the k classiﬁers yields the ﬁnal
+
+CSVi. The weights w j reﬂect the expected
+
+relative effectiveness of classiﬁers j , and
+
+are usually optimized on a validation set
+
+[Larkey and Croft 1996]. Another policy
+
+is dynamic classiﬁer selection (DCS),
+
+whereby among committee { 1, . . . , k}
+
+the classiﬁer t most effective on the l
+
+validation examples most similar to d j
+
+is selected, and its judgment adopted by
+
+the committee [Li and Jain 1998]. A still
+
+different policy, somehow intermediate
+
+between WLC and DCS, is adaptive
+
+classiﬁer combination (ACC), whereby the
+
+judgments of all the classiﬁers in the com-
+
+mittee are summed together, but their in-
+
+dividual contribution is weighted by their
+
+effectiveness on the l validation examples
+
+most similar to d j [Li and Jain 1998].
+
+Classiﬁer committees have had mixed
+
+results in TC so far. Larkey and Croft
+
+[1996] have used combinations of Rocchio,
+
+Na¨ıve Bayes, and k-NN, all together or in
+
+pairwise combinations, using a WLC rule.
+
+In their experiments the combination of
+
+any two classiﬁers outperformed the best
+
+individual classiﬁer (k-NN), and the com-
+
+bination of the three classiﬁers improved
+
+an all three pairwise combinations. These
+
+results would seem to give strong sup-
+
+port to the idea that classiﬁer committees
+
+can somehow proﬁt from the complementary strengths of their individual members. However, the small size of the test set used (187 documents) suggests that more experimentation is needed before conclusions can be drawn.
+Li and Jain [1998] have tested a committee formed of (various combinations of) a Na¨ıve Bayes classiﬁer, an example-based classiﬁer, a decision tree classiﬁer, and a classiﬁer built by means of their own “subspace method”; the combination rules they have worked with are MV, DCS, and ACC. Only in the case of a committee formed by Na¨ıve Bayes and the subspace classiﬁer combined by means of ACC has the committee outperformed, and by a narrow margin, the best individual classiﬁer (for every attempted classiﬁer combination ACC gave better results than MV and DCS). This seems discouraging, especially in light of the fact that the committee approach is computationally expensive (its cost trivially amounts to the sum of the costs of the individual classiﬁers plus the cost incurred for the computation of the combination rule). Again, it has to be remarked that the small size of their experiment (two test sets of less than 700 documents each were used) does not allow us to draw deﬁnitive conclusions on the approaches adopted.
+
+6.11.1. Boosting. The boosting method
+
+[Schapire et al. 1998; Schapire and Singer
+
+2000] occupies a special place in the classi-
+
+ﬁer committees literature, since the k clas-
+
+siﬁers 1, . . . , k forming the committee
+
+are obtained by the same learning method
+
+(here called the weak learner). The key
+
+intuition of boosting is that the k clas-
+
+siﬁers should be trained not in a con-
+
+ceptually parallel and independent way,
+
+as in the committees described above,
+
+but sequentially. In this way, in train-
+
+ing classiﬁer i one may take into ac-
+
+count how classiﬁers 1, . . . , i−1 perform
+
+on the training examples, and concentrate
+
+on getting right those examples on which
+
+1, . . . , i−1 have performed worst.
+
+Speciﬁcally, for learning classiﬁer t
+
+each d j , ci pair is given an “importance
+
+weight”
+
+ht
+ij
+
+(where
+
+h1
+ij
+
+is
+
+set
+
+to
+
+be
+
+equal
+
+for
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+32
+
+Sebastiani
+
+all d j , ci pairs15), which represents how
+
+hard to get a correct decision for this
+
+pair was for classiﬁers 1, . . . , t−1. These
+
+weights are exploited in learning t,
+
+which will be specially tuned to correctly
+
+solve the pairs with higher weight. Clas-
+
+siﬁer t is then applied to the training
+
+documents,
+
+and
+
+as
+
+a
+
+result
+
+weights
+
+ht
+ij
+
+are updated to hijt+1; in this update oper-
+
+ation, pairs correctly classiﬁed by t will
+
+have their weight decreased, while pairs
+
+misclassiﬁed by t will have their weight
+
+increased. After all the k classiﬁers have
+
+been built, a weighted linear combination
+
+rule is applied to yield the ﬁnal committee.
+
+In the BOOSTEXTER system [Schapire and
+
+Singer 2000], two different boosting al-
+
+gorithms are tested, using a one-level
+
+decision tree weak learner. The former
+
+algorithm (ADABOOST.MH, simply called
+
+ADABOOST in Schapire et al. [1998]) is ex-
+
+plicitly geared toward the maximization of
+
+microaveraged effectiveness, whereas the
+
+latter (ADABOOST.MR) is aimed at mini-
+
+mizing ranking loss (i.e., at getting a cor-
+
+rect category ranking for each individual
+
+document). In experiments conducted over
+
+three different test collections, Schapire
+
+et al. [1998] have shown ADABOOST to
+
+outperform SLEEPING EXPERTS, a classiﬁer
+
+that had proven quite effective in the ex-
+
+periments of Cohen and Singer [1999].
+
+Further experiments by Schapire and
+
+Singer [2000] showed ADABOOST to out-
+
+perform, aside from SLEEPING EXPERTS, a
+
+Na¨ıve Bayes classiﬁer, a standard (nonen-
+
+hanced) Rocchio classiﬁer, and Joachims’
+
+[1997] PRTFIDF classiﬁer.
+
+A boosting algorithm based on a “com-
+
+mittee of classiﬁer subcommittees” that
+
+improves on the effectiveness and (espe-
+
+cially) the efﬁciency of ADABOOST.MH was
+
+presented in Sebastiani et al. [2000]. An
+
+approach similar to boosting was also em-
+
+ployed by Weiss et al. [1999], who experi-
+
+mented with committees of decision trees
+
+each having an average of 16 leaves (and
+
+hence much more complex than the sim-
+
+15 Schapire et al. [1998] also showed that a simple modiﬁcation of this policy allows optimization of the classiﬁer based on “utility” (see Section 7.1.3).
+
+ple “decision stumps” used in Schapire and Singer [2000]), eventually combined by using the simple MV rule as a combination rule; similarly to boosting, a mechanism for emphasising documents that have been misclassiﬁed by previous decision trees is used. Boosting-based approaches have also been employed in Escudero et al. [2000], Iyer et al. [2000], Kim et al. [2000], Li and Jain [1998], and Myers et al. [2000].
+6.12. Other Methods
+Although in the previous sections we have tried to give an overview as complete as possible of the learning approaches proposed in the TC literature, it is hardly possible to be exhaustive. Some of the learning approaches adopted do not fall squarely under one or the other class of algorithms, or have remained somehow isolated attempts. Among these, the most noteworthy are the ones based on Bayesian inference networks [Dumais et al. 1998; Lam et al. 1997; Tzeras and Hartmann 1993], genetic algorithms [Clack et al. 1997; Masand 1994], and maximum entropy modelling [Manning and Schu¨ tze 1999].
+7. EVALUATION OF TEXT CLASSIFIERS
+As for text search systems, the evaluation of document classiﬁers is typically conducted experimentally, rather than analytically. The reason is that, in order to evaluate a system analytically (e.g., proving that the system is correct and complete), we would need a formal speciﬁcation of the problem that the system is trying to solve (e.g., with respect to what correctness and completeness are deﬁned), and the central notion of TC (namely, that of membership of a document in a category) is, due to its subjective character, inherently nonformalizable.
+The experimental evaluation of a classiﬁer usually measures its effectiveness (rather than its efﬁciency), that is, its ability to take the right classiﬁcation decisions.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+33
+
+Table II. The Contingency Table for Category ci
+
+Category ci
+
+Expert judgments
+
+YES
+
+NO
+
+Classiﬁer
+
+YES
+
+TPi
+
+FPi
+
+Judgments NO
+
+FNi
+
+TNi
+
+7.1. Measures of Text
+Categorization Effectiveness
+7.1.1. Precision and Recall. Classiﬁcation effectiveness is usually measured in terms of the classic IR notions of precision (π ) and recall (ρ), adapted to the case of TC. Precision wrt ci (πi) is deﬁned as the conditional probability P ( ˘ (dx, ci) = T | (dx, ci) = T ), that is, as the probability that if a random document dx is classiﬁed under ci, this decision is correct. Analogously, recall wrt ci (ρi) is deﬁned as P ( (dx, ci) = T | ˘ (dx, ci) = T ), that is, as the probability that, if a random document dx ought to be classiﬁed under ci, this decision is taken. These categoryrelative values may be averaged, in a way to be discussed shortly, to obtain π and ρ, that is, values global to the entire category set. Borrowing terminology from logic, π may be viewed as the “degree of soundness” of the classiﬁer wrt C, while ρ may be viewed as its “degree of completeness” wrt C. As deﬁned here, πi and ρi are to be understood as subjective probabilities, that is, as measuring the expectation of the user that the system will behave correctly when classifying an unseen document under ci. These probabilities may be estimated in terms of the contingency table for ci on a given test set (see Table II). Here, FPi (false positives wrt ci, a.k.a. errors of commission) is the number of test documents incorrectly classiﬁed under ci; TNi (true negatives wrt ci), TPi (true positives wrt ci), and FNi (false negatives wrt ci, a.k.a. errors of omission) are deﬁned accordingly. Estimates (indicated by carets) of precision wrt ci and recall wrt ci may thus be obtained as
+
+πˆi = TPi , TPi + FPi
+
+ρˆi = TPi . TPi + FNi
+
+For obtaining estimates of π and ρ, two different methods may be adopted:
+
+Table III. The Global Contingency Table
+
+Category set C = {c1, . . . , c|C|}
+
+Expert judgments
+
+YES
+
+NO
+
+|C|
+
+|C|
+
+Classiﬁer YES TP = TPi FP = FPi
+
+i=1
+
+i=1
+
+|C|
+
+|C|
+
+Judgments NO FN = FNi TN = TNi
+
+i=1
+
+i=1
+
+—microaveraging: π and ρ are obtained by summing over all individual decisions:
+
+πˆ µ = TP = TP + FP
+ρˆ µ = TP = TP + FN
+
+i=1 |C| TPi , i=1 |C| (TPi + FPi)
+i=1 |C| TPi , i=1 |C| (TPi + FNi)
+
+where “µ” indicates microaveraging. The “global” contingency table (Table III) is thus obtained by summing over category-speciﬁc contingency tables;
+
+—macroaveraging: precision and recall are ﬁrst evaluated “locally” for each category, and then “globally” by averaging over the results of the different categories:
+
+πˆ M =
+
+i=1 |C| πˆi , |C|
+
+ρˆ M =
+
+i=1 |C| ρˆi , |C|
+
+where “M ” indicates macroaveraging.
+
+These two methods may give quite different results, especially if the different categories have very different generality. For instance, the ability of a classiﬁer to behave well also on categories with low generality (i.e., categories with few positive training instances) will be emphasized by macroaveraging and much less so by microaveraging. Whether one or the other should be used obviously depends on the application requirements. From now on, we will assume that microaveraging is used; everything we will say in the rest of Section 7 may be adapted to the case of macroaveraging in the obvious way.
+
+7.1.2. Other Measures of Effectiveness. Measures alternative to π and ρ and commonly used in the ML literature, such as accuracy (estimated as
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+34
+
+Sebastiani
+
+Aˆ = TP+TN TP+TN+FP+FN ) and error (estimated as Eˆ = FP+FN TP+TN+FP+FN = 1 − Aˆ), are not widely used in TC. The reason is that, as Yang [1999] pointed out, the large value that their denominator typically has in TC makes them much more insensitive to variations in the number of correct decisions (TP + TN) than π and ρ. Besides, if A is the adopted evaluation measure, in the frequent case of a very low average generality the trivial rejector (i.e., the classiﬁer such that (d j , ci) = F for all d j and ci) tends to outperform all nontrivial classiﬁers (see also Cohen [1995a], Section 2.3). If A is adopted, parameter tuning on a validation set may thus result in parameter choices that make the classiﬁer behave very much like the trivial rejector.
+A nonstandard effectiveness measure was proposed by Sable and Hatzivassiloglou [2000, Section 7], who suggested basing π and ρ not on “absolute” values of success and failure (i.e., 1 if (d j , ci) = ˘ (d j , ci) and 0 if (d j , ci) = ˘ (d j , ci)), but on values of relative success (i.e., CSVi(d j ) if ˘ (d j , ci) = T and 1 − CSVi(d j ) if ˘ (d j , ci) = F ). This means that for a correct (respectively wrong) decision the classiﬁer is rewarded (respectively penalized) proportionally to its conﬁdence in the decision. This proposed measure does not reward the choice of a good thresholding policy, and is thus unﬁt for autonomous (“hard”) classiﬁcation systems. However, it might be appropriate for interactive (“ranking”) classiﬁers of the type used in Larkey [1999], where the conﬁdence that the classiﬁer has in its own decision inﬂuences category ranking and, as a consequence, the overall usefulness of the system.
+7.1.3. Measures Alternative to Effectiveness. In general, criteria different from effectiveness are seldom used in classiﬁer evaluation. For instance, efﬁciency, although very important for applicative purposes, is seldom used as the sole yardstick, due to the volatility of the parameters on which the evaluation rests. However, efﬁciency may be useful for choosing among
+
+Table IV. The Utility Matrix
+
+Category set C = {c1, . . . , c|C|}
+
+Expert judgments
+
+YES
+
+NO
+
+Classiﬁer YES uTP
+
+uFP
+
+Judgments NO uFN
+
+uTN
+
+classiﬁers with similar effectiveness. An interesting evaluation has been carried out by Dumais et al. [1998], who have compared ﬁve different learning methods along three different dimensions, namely, effectiveness, training efﬁciency (i.e., the average time it takes to build a classiﬁer for category ci from a training set Tr), and classiﬁcation efﬁciency (i.e., the average time it takes to classify a new document d j under category ci).
+An important alternative to effectiveness is utility, a class of measures from decision theory that extend effectiveness by economic criteria such as gain or loss. Utility is based on a utility matrix such as that of Table IV, where the numeric values uTP, uFP, uFN and uTN represent the gain brought about by a true positive, false positive, false negative, and true negative, respectively; both uTP and uTN are greater than both uFP and uFN. “Standard” effectiveness is a special case of utility, i.e., the one in which uTP = uTN > uFP = uFN. Less trivial cases are those in which uTP = uTN and/or uFP = uFN; this is appropriate, for example, in spam ﬁltering, where failing to discard a piece of junk mail (FP) is a less serious mistake than discarding a legitimate message (FN) [Androutsopoulos et al. 2000]. If the classiﬁer outputs probability estimates of the membership of d j in ci, then decision theory provides analytical methods to determine thresholds τi, thus avoiding the need to determine them experimentally (as discussed in Section 6.1). Speciﬁcally, as Lewis [1995a] reminds us, the expected value of utility is maximized when
+
+τi =
+
+(uFP − uTN) ,
+
+(uFN − uTP) + (uFP − uTN)
+
+which, in the case of “standard” effectiveness, is equal to 21 .
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+35
+
+Trivial rejector Trivial acceptor Trivial “Yes” collection Trivial “No” collection
+
+Table V.
+
+Trivial Cases in TC
+
+Precision
+
+Recall
+
+TP
+
+TP
+
+TP + FP TP + FN
+
+TP = FP = 0 FN = TN = 0 FP = TN = 0 TP = FN = 0
+
+Undeﬁned
+TP TP + FP TP = 1 TP
+0 =0 FP
+
+0 =0 FN TP = 1 TP
+TP TP + FN
+Undeﬁned
+
+C-precision TN
+FP + TN TN = 1 TN 0 =0 FP
+Undeﬁned
+TN FP + TN
+
+C-recall TN
+TN + FN TN
+TN + FN
+Undeﬁned
+0 =0 FN TN = 1 TN
+
+The use of utility in TC is discussed in detail by Lewis [1955a]. Other works where utility is employed are Amati and Crestani [1999], Cohen and Singer [1999], Hull et al. [1996], Lewis and Catlett [1994], and Schapire et al. [1998]. Utility has become popular within the text ﬁltering community, and the TREC “ﬁltering track” evaluations have been using it for a while [Lewis 1995c]. The values of the utility matrix are extremely applicationdependent. This means that if utility is used instead of “pure” effectiveness, there is a further element of difﬁculty in the cross-comparison of classiﬁcation systems (see Section 7.3), since for two classiﬁers to be experimentally comparable also the two utility matrices must be the same.
+Other effectiveness measures different from the ones discussed here have occasionally been used in the literature; these include adjacent score [Larkey 1998], coverage [Schapire and Singer 2000], oneerror [Schapire and Singer 2000], Pearson product-moment correlation [Larkey 1998], recall at n [Larkey and Croft 1996], top candidate [Larkey and Croft 1996], and top n [Larkey and Croft 1996]. We will not attempt to discuss them in detail. However, their use shows that, although the TC community is making consistent efforts at standardizing experimentation protocols, we are still far from universal agreement on evaluation issues and, as a consequence, from understanding precisely the relative merits of the various methods.
+
+7.1.4. Combined Effectiveness Measures.
+
+Neither precision nor recall makes sense
+
+in isolation from each other. In fact the
+
+classiﬁer such that (d j , ci) = T for all
+
+d j and ci (the trivial acceptor) has ρ = 1.
+
+When the CSVi function has values in
+
+[0, 1], one only needs to set every thresh-
+
+old τi to 0 to obtain the trivial acceptor.
+
+In this case, π would usually be very low
+
+(more precisely, equal to the average test
+
+|C|
+gTe(ci ) 16
+
+set generality
+
+i=1
+|C|
+
+). Conversely, it
+
+is well known from everyday IR practice
+
+that higher levels of π may be obtained at
+
+the price of low values of ρ.
+
+In practice, by tuning τi a function
+
+CSVi : D → {T, F } is tuned to be, in the
+
+words of Riloff and Lehnert [1994], more
+
+liberal (i.e., improving ρi to the detriment
+
+of πi) or more conservative (improving πi to
+
+16 From this, one might be tempted to infer, by sym-
+
+metry, that the trivial rejector always has π = 1.
+
+This is false, as π is undeﬁned (the denominator is
+
+zero) for the trivial rejector (see Table V). In fact, it is clear from its deﬁnition (π = TP TP+FP ) that π depends only on how the positives (TP + FP ) are
+
+split between true positives TP and the false posi-
+
+tives FP , and does not depend at all on the cardinal-
+
+ity of the positives. There is a breakup of “symme-
+
+try” between π and ρ here because, from the point of
+
+view of classiﬁer judgment (positives vs. negatives;
+
+this is the dichotomy of interest in trivial acceptor vs.
+
+trivial
+
+rejector),
+
+the
+
+“symmetric”
+
+of
+
+ρ
+
+(
+
+TP TP+FN
+
+)
+
+is
+
+not
+
+π ( TP+FP TP ) but C-precision (π c = FP+TN TN ), the “con-
+
+trapositive” of π . In fact, while ρ = 1 and πc = 0 for
+
+the trivial acceptor, πc = 1 and ρ = 0 for the trivial
+
+rejector.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+36
+
+Sebastiani
+
+the detriment of ρi).17 A classiﬁer should thus be evaluated by means of a measure which combines π and ρ.18 Various such measures have been proposed, among which the most frequent are:
+(1) Eleven-point average precision: threshold τi is repeatedly tuned so as to allow ρi to take up values of 0.0, .1, . . . , .9, 1.0; πi is computed for these 11 different values of τi, and averaged over the 11 resulting values. This is analogous to the standard evaluation methodology for ranked IR systems, and may be used
+(a) with categories in place of IR queries. This is most frequently used for document-ranking classiﬁers (see Schu¨ tze et al. [1995]; Yang [1994]; Yang [1999]; Yang and Pedersen [1997]);
+(b) with test documents in place of IR queries and categories in place of documents. This is most frequently used for category-ranking classiﬁers (see Lam et al. [1999]; Larkey and Croft [1996]; Schapire and Singer [2000]; Wiener et al. [1995]). In this case, if macroaveraging is used, it needs to be redeﬁned on a per-document, rather than per-category, basis.
+This measure does not make sense for binary-valued CSVi functions, since in this case ρi may not be varied at will.
+(2) The breakeven point, that is, the value at which π equals ρ (e.g., Apte´ et al. [1994]; Cohen and Singer [1999]; Dagan et al. [1997]; Joachims [1998];
+
+Joachims [1999]; Lewis [1992a]; Lewis and Ringuette [1994]; Moulinier and Ganascia [1996]; Ng et al. [1997]; Yang [1999]). This is obtained by a process analogous to the one used for 11-point average precision: a plot of π as a function of ρ is computed by repeatedly varying the thresholds τi; breakeven is the value of ρ (or π ) for which the plot intersects the ρ = π line. This idea relies on the fact that, by decreasing the τi’s from 1 to 0, ρ always increases monotonically from 0 to 1 and π usually decreases monotonically from a value near 1 to |C| i=1 1 |C| gTe(ci). If for no values of the τi’s π and ρ are exactly equal, the τi’s are set to the value for which π and ρ are closest, and an interpolated breakeven is computed as the average of the values of π and ρ.19
+(3) The Fβ function [van Rijsbergen 1979, Chapter 7], for some 0 ≤ β ≤ + ∞ (e.g., Cohen [1995a]; Cohen and Singer [1999]; Lewis and Gale [1994]; Lewis [1995a]; Moulinier et al. [1996]; Ruiz and Srinivassan [1999]), where
+(β2 + 1)πρ Fβ = 2
+β π+ρ
+Here β may be seen as the relative degree of importance attributed to π and ρ. If β = 0 then Fβ coincides with π , whereas if β = +∞ then Fβ coincides with ρ. Usually, a value β = 1 is used, which attributes equal importance to π and ρ. As shown in Moulinier et al. [1996] and Yang [1999], the breakeven of a classiﬁer is always less or equal than its F1 value.
+
+17 While ρi can always be increased at will by lowering τi, usually at the cost of decreasing πi, πi can usually be increased at will by raising τi, always at the cost of decreasing ρi. This kind of tuning is only possible for CSVi functions with values in [0, 1]; for binary-valued CSVi functions tuning is not always possible, or is anyway more difﬁcult (see Weiss et al.
+[1999], page 66). 18 An exception is single-label TC, in which π and ρ
+are not independent of each other: if a document d j has been classiﬁed under a wrong category cs (thus decreasing πs), this also means that it has not been classiﬁed under the right category ct (thus decreasing ρt ). In this case either π or ρ can be used as a measure of effectiveness.
+
+19 Breakeven, ﬁrst proposed by Lewis [1992a, 1992b], has been recently criticized. Lewis himself (see his message of 11 Sep 1997 10:49:01 to the DDLBETA text categorization mailing list—quoted with permission of the author) has pointed out that breakeven is not a good effectiveness measure, since (i) there may be no parameter setting that yields the breakeven; in this case the ﬁnal breakeven value, obtained by interpolation, is artiﬁcial; (ii) to have ρ equal π is not necessarily desirable, and it is not clear that a system that achieves high breakeven can be tuned to score high on other effectiveness measures. Yang [1999] also noted that when for no value of the parameters π and ρ are close enough, interpolated breakeven may not be a reliable indicator of effectiveness.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+37
+
+Once an effectiveness measure is chosen, a classiﬁer can be tuned (e.g., thresholds and other parameters can be set) so that the resulting effectiveness is the best achievable by that classiﬁer. Tuning a parameter p (be it a threshold or other) is normally done experimentally. This means performing repeated experiments on the validation set with the values of the other parameters pk ﬁxed (at a default value, in the case of a yet-tobe-tuned parameter pk, or at the chosen value, if the parameter pk has already been tuned) and with different values for parameter p. The value that has yielded the best effectiveness is chosen for p.
+7.2. Benchmarks for Text Categorization
+Standard benchmark collections that can be used as initial corpora for TC are publically available for experimental purposes. The most widely used is the Reuters collection, consisting of a set of newswire stories classiﬁed under categories related to economics. The Reuters collection accounts for most of the experimental work in TC so far. Unfortunately, this does not always translate into reliable comparative results, in the sense that many of these experiments have been carried out in subtly different conditions.
+In general, different sets of experiments may be used for cross-classiﬁer comparison only if the experiments have been performed
+(1) on exactly the same collection (i.e., same documents and same categories);
+(2) with the same “split” between training set and test set;
+(3) with the same evaluation measure and, whenever this measure depends on some parameters (e.g., the utility matrix chosen), with the same parameter values.
+Unfortunately, a lot of experimentation, both on Reuters and on other collections, has not been performed with these caveats in mind: by testing three different classiﬁers on ﬁve popular versions of Reuters, Yang [1999] has shown that
+
+a lack of compliance with these three conditions may make the experimental results hardly comparable among each other. Table VI lists the results of all experiments known to us performed on ﬁve major versions of the Reuters benchmark: Reuters-22173 “ModLewis” (column #1), Reuters-22173 “ModApte´ ” (column #2), Reuters-22173 “ModWiener” (column #3), Reuters-21578 “ModApte´ ” (column #4), and Reuters-21578[10] “ModApte´ ” (column #5).20 Only experiments that have computed either a breakeven or F1 have been listed, since other less popular effectiveness measures do not readily compare with these.
+Note that only results belonging to the same column are directly comparable. In particular, Yang [1999] showed that experiments carried out on Reuters-22173 “ModLewis” (column #1) are not directly comparable with those using the other three versions, since the former strangely includes a signiﬁcant percentage (58%) of “unlabeled” test documents which, being negative examples of all categories, tend to depress effectiveness. Also, experiments performed on Reuters-21578[10] “ModApte´ ” (column #5) are not comparable with the others, since this collection is the restriction of Reuters-21578 “ModApte´ ” to the 10 categories with the highest generality, and is thus an obviously “easier” collection.
+Other test collections that have been frequently used are
+—the OHSUMED collection, set up by Hersh et al. [1994] and used by Joachims [1998], Lam and Ho [1998], Lam et al. [1999], Lewis et al. [1996], Ruiz and Srinivasan [1999], and Yang
+20 The Reuters-21578 collection may be freely downloaded for experimentation purposes from http:// www.research.att.com/~lewis/reuters21578.html. A new corpus, called Reuters Corpus Volume 1 and consisting of roughly 800,000 documents, has recently been made available by Reuters for TC experiments (see http://about.reuters.com/ researchandstandards/corpus/). This will likely replace Reuters-21578 as the “standard” Reuters benchmark for TC.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+38
+
+Sebastiani
+
+Table VI. Comparative Results Among Different Classiﬁers Obtained on Five Different Versions of Reuters.
+(Unless otherwise noted, entries indicate the microaveraged breakeven point; within parentheses, “M” indicates macroaveraging and “F 1” indicates use of the F 1 measure; boldface indicates the best performer on the collection.)
+
+#1
+
+#2
+
+#3 #4 #5
+
+# of documents # of training documents
+# of test documents # of categories
+
+21,450 14,704 6,746
+135
+
+14,347 13,272 12,902 12,902
+
+10,667 9,610 9,603 9,603
+
+3,680 3,662 3,299 3,299
+
+93
+
+92 90 10
+
+System
+
+Type
+
+Results reported by
+
+WORD
+
+(non-learning)
+
+Yang [1999]
+
+probabilistic
+
+[Dumais et al. 1998]
+
+probabilistic
+
+[Joachims 1998]
+
+probabilistic
+
+[Lam et al. 1997]
+
+PROPBAYES
+
+probabilistic
+
+[Lewis 1992a]
+
+BIM
+
+probabilistic [Li and Yamanishi 1999]
+
+probabilistic [Li and Yamanishi 1999]
+
+NB
+
+probabilistic
+
+[Yang and Liu 1999]
+
+decision trees
+
+[Dumais et al. 1998]
+
+C4.5
+
+decision trees
+
+[Joachims 1998]
+
+IND
+
+decision trees [Lewis and Ringuette 1994]
+
+SWAP-1
+
+decision rules
+
+[Apte´ et al. 1994]
+
+RIPPER
+
+decision rules [Cohen and Singer 1999]
+
+SLEEPINGEXPERTS decision rules [Cohen and Singer 1999]
+
+DL-ESC
+
+decision rules [Li and Yamanishi 1999]
+
+CHARADE
+
+decision rules [Moulinier and Ganascia 1996]
+
+CHARADE
+
+decision rules
+
+[Moulinier et al. 1996]
+
+LLSF
+
+regression
+
+[Yang 1999]
+
+LLSF
+
+regression
+
+[Yang and Liu 1999]
+
+BALANCEDWINNOW on-line linear
+
+[Dagan et al. 1997]
+
+WIDROW-HOFF on-line linear
+
+[Lam and Ho 1998]
+
+ROCCHIO
+
+batch linear [Cohen and Singer 1999]
+
+FINDSIM
+
+batch linear
+
+[Dumais et al. 1998]
+
+ROCCHIO
+
+batch linear
+
+[Joachims 1998]
+
+ROCCHIO
+
+batch linear
+
+[Lam and Ho 1998]
+
+ROCCHIO
+
+batch linear [Li and Yamanishi 1999]
+
+CLASSI
+
+neural network
+
+[Ng et al. 1997]
+
+NNET
+
+neural network
+
+Yang and Liu 1999]
+
+neural network
+
+[Wiener et al. 1995]
+
+GIS-W
+
+example-based
+
+[Lam and Ho 1998]
+
+k-NN
+
+example-based
+
+[Joachims 1998]
+
+k-NN
+
+example-based
+
+[Lam and Ho 1998]
+
+k-NN
+
+example-based
+
+[Yang 1999]
+
+k-NN
+
+example-based
+
+[Yang and Liu 1999]
+
+SVM
+
+[Dumais et al. 1998]
+
+SVMLIGHT
+
+SVM
+
+[Joachims 1998]
+
+SVMLIGHT
+
+SVM
+
+[Li Yamanishi 1999]
+
+SVMLIGHT
+
+SVM
+
+[Yang and Liu 1999]
+
+ADABOOST.MH committee [Schapire and Singer 2000]
+
+committee
+
+[Weiss et al. 1999]
+
+Bayesian net
+
+[Dumais et al. 1998]
+
+Bayesian net
+
+[Lam et al. 1997]
+
+.150
+
+.310
+
+.443 (MF1) .650
+
+.670
+
+.805
+
+.683
+
+.811
+
+.753
+
+.759
+
+.738
+.783 (F1) .855
+
+.747 (M) .833 (M)
+
+.660
+
+.748
+
+.802
+
+.690
+
+.852
+
+.860 .542 (MF1)
+
+.290
+.810 .820 .820
+
+.752 .720
+.747 .773 .795
+.794
+.820 .827 .820
+.849
+.822 .776 .617 .799 .781 .625
+.838
+.860 .823 .820
+.856 .870 .864 .841 .859
+.878 .800
+
+.815 .884
+.646
+.920 .850
+
+and Pedersen [1997].21 The documents are titles or title-plus-abstracts from medical journals (OHSUMED is actually a subset of the Medline document base);
+21 The OHSUMED collection may be freely downloaded for experimentation purposes from ftp:// medir.ohsu.edu/pub/ohsumed.
+
+the categories are the “postable terms” of the MESH thesaurus.
+—the 20 Newsgroups collection, set up by Lang [1995] and used by Baker and McCallum [1998], Joachims [1997], McCallum and Nigam [1998], McCallum et al. [1998], Nigam et al.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+39
+
+[2000], and Schapire and Singer [2000]. The documents are messages posted to Usenet newsgroups, and the categories are the newsgroups themselves.
+—the AP collection, used by Cohen [1995a, 1995b], Cohen and Singer [1999], Lewis and Catlett [1994], Lewis and Gale [1994], Lewis et al. [1996], Schapire and Singer [2000], and Schapire et al. [1998].
+We will not cover the experiments performed on these collections for the same reasons as those illustrated in footnote 20, that is, because in no case have a signiﬁcant enough number of authors used the same collection in the same experimental conditions, thus making comparisons difﬁcult.
+7.3. Which Text Classiﬁer Is Best?
+The published experimental results, and especially those listed in Table VI, allow us to attempt some considerations on the comparative performance of the TC methods discussed. However, we have to bear in mind that comparisons are reliable only when based on experiments performed by the same author under carefully controlled conditions. They are instead more problematic when they involve different experiments performed by different authors. In this case various “background conditions,” often extraneous to the learning algorithm itself, may inﬂuence the results. These may include, among others, different choices in preprocessing (stemming, etc.), indexing, dimensionality reduction, classiﬁer parameter values, etc., but also different standards of compliance with safe scientiﬁc practice (such as tuning parameters on the test set rather than on a separate validation set), which often are not discussed in the published papers.
+Two different methods may thus be applied for comparing classiﬁers [Yang 1999]:
+—direct comparison: classiﬁers and may be compared when they have been tested on the same collection , usually by the same researchers and with the
+
+same background conditions. This is the more reliable method.
+—indirect comparison: classiﬁers and may be compared when
+(1) they have been tested on collections and , respectively, typically
+by different researchers and hence with possibly different background conditions;
+(2) one or more “baseline” classiﬁers ¯ 1, . . . , ¯ m have been tested on both and by the direct comparison method.
+Test 2 gives an indication on the relative “hardness” of and ; using this and the results from Test 1, we may obtain an indication on the relative effectiveness of and . For the reasons discussed above, this method is less reliable.
+A number of interesting conclusions can be drawn from Table VI by using these two methods. Concerning the relative “hardness” of the ﬁve collections, if by > we indicate that is a harder collection than , there seems to be enough evidence that Reuters-22173 “ModLewis” Reuters-22173 “ModWiener” > Reuters22173 “ModApte´ ” ≈ Reuters-21578 “ModApte´ ” > Reuters-21578[10] “ModApte´ .” These facts are unsurprising; in particular, the ﬁrst and the last inequalities are a direct consequence of the peculiar characteristics of Reuters-22173 “ModLewis” and Reuters-21578[10] “ModApte´ ” discussed in Section 7.2.
+Concerning the relative performance of the classiﬁers, remembering the considerations above we may attempt a few conclusions:
+—Boosting-based classiﬁer committees, support vector machines, examplebased methods, and regression methods deliver top-notch performance. There seems to be no sufﬁcient evidence to decidedly opt for either method; efﬁciency considerations or applicationdependent issues might play a role in breaking the tie.
+—Neural networks and on-line linear classiﬁers work very well, although slightly
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+40
+
+Sebastiani
+
+worse than the previously mentioned methods.
+—Batch linear classiﬁers (Rocchio) and probabilistic Na¨ıve Bayes classiﬁers look the worst of the learning-based classiﬁers. For Rocchio, these results conﬁrm earlier results by Schu¨ tze et al. [1995], who had found three classiﬁers based on linear discriminant analysis, linear regression, and neural networks to perform about 15% better than Rocchio. However, recent results by Schapire et al. [1998] ranked Rocchio along the best performers once nearpositives are used in training.
+—The data in Table VI is hardly sufﬁcient to say anything about decision trees. However, the work by Dumais et al. [1998], in which a decision tree classiﬁer was shown to perform nearly as well as their top performing system (a SVM classiﬁer), will probably renew the interest in decision trees, an interest that had dwindled after the unimpressive results reported in earlier literature [Cohen and Singer 1999; Joachims 1998; Lewis and Catlett 1994; Lewis and Ringuette 1994].
+—By far the lowest performance is displayed by WORD, a classiﬁer implemented by Yang [1999] and not including any learning component.22
+Concerning WORD and no-learning classiﬁers, for completeness we should recall that one of the highest effectiveness values reported in the literature for the Reuters collection (a .90 breakeven) belongs to CONSTRUE, a manually constructed classiﬁer. However, this classiﬁer has never been tested on the standard variants of Reuters mentioned in Table VI, and it is not clear [Yang 1999] whether the (small) test set of Reuters-22173 “ModHayes” on
+22 WORD is based on the comparison between documents and category names, each treated as a vector of weighted terms in the vector space model. WORD was implemented by Yang with the only purpose of determining the difference in effectiveness that adding a learning component to a classiﬁer brings about. WORD is actually called STR in [Yang 1994; Yang and Chute 1994]. Another no-learning classiﬁer was proposed in Wong et al. [1996].
+
+which the .90 breakeven value was obtained was chosen randomly, as safe scientiﬁc practice would demand. Therefore, the fact that this ﬁgure is indicative of the performance of CONSTRUE, and of the manual approach it represents, has been convincingly questioned [Yang 1999].
+It is important to bear in mind that the considerations above are not absolute statements (if there may be any) on the comparative effectiveness of these TC methods. One of the reasons is that a particular applicative context may exhibit very different characteristics from the ones to be found in Reuters, and different classiﬁers may respond differently to these characteristics. An experimental study by Joachims [1998] involving support vector machines, k-NN, decision trees, Rocchio, and Na¨ıve Bayes, showed all these classiﬁers to have similar effectiveness on categories with ≥ 300 positive training examples each. The fact that this experiment involved the methods which have scored best (support vector machines, k-NN) and worst (Rocchio and Na¨ıve Bayes) according to Table VI shows that applicative contexts different from Reuters may well invalidate conclusions drawn on this latter.
+Finally, a note about the worth of statistical signiﬁcance testing. Few authors have gone to the trouble of validating their results by means of such tests. These tests are useful for verifying how strongly the experimental results support the claim that a given system is better than another system , or for verifying how much a difference in the experimental setup affects the measured effectiveness of a system . Hull [1994] and Schu¨ tze et al. [1995] have been among the ﬁrst to work in this direction, validating their results by means of the ANOVA test and the Friedman test; the former is aimed at determining the signiﬁcance of the difference in effectiveness between two methods in terms of the ratio between this difference and the effectiveness variability across categories, while the latter conducts a similar test by using instead the rank positions of each method within a category. Yang and Liu [1999] deﬁned a full suite of signiﬁcance
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+41
+
+tests, some of which apply to microaveraged and some to macroaveraged effectiveness. They applied them systematically to the comparison between ﬁve different classiﬁers, and were thus able to infer ﬁnegrained conclusions about their relative effectiveness. For other examples of signiﬁcance testing in TC, see Cohen [1995a, 1995b]; Cohen and Hirsh [1998], Joachims [1997], Koller and Sahami [1997], Lewis et al. [1996], and Wiener et al. [1995].
+8. CONCLUSION
+Automated TC is now a major research area within the information systems discipline, thanks to a number of factors:
+—Its domains of application are numerous and important, and given the proliferation of documents in digital form they are bound to increase dramatically in both number and importance.
+—It is indispensable in many applications in which the sheer number of the documents to be classiﬁed and the short response time required by the application make the manual alternative implausible.
+—It can improve the productivity of human classiﬁers in applications in which no classiﬁcation decision can be taken without a ﬁnal human judgment [Larkey and Croft 1996], by providing tools that quickly “suggest” plausible decisions.
+—It has reached effectiveness levels comparable to those of trained professionals. The effectiveness of manual TC is not 100% anyway [Cleverdon 1984] and, more importantly, it is unlikely to be improved substantially by the progress of research. The levels of effectiveness of automated TC are instead growing at a steady pace, and even if they will likely reach a plateau well below the 100% level, this plateau will probably be higher than the effectiveness levels of manual TC.
+One of the reasons why from the early ’90s the effectiveness of text classiﬁers has dramatically improved is the arrival
+
+in the TC arena of ML methods that are backed by strong theoretical motivations. Examples of these are multiplicative weight updating (e.g., the WINNOW family, WIDROW-HOFF, etc.), adaptive resampling (e.g., boosting), and support vector machines, which provide a sharp contrast with relatively unsophisticated and weak methods such as Rocchio. In TC, ML researchers have found a challenging application, since datasets consisting of hundreds of thousands of documents and characterized by tens of thousands of terms are widely available. This means that TC is a good benchmark for checking whether a given learning technique can scale up to substantial sizes. In turn, this probably means that the active involvement of the ML community in TC is bound to grow.
+The success story of automated TC is also going to encourage an extension of its methods and techniques to neighboring ﬁelds of application. Techniques typical of automated TC have already been extended successfully to the categorization of documents expressed in slightly different media; for instance:
+—very noisy text resulting from optical character recognition [Ittner et al. 1995; Junker and Hoch 1998]. In their experiments Ittner et al. [1995] have found that, by employing noisy texts also in the training phase (i.e. texts affected by the same source of noise that is also at work in the test documents), effectiveness levels comparable to those obtainable in the case of standard text can be achieved.
+—speech transcripts [Myers et al. 2000; Schapire and Singer 2000]. For instance, Schapire and Singer [2000] classiﬁed answers given to a phone operator’s request “How may I help you?” so as to be able to route the call to a specialized operator according to call type.
+Concerning other more radically different media, the situation is not as bright (however, see Lim [1999] for an interesting attempt at image categorization based
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+42
+
+Sebastiani
+
+on a textual metaphor). The reason for this is that capturing real semantic content of nontextual media by automatic indexing is still an open problem. While there are systems that attempt to detect content, for example, in images by recognizing shapes, color distributions, and texture, the general problem of image semantics is still unsolved. The main reason is that natural language, the language of the text medium, admits far fewer variations than the “languages” employed by the other media. For instance, while the concept of a house can be “triggered” by relatively few natural language expressions such as house, houses, home, housing, inhabiting, etc., it can be triggered by far more images: the images of all the different houses that exist, of all possible colors and shapes, viewed from all possible perspectives, from all possible distances, etc. If we had solved the multimedia indexing problem in a satisfactory way, the general methodology that we have discussed in this paper for text would also apply to automated multimedia categorization, and there are reasons to believe that the effectiveness levels could be as high. This only adds to the common sentiment that more research in automated contentbased indexing for multimedia documents is needed.
+ACKNOWLEDGMENTS
+This paper owes a lot to the suggestions and constructive criticism of Norbert Fuhr and David Lewis. Thanks also to Umberto Straccia for comments on an earlier draft, to Evgeniy Gabrilovich, Daniela Giorgetti, and Alessandro Moschitti for spotting mistakes in an earlier draft, and to Alessandro Sperduti for many fruitful discussions.
+REFERENCES
+AMATI, G. AND CRESTANI, F. 1999. Probabilistic learning for selective dissemination of information. Inform. Process. Man. 35, 5, 633–654.
+ANDROUTSOPOULOS, I., KOUTSIAS, J., CHANDRINOS, K. V., AND SPYROPOULOS, C. D. 2000. An experimental comparison of naive Bayesian and keywordbased anti-spam ﬁltering with personal e-mail messages. In Proceedings of SIGIR-00, 23rd ACM International Conference on Research and Development in Information Retrieval (Athens, Greece, 2000), 160–167.
+
+APTE´, C., DAMERAU, F. J., AND WEISS, S. M. 1994. Automated learning of decision rules for text categorization. ACM Trans. on Inform. Syst. 12, 3, 233–251.
+ATTARDI, G., DI MARCO, S., AND SALVI, D. 1998. Categorization by context. J. Univers. Comput. Sci. 4, 9, 719–736.
+BAKER, L. D. AND MCCALLUM, A. K. 1998. Distributional clustering of words for text classiﬁcation. In Proceedings of SIGIR-98, 21st ACM International Conference on Research and Development in Information Retrieval (Melbourne, Australia, 1998), 96–103.
+BELKIN, N. J. AND CROFT, W. B. 1992. Information ﬁltering and information retrieval: two sides of the same coin? Commun. ACM 35, 12, 29– 38.
+BIEBRICHER, P., FUHR, N., KNORZ, G., LUSTIG, G., AND SCHWANTNER, M. 1988. The automatic indexing system AIR/PHYS. From research to application. In Proceedings of SIGIR-88, 11th ACM International Conference on Research and Development in Information Retrieval (Grenoble, France, 1988), 333–342. Also reprinted in Sparck Jones and Willett [1997], pp. 513–517.
+BORKO, H. AND BERNICK, M. 1963. Automatic document classiﬁcation. J. Assoc. Comput. Mach. 10, 2, 151–161.
+CAROPRESO, M. F., MATWIN, S., AND SEBASTIANI, F. 2001. A learner-independent evaluation of the usefulness of statistical phrases for automated text categorization. In Text Databases and Document Management: Theory and Practice, A. G. Chin, ed. Idea Group Publishing, Hershey, PA, 78–102.
+CAVNAR, W. B. AND TRENKLE, J. M. 1994. N-grambased text categorization. In Proceedings of SDAIR-94, 3rd Annual Symposium on Document Analysis and Information Retrieval (Las Vegas, NV, 1994), 161–175.
+CHAKRABARTI, S., DOM, B. E., AGRAWAL, R., AND RAGHAVAN, P. 1998a. Scalable feature selection, classiﬁcation and signature generation for organizing large text databases into hierarchical topic taxonomies. J. Very Large Data Bases 7, 3, 163–178.
+CHAKRABARTI, S., DOM, B. E., AND INDYK, P. 1998b. Enhanced hypertext categorization using hyperlinks. In Proceedings of SIGMOD-98, ACM International Conference on Management of Data (Seattle, WA, 1998), 307–318.
+CLACK, C., FARRINGDON, J., LIDWELL, P., AND YU, T. 1997. Autonomous document classiﬁcation for business. In Proceedings of the 1st International Conference on Autonomous Agents (Marina del Rey, CA, 1997), 201–208.
+CLEVERDON, C. 1984. Optimizing convenient online access to bibliographic databases. Inform. Serv. Use 4, 1, 37–47. Also reprinted in Willett [1988], pp. 32–41.
+COHEN, W. W. 1995a. Learning to classify English text with ILP methods. In Advances in Inductive
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+43
+
+Logic Programming, L. De Raedt, ed. IOS Press, Amsterdam, The Netherlands, 124–143.
+COHEN, W. W. 1995b. Text categorization and relational learning. In Proceedings of ICML-95, 12th International Conference on Machine Learning (Lake Tahoe, CA, 1995), 124–132.
+COHEN, W. W. AND HIRSH, H. 1998. Joins that generalize: text classiﬁcation using WHIRL. In Proceedings of KDD-98, 4th International Conference on Knowledge Discovery and Data Mining (New York, NY, 1998), 169–173.
+COHEN, W. W. AND SINGER, Y. 1999. Contextsensitive learning methods for text categorization. ACM Trans. Inform. Syst. 17, 2, 141– 173.
+COOPER, W. S. 1995. Some inconsistencies and misnomers in probabilistic information retrieval. ACM Trans. Inform. Syst. 13, 1, 100–111.
+CREECY, R. M., MASAND, B. M., SMITH, S. J., AND WALTZ, D. L. 1992. Trading MIPS and memory for knowledge engineering: classifying census returns on the Connection Machine. Commun. ACM 35, 8, 48–63.
+CRESTANI, F., LALMAS, M., VAN RIJSBERGEN, C. J., AND CAMPBELL, I. 1998. “Is this document relevant? . . . probably.” A survey of probabilistic models in information retrieval. ACM Comput. Surv. 30, 4, 528–552.
+DAGAN, I., KAROV, Y., AND ROTH, D. 1997. Mistakedriven learning in text categorization. In Proceedings of EMNLP-97, 2nd Conference on Empirical Methods in Natural Language Processing (Providence, RI, 1997), 55–63.
+DEERWESTER, S., DUMAIS, S. T., FURNAS, G. W., LANDAUER, T. K., AND HARSHMAN, R. 1990. Indexing by latent semantic indexing. J. Amer. Soc. Inform. Sci. 41, 6, 391–407.
+DENOYER, L., ZARAGOZA, H., AND GALLINARI, P. 2001. HMM-based passage models for document classiﬁcation and ranking. In Proceedings of ECIR01, 23rd European Colloquium on Information Retrieval Research (Darmstadt, Germany, 2001).
+D´IAZ ESTEBAN, A., DE BUENAGA RODR´IGUEZ, M., UREN˜ A LO´ PEZ, L. A., AND GARC´IA VEGA, M. 1998. Integrating linguistic resources in an uniform way for text classiﬁcation tasks. In Proceedings of LREC-98, 1st International Conference on Language Resources and Evaluation (Grenada, Spain, 1998), 1197–1204.
+DOMINGOS, P. AND PAZZANI, M. J. 1997. On the the optimality of the simple Bayesian classiﬁer under zero-one loss. Mach. Learn. 29, 2–3, 103–130.
+DRUCKER, H., VAPNIK, V., AND WU, D. 1999. Automatic text categorization and its applications to text retrieval. IEEE Trans. Neural Netw. 10, 5, 1048–1054.
+DUMAIS, S. T. AND CHEN, H. 2000. Hierarchical classiﬁcation of Web content. In Proceedings of SIGIR-00, 23rd ACM International Conference on Research and Development in Information Retrieval (Athens, Greece, 2000), 256–263.
+
+DUMAIS, S. T., PLATT, J., HECKERMAN, D., AND SAHAMI, M. 1998. Inductive learning algorithms and representations for text categorization. In Proceedings of CIKM-98, 7th ACM International Conference on Information and Knowledge Management (Bethesda, MD, 1998), 148–155.
+ESCUDERO, G., MA` RQUEZ, L., AND RIGAU, G. 2000. Boosting applied to word sense disambiguation. In Proceedings of ECML-00, 11th European Conference on Machine Learning (Barcelona, Spain, 2000), 129–141.
+FIELD, B. 1975. Towards automatic indexing: automatic assignment of controlled-language indexing and classiﬁcation from free indexing. J. Document. 31, 4, 246–265.
+FORSYTH, R. S. 1999. New directions in text categorization. In Causal Models and Intelligent Data Management, A. Gammerman, ed. Springer, Heidelberg, Germany, 151–185.
+FRASCONI, P., SODA, G., AND VULLO, A. 2002. Text categorization for multi-page documents: A hybrid naive Bayes HMM approach. J. Intell. Inform. Syst. 18, 2/3 (March–May), 195–217.
+FUHR, N. 1985. A probabilistic model of dictionarybased automatic indexing. In Proceedings of RIAO-85, 1st International Conference “Recherche d’Information Assistee par Ordinateur” (Grenoble, France, 1985), 207–216.
+FUHR, N. 1989. Models for retrieval with probabilistic indexing. Inform. Process. Man. 25, 1, 55– 72.
+FUHR, N. AND BUCKLEY, C. 1991. A probabilistic learning approach for document indexing. ACM Trans. Inform. Syst. 9, 3, 223–248.
+FUHR, N., HARTMANN, S., KNORZ, G., LUSTIG, G., SCHWANTNER, M., AND TZERAS, K. 1991. AIR/X—a rule-based multistage indexing system for large subject ﬁelds. In Proceedings of RIAO-91, 3rd International Conference “Recherche d’Information Assistee par Ordinateur” (Barcelona, Spain, 1991), 606–623.
+FUHR, N. AND KNORZ, G. 1984. Retrieval test evaluation of a rule-based automated indexing (AIR/PHYS). In Proceedings of SIGIR-84, 7th ACM International Conference on Research and Development in Information Retrieval (Cambridge, UK, 1984), 391–408.
+FUHR, N. AND PFEIFER, U. 1994. Probabilistic information retrieval as combination of abstraction inductive learning and probabilistic assumptions. ACM Trans. Inform. Syst. 12, 1, 92–115.
+FU¨ RNKRANZ, J. 1999. Exploiting structural information for text classiﬁcation on the WWW. In Proceedings of IDA-99, 3rd Symposium on Intelligent Data Analysis (Amsterdam, The Netherlands, 1999), 487–497.
+GALAVOTTI, L., SEBASTIANI, F., AND SIMI, M. 2000. Experiments on the use of feature selection and negative evidence in automated text categorization. In Proceedings of ECDL-00, 4th European Conference on Research and
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+44
+
+Sebastiani
+
+Advanced Technology for Digital Libraries (Lisbon, Portugal, 2000), 59–68.
+GALE, W. A., CHURCH, K. W., AND YAROWSKY, D. 1993. A method for disambiguating word senses in a large corpus. Comput. Human. 26, 5, 415–439.
+GO¨ VERT, N., LALMAS, M., AND FUHR, N. 1999. A probabillistic description-oriented approach for categorising Web documents. In Proceedings of CIKM-99, 8th ACM International Conference on Information and Knowledge Management (Kansas City, MO, 1999), 475–482.
+GRAY, W. A. AND HARLEY, A. J. 1971. Computerassisted indexing. Inform. Storage Retrieval 7, 4, 167–174.
+GUTHRIE, L., WALKER, E., AND GUTHRIE, J. A. 1994. Document classiﬁcation by machine: theory and practice. In Proceedings of COLING-94, 15th International Conference on Computational Linguistics (Kyoto, Japan, 1994), 1059–1063.
+HAYES, P. J., ANDERSEN, P. M., NIRENBURG, I. B., AND SCHMANDT, L. M. 1990. Tcs: a shell for content-based text categorization. In Proceedings of CAIA-90, 6th IEEE Conference on Artiﬁcial Intelligence Applications (Santa Barbara, CA, 1990), 320–326.
+HEAPS, H. 1973. A theory of relevance for automatic document classiﬁcation. Inform. Control 22, 3, 268–278.
+HERSH, W., BUCKLEY, C., LEONE, T., AND HICKMAN, D. 1994. OHSUMED: an interactive retrieval evaluation and new large text collection for research. In Proceedings of SIGIR-94, 17th ACM International Conference on Research and Development in Information Retrieval (Dublin, Ireland, 1994), 192–201.
+HULL, D. A. 1994. Improving text retrieval for the routing problem using latent semantic indexing. In Proceedings of SIGIR-94, 17th ACM International Conference on Research and Development in Information Retrieval (Dublin, Ireland, 1994), 282–289.
+HULL, D. A., PEDERSEN, J. O., AND SCHU¨ TZE, H. 1996. Method combination for document ﬁltering. In Proceedings of SIGIR-96, 19th ACM International Conference on Research and Development in Information Retrieval (Zu¨ rich, Switzerland, 1996), 279–288.
+ITTNER, D. J., LEWIS, D. D., AND AHN, D. D. 1995. Text categorization of low quality images. In Proceedings of SDAIR-95, 4th Annual Symposium on Document Analysis and Information Retrieval (Las Vegas, NV, 1995), 301–315.
+IWAYAMA, M. AND TOKUNAGA, T. 1995. Cluster-based text categorization: a comparison of category search strategies. In Proceedings of SIGIR-95, 18th ACM International Conference on Research and Development in Information Retrieval (Seattle, WA, 1995), 273–281.
+IYER, R. D., LEWIS, D. D., SCHAPIRE, R. E., SINGER, Y., AND SINGHAL, A. 2000. Boosting for document routing. In Proceedings of CIKM-00, 9th ACM International Conference on Information and
+
+Knowledge Management (McLean, VA, 2000), 70–77.
+JOACHIMS, T. 1997. A probabilistic analysis of the Rocchio algorithm with TFIDF for text categorization. In Proceedings of ICML-97, 14th International Conference on Machine Learning (Nashville, TN, 1997), 143–151.
+JOACHIMS, T. 1998. Text categorization with support vector machines: learning with many relevant features. In Proceedings of ECML-98, 10th European Conference on Machine Learning (Chemnitz, Germany, 1998), 137–142.
+JOACHIMS, T. 1999. Transductive inference for text classiﬁcation using support vector machines. In Proceedings of ICML-99, 16th International Conference on Machine Learning (Bled, Slovenia, 1999), 200–209.
+JOACHIMS, T. AND SEBASTIANI, F. 2002. Guest editors’ introduction to the special issue on automated text categorization. J. Intell. Inform. Syst. 18, 2/3 (March-May), 103–105.
+JOHN, G. H., KOHAVI, R., AND PFLEGER, K. 1994. Irrelevant features and the subset selection problem. In Proceedings of ICML-94, 11th International Conference on Machine Learning (New Brunswick, NJ, 1994), 121–129.
+JUNKER, M. AND ABECKER, A. 1997. Exploiting thesaurus knowledge in rule induction for text classiﬁcation. In Proceedings of RANLP-97, 2nd International Conference on Recent Advances in Natural Language Processing (Tzigov Chark, Bulgaria, 1997), 202–207.
+JUNKER, M. AND HOCH, R. 1998. An experimental evaluation of OCR text representations for learning document classiﬁers. Internat. J. Document Analysis and Recognition 1, 2, 116–122.
+KESSLER, B., NUNBERG, G., AND SCHU¨ TZE, H. 1997. Automatic detection of text genre. In Proceedings of ACL-97, 35th Annual Meeting of the Association for Computational Linguistics (Madrid, Spain, 1997), 32–38.
+KIM, Y.-H., HAHN, S.-Y., AND ZHANG, B.-T. 2000. Text ﬁltering by boosting naive Bayes classiﬁers. In Proceedings of SIGIR-00, 23rd ACM International Conference on Research and Development in Information Retrieval (Athens, Greece, 2000), 168–175.
+KLINKENBERG, R. AND JOACHIMS, T. 2000. Detecting concept drift with support vector machines. In Proceedings of ICML-00, 17th International Conference on Machine Learning (Stanford, CA, 2000), 487–494.
+KNIGHT, K. 1999. Mining online text. Commun. ACM 42, 11, 58–61.
+KNORZ, G. 1982. A decision theory approach to optimal automated indexing. In Proceedings of SIGIR-82, 5th ACM International Conference on Research and Development in Information Retrieval (Berlin, Germany, 1982), 174–193.
+KOLLER, D. AND SAHAMI, M. 1997. Hierarchically classifying documents using very few words. In
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+45
+
+Proceedings of ICML-97, 14th International Conference on Machine Learning (Nashville, TN, 1997), 170–178.
+KORFHAGE, R. R. 1997. Information Storage and Retrieval. Wiley Computer Publishing, New York, NY.
+LAM, S. L. AND LEE, D. L. 1999. Feature reduction for neural network based text categorization. In Proceedings of DASFAA-99, 6th IEEE International Conference on Database Advanced Systems for Advanced Application (Hsinchu, Taiwan, 1999), 195–202.
+LAM, W. AND HO, C. Y. 1998. Using a generalized instance set for automatic text categorization. In Proceedings of SIGIR-98, 21st ACM International Conference on Research and Development in Information Retrieval (Melbourne, Australia, 1998), 81–89.
+LAM, W., LOW, K. F., AND HO, C. Y. 1997. Using a Bayesian network induction approach for text categorization. In Proceedings of IJCAI-97, 15th International Joint Conference on Artiﬁcial Intelligence (Nagoya, Japan, 1997), 745–750.
+LAM, W., RUIZ, M. E., AND SRINIVASAN, P. 1999. Automatic text categorization and its applications to text retrieval. IEEE Trans. Knowl. Data Engin. 11, 6, 865–879.
+LANG, K. 1995. NEWSWEEDER: learning to ﬁlter netnews. In Proceedings of ICML-95, 12th International Conference on Machine Learning (Lake Tahoe, CA, 1995), 331–339.
+LARKEY, L. S. 1998. Automatic essay grading using text categorization techniques. In Proceedings of SIGIR-98, 21st ACM International Conference on Research and Development in Information Retrieval (Melbourne, Australia, 1998), 90–95.
+LARKEY, L. S. 1999. A patent search and classiﬁcation system. In Proceedings of DL-99, 4th ACM Conference on Digital Libraries (Berkeley, CA, 1999), 179–187.
+LARKEY, L. S. AND CROFT, W. B. 1996. Combining classiﬁers in text categorization. In Proceedings of SIGIR-96, 19th ACM International Conference on Research and Development in Information Retrieval (Zu¨ rich, Switzerland, 1996), 289–297.
+LEWIS, D. D. 1992a. An evaluation of phrasal and clustered representations on a text categorization task. In Proceedings of SIGIR-92, 15th ACM International Conference on Research and Development in Information Retrieval (Copenhagen, Denmark, 1992), 37–50.
+LEWIS, D. D. 1992b. Representation and Learning in Information Retrieval. Ph. D. thesis, Department of Computer Science, University of Massachusetts, Amherst, MA.
+LEWIS, D. D. 1995a. Evaluating and optmizing autonomous text classiﬁcation systems. In Proceedings of SIGIR-95, 18th ACM International Conference on Research and Development in Information Retrieval (Seattle, WA, 1995), 246– 254.
+
+LEWIS, D. D. 1995b. A sequential algorithm for training text classiﬁers: corrigendum and additional data. SIGIR Forum 29, 2, 13–19.
+LEWIS, D. D. 1995c. The TREC-4 ﬁltering track: description and analysis. In Proceedings of TREC-4, 4th Text Retrieval Conference (Gaithersburg, MD, 1995), 165–180.
+LEWIS, D. D. 1998. Naive (Bayes) at forty: The independence assumption in information retrieval. In Proceedings of ECML-98, 10th European Conference on Machine Learning (Chemnitz, Germany, 1998), 4–15.
+LEWIS, D. D. AND CATLETT, J. 1994. Heterogeneous uncertainty sampling for supervised learning. In Proceedings of ICML-94, 11th International Conference on Machine Learning (New Brunswick, NJ, 1994), 148–156.
+LEWIS, D. D. AND GALE, W. A. 1994. A sequential algorithm for training text classiﬁers. In Proceedings of SIGIR-94, 17th ACM International Conference on Research and Development in Information Retrieval (Dublin, Ireland, 1994), 3–12. See also Lewis [1995b].
+LEWIS, D. D. AND HAYES, P. J. 1994. Guest editorial for the special issue on text categorization. ACM Trans. Inform. Syst. 12, 3, 231.
+LEWIS, D. D. AND RINGUETTE, M. 1994. A comparison of two learning algorithms for text categorization. In Proceedings of SDAIR-94, 3rd Annual Symposium on Document Analysis and Information Retrieval (Las Vegas, NV, 1994), 81–93.
+LEWIS, D. D., SCHAPIRE, R. E., CALLAN, J. P., AND PAPKA, R. 1996. Training algorithms for linear text classiﬁers. In Proceedings of SIGIR-96, 19th ACM International Conference on Research and Development in Information Retrieval (Zu¨ rich, Switzerland, 1996), 298–306.
+LI, H. AND YAMANISHI, K. 1999. Text classiﬁcation using ESC-based stochastic decision lists. In Proceedings of CIKM-99, 8th ACM International Conference on Information and Knowledge Management (Kansas City, MO, 1999), 122–130.
+LI, Y. H. AND JAIN, A. K. 1998. Classiﬁcation of text documents. Comput. J. 41, 8, 537–546.
+LIDDY, E. D., PAIK, W., AND YU, E. S. 1994. Text categorization for multiple users based on semantic features from a machine-readable dictionary. ACM Trans. Inform. Syst. 12, 3, 278–295.
+LIERE, R. AND TADEPALLI, P. 1997. Active learning with committees for text categorization. In Proceedings of AAAI-97, 14th Conference of the American Association for Artiﬁcial Intelligence (Providence, RI, 1997), 591–596.
+LIM, J. H. 1999. Learnable visual keywords for image classiﬁcation. In Proceedings of DL-99, 4th ACM Conference on Digital Libraries (Berkeley, CA, 1999), 139–145.
+MANNING, C. AND SCHU¨ TZE, H. 1999. Foundations of Statistical Natural Language Processing. MIT Press, Cambridge, MA.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+46
+
+Sebastiani
+
+MARON, M. 1961. Automatic indexing: an experimental inquiry. J. Assoc. Comput. Mach. 8, 3, 404–417.
+MASAND, B. 1994. Optimising conﬁdence of text classiﬁcation by evolution of symbolic expressions. In Advances in Genetic Programming, K. E. Kinnear, ed. MIT Press, Cambridge, MA, Chapter 21, 459–476.
+MASAND, B., LINOFF, G., AND WALTZ, D. 1992. Classifying news stories using memory-based reasoning. In Proceedings of SIGIR-92, 15th ACM International Conference on Research and Development in Information Retrieval (Copenhagen, Denmark, 1992), 59–65.
+MCCALLUM, A. K. AND NIGAM, K. 1998. Employing EM in pool-based active learning for text classiﬁcation. In Proceedings of ICML-98, 15th International Conference on Machine Learning (Madison, WI, 1998), 350–358.
+MCCALLUM, A. K., ROSENFELD, R., MITCHELL, T. M., AND NG, A. Y. 1998. Improving text classiﬁcation by shrinkage in a hierarchy of classes. In Proceedings of ICML-98, 15th International Conference on Machine Learning (Madison, WI, 1998), 359–367.
+MERKL, D. 1998. Text classiﬁcation with selforganizing maps: Some lessons learned. Neurocomputing 21, 1/3, 61–77.
+MITCHELL, T. M. 1996. Machine Learning. McGraw Hill, New York, NY.
+MLADENIC´, D. 1998. Feature subset selection in text learning. In Proceedings of ECML-98, 10th European Conference on Machine Learning (Chemnitz, Germany, 1998), 95–100.
+MLADENIC´ , D. AND GROBELNIK, M. 1998. Word sequences as features in text-learning. In Proceedings of ERK-98, the Seventh Electrotechnical and Computer Science Conference (Ljubljana, Slovenia, 1998), 145–148.
+MOULINIER, I. AND GANASCIA, J.-G. 1996. Applying an existing machine learning algorithm to text categorization. In Connectionist, Statistical, and Symbolic Approaches to Learning for Natural Language Processing, S. Wermter, E. Riloff, and G. Schaler, eds. Springer Verlag, Heidelberg, Germany, 343–354.
+MOULINIER, I., RAS˘KINIS, G., AND GANASCIA, J.-G. 1996. Text categorization: a symbolic approach. In Proceedings of SDAIR-96, 5th Annual Symposium on Document Analysis and Information Retrieval (Las Vegas, NV, 1996), 87–99.
+MYERS, K., KEARNS, M., SINGH, S., AND WALKER, M. A. 2000. A boosting approach to topic spotting on subdialogues. In Proceedings of ICML-00, 17th International Conference on Machine Learning (Stanford, CA, 2000), 655– 662.
+NG, H. T., GOH, W. B., AND LOW, K. L. 1997. Feature selection, perceptron learning, and a usability case study for text categorization. In Proceedings of SIGIR-97, 20th ACM International Conference on Research and Development in
+
+Information Retrieval (Philadelphia, PA, 1997), 67–73.
+NIGAM, K., MCCALLUM, A. K., THRUN, S., AND MITCHELL, T. M. 2000. Text classiﬁcation from labeled and unlabeled documents using EM. Mach. Learn. 39, 2/3, 103–134.
+OH, H.-J., MYAENG, S. H., AND LEE, M.-H. 2000. A practical hypertext categorization method using links and incrementally available class information. In Proceedings of SIGIR-00, 23rd ACM International Conference on Research and Development in Information Retrieval (Athens, Greece, 2000), 264–271.
+PAZIENZA, M. T., ed. 1997. Information Extraction. Lecture Notes in Computer Science, Vol. 1299. Springer, Heidelberg, Germany.
+RILOFF. E. 1995. Little words can make a big difference for text classiﬁcation. In Proceedings of SIGIR-95, 18th ACM International Conference on Research and Development in Information Retrieval (Seattle, WA, 1995), 130–136.
+RILOFF, E. AND LEHNERT, W. 1994. Information extraction as a basis for high-precision text classiﬁcation. ACM Trans. Inform. Syst. 12, 3, 296–333.
+ROBERTSON, S. E. AND HARDING, P. 1984. Probabilistic automatic indexing by learning from human indexers. J. Document. 40, 4, 264–270.
+ROBERTSON, S. E. AND SPARCK JONES, K. 1976. Relevance weighting of search terms. J. Amer. Soc. Inform. Sci. 27, 3, 129–146. Also reprinted in Willett [1988], pp. 143–160.
+ROTH, D. 1998. Learning to resolve natural language ambiguities: a uniﬁed approach. In Proceedings of AAAI-98, 15th Conference of the American Association for Artiﬁcial Intelligence (Madison, WI, 1998), 806–813.
+RUIZ, M. E. AND SRINIVASAN, P. 1999. Hierarchical neural networks for text categorization. In Proceedings of SIGIR-99, 22nd ACM International Conference on Research and Development in Information Retrieval (Berkeley, CA, 1999), 281–282.
+SABLE, C. L. AND HATZIVASSILOGLOU, V. 2000. Textbased approaches for non-topical image categorization. Internat. J. Dig. Libr. 3, 3, 261–275.
+SALTON, G. AND BUCKLEY, C. 1988. Term-weighting approaches in automatic text retrieval. Inform. Process. Man. 24, 5, 513–523. Also reprinted in Sparck Jones and Willett [1997], pp. 323–328.
+SALTON, G., WONG, A., AND YANG, C. 1975. A vector space model for automatic indexing. Commun. ACM 18, 11, 613–620. Also reprinted in Sparck Jones and Willett [1997], pp. 273–280.
+SARACEVIC, T. 1975. Relevance: a review of and a framework for the thinking on the notion in information science. J. Amer. Soc. Inform. Sci. 26, 6, 321–343. Also reprinted in Sparck Jones and Willett [1997], pp. 143–165.
+SCHAPIRE, R. E. AND SINGER, Y. 2000. BoosTexter: a boosting-based system for text categorization. Mach. Learn. 39, 2/3, 135–168.
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+
+Machine Learning in Automated Text Categorization
+
+47
+
+SCHAPIRE, R. E., SINGER, Y., AND SINGHAL, A. 1998. Boosting and Rocchio applied to text ﬁltering. In Proceedings of SIGIR-98, 21st ACM International Conference on Research and Development in Information Retrieval (Melbourne, Australia, 1998), 215–223.
+SCHU¨ TZE, H. 1998. Automatic word sense discrimination. Computat. Ling. 24, 1, 97–124.
+SCHU¨ TZE, H., HULL, D. A., AND PEDERSEN, J. O. 1995. A comparison of classiﬁers and document representations for the routing problem. In Proceedings of SIGIR-95, 18th ACM International Conference on Research and Development in Information Retrieval (Seattle, WA, 1995), 229–237.
+SCOTT, S. AND MATWIN, S. 1999. Feature engineering for text classiﬁcation. In Proceedings of ICML-99, 16th International Conference on Machine Learning (Bled, Slovenia, 1999), 379–388.
+SEBASTIANI, F., SPERDUTI, A., AND VALDAMBRINI, N. 2000. An improved boosting algorithm and its application to automated text categorization. In Proceedings of CIKM-00, 9th ACM International Conference on Information and Knowledge Management (McLean, VA, 2000), 78–85.
+SINGHAL, A., MITRA, M., AND BUCKLEY, C. 1997. Learning routing queries in a query zone. In Proceedings of SIGIR-97, 20th ACM International Conference on Research and Development in Information Retrieval (Philadelphia, PA, 1997), 25–32.
+SINGHAL, A., SALTON, G., MITRA, M., AND BUCKLEY, C. 1996. Document length normalization. Inform. Process. Man. 32, 5, 619–633.
+SLONIM, N. AND TISHBY, N. 2001. The power of word clusters for text classiﬁcation. In Proceedings of ECIR-01, 23rd European Colloquium on Information Retrieval Research (Darmstadt, Germany, 2001).
+SPARCK JONES, K. AND WILLETT, P., eds. 1997. Readings in Information Retrieval. Morgan Kaufmann, San Mateo, CA.
+TAIRA, H. AND HARUNO, M. 1999. Feature selection in SVM text categorization. In Proceedings of AAAI-99, 16th Conference of the American Association for Artiﬁcial Intelligence (Orlando, FL, 1999), 480–486.
+TAURITZ, D. R., KOK, J. N., AND SPRINKHUIZEN-KUYPER, I. G. 2000. Adaptive information ﬁltering using evolutionary computation. Inform. Sci. 122, 2–4, 121–140.
+TUMER, K. AND GHOSH, J. 1996. Error correlation and error reduction in ensemble classiﬁers. Connection Sci. 8, 3-4, 385–403.
+TZERAS, K. AND HARTMANN, S. 1993. Automatic indexing based on Bayesian inference networks. In Proceedings of SIGIR-93, 16th ACM International Conference on Research and Development in Information Retrieval (Pittsburgh, PA, 1993), 22–34.
+
+VAN RIJSBERGEN, C. J. 1977. A theoretical basis for the use of co-occurrence data in information retrieval. J. Document. 33, 2, 106–119.
+VAN RIJSBERGEN, C. J. 1979. Information Retrieval, 2nd ed. Butterworths, London, UK. Available at http://www.dcs.gla.ac.uk/Keith.
+WEIGEND, A. S., WIENER, E. D., AND PEDERSEN, J. O. 1999. Exploiting hierarchy in text catagorization. Inform. Retr. 1, 3, 193–216.
+WEISS, S. M., APTE´, C., DAMERAU, F. J., JOHNSON, D. E., OLES, F. J., GOETZ, T., AND HAMPP, T. 1999. Maximizing text-mining performance. IEEE Intell. Syst. 14, 4, 63–69.
+WIENER, E. D., PEDERSEN, J. O., AND WEIGEND, A. S. 1995. A neural network approach to topic spotting. In Proceedings of SDAIR-95, 4th Annual Symposium on Document Analysis and Information Retrieval (Las Vegas, NV, 1995), 317–332.
+WILLETT, P., ed. 1988. Document Retrieval Systems. Taylor Graham, London, UK.
+WONG, J. W., KAN, W.-K., AND YOUNG, G. H. 1996. ACTION: automatic classiﬁcation for full-text documents. SIGIR Forum 30, 1, 26–41.
+YANG, Y. 1994. Expert network: effective and efﬁcient learning from human decisions in text categorisation and retrieval. In Proceedings of SIGIR-94, 17th ACM International Conference on Research and Development in Information Retrieval (Dublin, Ireland, 1994), 13–22.
+YANG, Y. 1995. Noise reduction in a statistical approach to text categorization. In Proceedings of SIGIR-95, 18th ACM International Conference on Research and Development in Information Retrieval (Seattle, WA, 1995), 256–263.
+YANG, Y. 1999. An evaluation of statistical approaches to text categorization. Inform. Retr. 1, 1–2, 69–90.
+YANG, Y. AND CHUTE, C. G. 1994. An example-based mapping method for text categorization and retrieval. ACM Trans. Inform. Syst. 12, 3, 252–277.
+YANG, Y. AND LIU, X. 1999. A re-examination of text categorization methods. In Proceedings of SIGIR-99, 22nd ACM International Conference on Research and Development in Information Retrieval (Berkeley, CA, 1999), 42–49.
+YANG, Y. AND PEDERSEN, J. O. 1997. A comparative study on feature selection in text categorization. In Proceedings of ICML-97, 14th International Conference on Machine Learning (Nashville, TN, 1997), 412–420.
+YANG, Y., SLATTERY, S., AND GHANI, R. 2002. A study of approaches to hypertext categorization. J. Intell. Inform. Syst. 18, 2/3 (March-May), 219–241.
+YU, K. L. AND LAM, W. 1998. A new on-line learning algorithm for adaptive text ﬁltering. In Proceedings of CIKM-98, 7th ACM International Conference on Information and Knowledge Management (Bethesda, MD, 1998), 156–160.
+
+Received December 1999; revised February 2001; accepted July 2001
+
+ACM Computing Surveys, Vol. 34, No. 1, March 2002.
+

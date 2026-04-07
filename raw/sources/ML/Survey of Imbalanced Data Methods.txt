@@ -1,0 +1,721 @@
+Survey of Imbalanced Data Methodologies
+
+Lian Yu Corporate Model Risk
+Wells Fargo, US lian.yu@wellsfargo.com
+
+Nengfeng Zhou Corporate Model Risk
+Wells Fargo, US nengfeng.zhou@wellsfargo.com
+
+arXiv:2104.02240v1 [stat.ML] 6 Apr 2021
+
+Abstract
+Imbalanced data set is a problem often found and well-studied in ﬁnancial industry. In this paper, we reviewed and compared some popular methodologies handling data imbalance. We then applied the under-sampling/over-sampling methodologies to several modeling algorithms on UCI and Keel data sets. The performance was analyzed for class-imbalance methods, modeling algorithms and grid search criteria comparison.
+Index Terms
+data imbalance, classiﬁcation, over-sampling, under-sampling, AUC, F-score
+I. INTRODUCTION
+A data set is called imbalanced if the classiﬁcation classes are not approximately equal, where one class contains many more samples than the rest of the classes. In this scenario, classiﬁers can have good predictive accuracy on the majority class but poor performance on the minority class(es) due to the larger inﬂuence of majority class. Hence, the traditional modeling algorithms do not always perform well on the imbalanced data, and the class-imbalance methodologies are proposed to improve the prediction performance of the modeling algorithms.
+In this paper, we review methodologies dealing with imbalanced data and the corresponding performance measures. We then evaluate the impact of class-imbalance methods on many traditional modeling algorithms with empirical experiments. The imbalanced data problem draws many attentions in literature and empirical works. Depending on the modeling stages applied on, the class-imbalance methodologies can be classiﬁed into data pre-processing methods and modeling algorithm speciﬁc methods. The data pre-processing methods are usually under/over-sampling methods that apply on the training data before modeling. The modeling algorithm speciﬁc methods are stand-alone algorithms that work on imbalanced training data directly. To evaluate the impact of class-imbalance methods on the model performance, 15 data sets from UCI/Keel databases are tested, where each data set contains at least 500 samples and the range of imbalance ratio is wide. We experiment four class-imbalance methods on eight modeling algorithms, and measure the performance with F-score and AUC. The results show that the choice of modeling algorithms has more impact on the performance, while the class-imbalance methods are more effective on simple linear algorithms like Logistic Regression and Linear SVC.
+The paper is organized as follows. Section 2 describes the class-imbalance methods and the performance measure for imbalanced data. Section 3 compares the performance of imbalance methods and modeling algorithms through empirical experiments.
+II. CLASS-IMBALANCE METHODOLOGIES AND PERFORMANCE MEASURES
+In this section, we present a literature review of techniques to handle imbalanced data sets, including sampling methods, algorithms of data ensemble and cost sensitive approaches. Furthermore, we present several performance measures for data imbalance, the way to select appropriate measures and their impacts on performance evaluation.
+A. Sampling methods
+Resampling the original data set is a technique that applies at data level for balancing the majority and minority classes. The method works at data pre-processing step, either by over-sampling the minority class or by under-sampling the majority class, to construct a well-balanced training data set. After that, any modeling algorithm could be trained on such data set to alleviate the bias of the algorithm towards the majority class.
+Random majority under-sampling method is the most basic statistical approach that randomly discards samples from the majority class. Since the samples from the majority classes are removed, this method can potentially ignore useful information from those removed samples. Therefore, several under-sampling approaches are proposed to selectively remove samples from the majority class so that the information could be largely retained in the training data set. Condensed Nearest Neighbor (CNN) rule (Hart, 1968) is one of the ﬁrst techniques that only removes majority samples far away from the decision neighbor. The CNN rule is repeated on the training data set until the set to be removed is stable. Edited Nearest Neighbor (ENN) rule (Wilson, 1972) uses nearest neighbor for removing samples that do not agree with the majority of its k nearest neighbors. This algorithm edits out the samples that are identiﬁed as noise or borderline, and leaves smoother decision boundaries. Tomek Links (Tomek,
+
+1976) is another approach such that only majority samples identiﬁed as Tomek Links are removed. By checking Tomek Links between nearest neighbor pairs, majority samples are removed until all minimally distanced nearest neighbor pairs are in the same class. Near Miss (Zhang and Mani, 2003) is a family of under-sampling techniques that remove majority samples based on their average distances from the minority class. Depending on the nearest neighbor algorithms used to measure the distance, three Near Miss methods are proposed. Near Miss-1 selects majority samples with smallest average distance to three closest samples from the minority class. Near Miss-2 selects majority samples with smallest average distance to three farthest samples from the minority class. Near Miss-3 selects the k closest majority samples for each sample of the minority class. In practice, the under-sampling methods could also be used in combination to further improve data imbalance. One-Sided Selection (Kubat and Matwin, 1997) is such a hybrid algorithm, where the CNN rule reduces the majority samples by keeping the samples in a sub-set with the one-nearest neighbor rule (1-NN), then the borderline or noisy samples that detected by Tomek Links are further removed. Neighborhood cleaning rule (Laurikkala, 2001) works similarly as the one-sided selection by applying CNN rule then Wilson’s ENN rule to identify noisy samples.
+Over-sampling is another set of efﬁcient sampling techniques to handle class imbalance, which artiﬁcially increases samples from the minority class while keeping all the majority samples. In that case, the information of the majority class is fully retained. Random minority over-sampling is such an approach that randomly duplicates minority samples and adds them to the training data set. However, even though the imbalance ratio is improved with this technique, duplicating the minority samples leads the modeling algorithm trained more on speciﬁc regions, or over-ﬁtting. Therefore, several synthetic over-sampling approaches are proposed to increase the variety of minority class and reduce learning bias. Synthetic Minority Over-sampling Technique (SMOTE) (Chawla et al., 2002) generates synthetic samples for minority class based on their nearest neighbors to shift the learning bias toward the minority class. The algorithm chooses nearest neighbor by Euclidean distance between data points and generates the synthetic samples by taking a linear segment between the sample under consideration and its nearest neighbor. Based on the regular SMOTE algorithm, extensions with different distance measures or selection of samples in consideration are proposed. For instance, in borderline SMOTE (Han et al., 2005), only minority samples near the borderline are oversampled. In safe-level SMOTE (Bunkhumpornpat et al., 2009), minority samples along the same line with different weight degree, called safe level, are over-sampled. In density-based SMOTE (Bunkhumpornpat et al., 2011), only monitory samples from density-based notion of clusters are over-sampled. In addition to SMOTE algorithms, Adaptive Synthetic (He et al., 2008) sampling is an over-sampling approach that uses a weighted distribution for different minority samples according to their level of difﬁculty in learning. In AdaSyn algorithm, more synthetic data is generated for minority samples that are harder to learn compared to those minority samples that are easier to learn.
+Both over-sampling and under-sampling techniques can be effective when used in isolation, while combination of both techniques could be more effective for imbalanced data sets. SMOTE + Tomek Links and SMOTE + ENN (Batista et al., 2004) are proposed to address the concern of over-ﬁtting introduced by artiﬁcial minority samples. First, the SMOTE algorithm is applied to the original data set to over-sample the minority samples. Then, majority samples in Tomek Links are identiﬁed and removed, or the misclassiﬁed majority samples by its nearest neighbors is removed by the ENN rule. Both hybrid algorithms have been showed good experiment results when compared with the over-sampling methods alone.
+B. Ensemble classiﬁers and cost sensitive approaches
+The over- and under-sampling approaches are not speciﬁc to any modeling algorithms, which could be considered as data pre-processing steps. Data imbalance problem could also be handled by ensemble classiﬁers and cost sensitive approaches, which are algorithm speciﬁc and could be considered as algorithm enhancement. AdaBoost (Freund and Schapire, 1996), which ensembles of weak learners on various distributions, is one of the early successful boosting algorithms that work for classiﬁcation learning problem. Since then, variants of hybrid sampling/boosting algorithms are proposed for imbalanced data sets. SMOTEBoost (Chawla1 et al., 2003) iteratively trains the AdaBoost learners on balanced subsets with synthetic minority samples generated by SMOTE, and combines the outputs of those learners. On the contrary, Random under-sampling boost (RUSB) (Seiffert et al., 2010) iteratively trains the AdaBoost learners on the randomly under-sampled data set. The RUSB greatly overcomes the main drawback of random under-sampling, which is the loss of information, by combining it with boosting. Balance Cascade approach (Liu et al., 2009) trains the AdaBoost learners sequentially, where correctly classiﬁed majority samples are removed from training data sets in each iteration. Besides the boosting algorithms, Balanced Random Forest (Chen et al., 2004) trains individual trees on more balanced subsets with bootstrap samples of the minority class and randomly selected majority samples, and takes a majority vote for prediction.
+The cost sensitive approaches, which penalize more on misclassiﬁcation of the minority class, have also been reported to be effective to handle class imbalance problem. AdaCost (Sun et al., 2005) is an AdaBoost learner with more weights on the misclassiﬁed minority samples and updates the sample weights in the training process. Easy ensemble (Easy) (Liu et al., 2009) trains AdaBoost learners on balanced subsets with majority samples randomly under-sampled, and intentionally increases the weights of minority samples. Weighted Random Forest (Chen et al., 2004) assigns higher misclassiﬁcation cost on the minority class, and uses the class weight to ﬁnd splits and classify the terminal leaves when growing the tree.
+2
+
+C. Performance measures of imbalanced data
+
+We have discussed the techniques that deal with data imbalance in the training data, and we notes that the evaluation of model performance is based on the testing data. Although the training data are sampled through the imbalance methods, the testing data are not sampled and its class distribution are not the same as the sampled training data. In this section, we review the common performance measures and their appropriateness to imbalanced data.
+For binary classiﬁcation problem, the confusion matrix deﬁnes the base for performance measures. Most of the performance metrics are derived from the confusion matrix, for example, accuracy, misclassiﬁcation rate, precision and recall. Accuracy is a measure of the overall efﬁciency of a model and is deﬁned as:
+
+Correct Predictions
+
+True Positive + False Negative
+
+Accuracy =
+
+=
+
+Total Predictions True Positive + False Positive + True Negative + False Negative
+
+However, the accuracy may not be appropriate when the data is imbalanced. In that case, more weights are placed on the
+
+majority class than on the minority class, and the model may not perform well on the minority class even with a high accuracy.
+
+To accomodate the cost of the minority class, Receiver Operating Characteristic (ROC) (Swets, 1988) curve is proposed as
+
+a measure over a range of tradeoffs between the True Positive Rate and False Positive Rate. Area Under the Curve (AUC)
+
+is a commonly used performance metric for summarizing the ROC curve in a single score. Moreover, AUC is not biased
+
+toward model’s performance on the majority or minority class, which makes this measure more appropriate when dealing with
+
+imbalanced data.
+
+From the confusion matrix, we can also derive precision and recall (Buckland and Gey, 1994) performance metrics, which
+
+are deﬁned as:
+
+True Positive Precision =
+True Positive + False Positive
+
+and True Positive
+Recall = True Positive + False Negative
+
+For imbalanced data, the main goal is to improve the True Positive for the minority class, however, the number of False Positives can also increase in that case. To balance the recall and precision, i.e. improving the recall, while keeping precision low, the F-score (Buckland and Gey, 1994) is proposed as a harmonic mean of the precision and recall:
+
+Precision · Recall F -score = 2 ·
+Precision + Recall Since the F-score weights precision and recall equally and balances both concerns, it is less likely to be biased to the majority or minority class.
+
+III. COMPARISON OF CLASS-IMBALANCE METHODS
+A. Experimental Settings
+We test the imbalance methods on 15 data sets. The data sets are from UCI (UCIdatabase, 2020) and Keel (Alcala´-Fdez et al., 2011) databases and we further randomly down-sample the minority samples to achieve a higher imbalance ratio for some data sets. The statistics of these data sets with imbalance ratio ranging from 9 to 130 are summarized in Table I.
+For each data set, we randomly split the sample into training and testing data sets on a 70:30 split before model development. The target is a binary variable labeled with 1 for minority samples and 0 for majority samples. The model performance is measured by F-score and AUC on testing data sets. The model score cutoffs are based on scores of original testing data sets. The scores are rank-ordered from highest to lowest, and the cutoff is determined such that the percentage of predicted 1’s is the same as percentage of actual 1’s. The whole development/testing process is repeated for 50 times, and the performance values are averaged over the 50 iterations for each data set. The ﬁnal performance value at algorithm level is the averaged F-score or AUC over the 15 experimental data sets.
+We compare the performance of eight algorithms in this experiment, which include Logistic Regression (LR), Linear Support Vector Classiﬁer (Linear SVC), Nearest Neighbor (NN), Classiﬁcation and Regression Trees (CART), Random Forests (RF), Gradient Boosting Tree (XGBoost), Under-sampling with AdaBoost (RUSB) (Seiffert et al., 2010) and Easy Ensemble (Easy) (Liu et al., 2009). For each modeling algorithm, the models are built on the original training data sets as the baseline and on the training data sets after applying imbalance methods for comparison. We test four class-imbalance methods: SMOTE, Adaptive Synthetic Sampling (AdaSyn), SMOTE-ENN and SMOTE-Tomek. The hyper-parameters for these modeling algorithms are tuned by grid search so that F-score, AUC and accuracy metrics on training data sets are optimized, respectively. Finally, the model performance across modeling algorithms and imbalance methods is evaluated by the average F-score or AUC on original testing data sets.
+
+3
+
+TABLE I SUMMARY STATISTICS OF EXPERIMENTAL DATA SETS
+
+Data Adult Abalone2 Car eval Wiﬁ localization Satimage Wine Letter-recognition2 Yeast 3 Pima Abalone 19 Page-blocks0 Yeast-0-2-5-6 vs 3-7-8-9 Yeast-0-2-5-7-9 vs 3-6-8 Yeast6 Yeast1
+
+Size 25,503
+3,864 1,421 1,550 5,073 5,058 20,000 1,354
+554 4,174 4,969 1,004 1,004 1,484 1,098
+
+Minority/Majority 784/24,719 78/3,786 77/1,344 50/1,500 151/4,922 160/4,898 789/19,211 33/1,321 54/500 32/4,142 56/4,913 99/905 99/905 35/1,449 43/1,055
+
+Ratio 31.5 48.5 17.5 30 32.6 30.6 24.3 40.0 9.3 129.4 87.7 9.1 9.1 41.4 24.5
+
+Data Source UCI UCI UCI UCI UCI UCI UCI Keel Keel Keel Keel Keel Keel Keel Keel
+
+Original Data Size 7,841/24,719 391/3,786 384/1,344 500/1,500 1,508/4,922 1,599/4,898 789/19,211 163/1,321 268/500 32/4,142 559/4,913 99/905 99/905 35/1,449 429/1,055
+
+B. Analysis of Performance
+The performance of imbalance methods for the eight modeling algorithms has been summarized in tables below. Table II, III and IV have presented the average F-score and AUC for the models that are tuned by grid search using AUC, F-score, and accuracy, respectively. We evaluate the performance in terms of class-imbalance methods, modeling algorithms and grid search criteria.
+
+F-score None SMOTE AdaSyn SMOTE-ENN SMOTE-Tomek AUC None SMOTE AdaSyn SMOTE-ENN SMOTE-Tomek
+
+TABLE II AVERAGE PERFORMANCE WITH GRID SEARCH BY AUC
+
+Linear Algorithms
+
+LR
+
+Linear SVC
+
+0.6781
+
+0.6625
+
+0.6750
+
+0.6646
+
+0.6681
+
+0.6591
+
+0.6765
+
+0.6666
+
+0.6746
+
+0.6651
+
+LR
+
+Linear SVC
+
+0.8508
+
+0.8333
+
+0.8777
+
+0.8597
+
+0.8761
+
+0.8583
+
+0.8775
+
+0.8624
+
+0.8783
+
+0.8599
+
+Simple Non-linear Algorithms
+
+NN
+
+CART
+
+0.6909
+
+0.6469
+
+0.6484
+
+0.6147
+
+0.6083
+
+0.5944
+
+0.5057
+
+0.5530
+
+0.6482
+
+0.6097
+
+NN
+
+CART
+
+0.8079
+
+0.8163
+
+0.8378
+
+0.8037
+
+0.8350
+
+0.8124
+
+0.8081
+
+0.8087
+
+0.8369
+
+0.8023
+
+Ensemble Algorithms
+
+RF
+
+XGBoost
+
+0.7090
+
+0.7036
+
+0.6919
+
+0.7099
+
+0.6787
+
+0.7016
+
+0.6887
+
+0.7036
+
+0.6936
+
+0.7093
+
+RF
+
+XGBoost
+
+0.8941
+
+0.8935
+
+0.8957
+
+0.8968
+
+0.8911
+
+0.8952
+
+0.8966
+
+0.8981
+
+0.8961
+
+0.8966
+
+Imbalance Algorithms
+
+RUSB
+
+Easy
+
+0.6847
+
+0.6901
+
+0.6886
+
+0.6650
+
+0.6829
+
+0.6531
+
+0.6905
+
+0.6721
+
+0.6905
+
+0.6668
+
+RUSB
+
+Easy
+
+0.8934
+
+0.8913
+
+0.8719
+
+0.8741
+
+0.8676
+
+0.8688
+
+0.8790
+
+0.8817
+
+0.8717
+
+0.8751
+
+Average 0.6832 0.6698 0.6558 0.6446 0.6697 Average 0.8601 0.8647 0.8631 0.8640 0.8646
+
+First, we compare the impact of imbalance methods across modeling algorithm categories. Since the performance is similar over grid search criteria and is evaluated by F-score and AUC, we focus on results in Table II.
+1) For the linear algorithms, Logistic Regression and Linear SVC, the model performance measured by AUC improves after applying the imbalance methods to the training data sets. With any of the class-imbalance methods, the AUC improves signiﬁcantly from 85.08% to 87% for Logistic Regression, and from 83.33% to 86% for Linear SVC. The F-score is not very sensitive to the imbalance methods, where the values are comparable with the original baseline for SMOTE methods, and drop slightly for Adaptive Synthetic method. Overall, both linear algorithms perform better with imbalance methods, and it is recommended to pre-process the data sets before training the model.
+2) For simple non-linear algorithms, Nearest Neighbor and CART, the performance results are mixing and we do not observe consistent improvement. For Nearest Neighbor, the AUC improves from 80.79% to 83% for most of the imbalance methods except only 0.02% improvement for SMOTE-ENN. For CART, the AUC is the highest when the model is trained on the original data set, and decreases slightly after applying imbalance methods. When measured by F-score, the performance drops signiﬁcantly from original 69.09% to 50-65% for Nearest Neighbor, and from 64.69% to 55-61% for CART. Speciﬁcally, with
+
+4
+
+F-score None SMOTE AdaSyn SMOTE-ENN SMOTE-Tomek AUC None SMOTE AdaSyn SMOTE-ENN SMOTE-Tomek
+
+TABLE III AVERAGE PERFORMANCE WITH GRID SEARCH BY F-SCORE
+
+Linear Algorithms
+
+LR
+
+Linear SVC
+
+0.6725
+
+0.6417
+
+0.6766
+
+0.6928
+
+0.6703
+
+0.6597
+
+0.6739
+
+0.6650
+
+0.6773
+
+0.6653
+
+LR
+
+Linear SVC
+
+0.8387
+
+0.8084
+
+0.8777
+
+0.8599
+
+0.8763
+
+0.8577
+
+0.8727
+
+0.8571
+
+0.8775
+
+0.8613
+
+Simple Non-linear Algorithms
+
+NN
+
+CART
+
+0.6891
+
+0.6665
+
+0.6115
+
+0.6063
+
+0.5729
+
+0.5892
+
+0.5054
+
+0.5387
+
+0.6070
+
+0.6031
+
+NN
+
+CART
+
+0.7784
+
+0.7685
+
+0.8227
+
+0.7900
+
+0.8248
+
+0.7987
+
+0.8037
+
+0.7987
+
+0.8224
+
+0.7884
+
+Ensemble Algorithms
+
+RF
+
+XGBoost
+
+0.7077
+
+0.7178
+
+0.6642
+
+0.7126
+
+0.6768
+
+0.7095
+
+0.6907
+
+0.7027
+
+0.6940
+
+0.7124
+
+RF
+
+XGBoost
+
+0.8927
+
+0.8778
+
+0.8954
+
+0.8839
+
+0.8917
+
+0.8835
+
+0.8963
+
+0.8901
+
+0.8957
+
+0.8844
+
+Imbalance Algorithms
+
+RUSB
+
+Easy
+
+0.6854
+
+0.6881
+
+0.6889
+
+0.6647
+
+0.6813
+
+0.6529
+
+0.6913
+
+0.6739
+
+0.6887
+
+0.6661
+
+RUSB
+
+Easy
+
+0.8930
+
+0.8901
+
+0.8714
+
+0.8738
+
+0.8676
+
+0.8693
+
+0.8793
+
+0.8823
+
+0.8706
+
+0.8745
+
+Average 0.6836 0.6647 0.6516 0.6427 0.6642 Average 0.8434 0.8594 0.8587 0.8600 0.8594
+
+F-score None SMOTE AdaSyn SMOTE-ENN SMOTE-Tomek AUC None SMOTE AdaSyn SMOTE-ENN SMOTE-Tomek
+
+TABLE IV AVERAGE PERFORMANCE WITH GRID SEARCH BY ACCURACY
+
+Linear Algorithms
+
+LR
+
+Linear SVC
+
+0.6705
+
+0.6421
+
+0.6763
+
+0.6638
+
+0.6702
+
+0.6591
+
+0.6749
+
+0.6639
+
+0.6759
+
+0.6651
+
+LR
+
+Linear SVC
+
+0.8379
+
+0.8108
+
+0.8772
+
+0.8591
+
+0.8763
+
+0.8570
+
+0.8733
+
+0.8573
+
+0.8774
+
+0.8599
+
+Simple Non-linear Algorithms
+
+NN
+
+CART
+
+0.6877
+
+0.6596
+
+0.6120
+
+0.6043
+
+0.5729
+
+0.5910
+
+0.5053
+
+0.5389
+
+0.6054
+
+0.6035
+
+NN
+
+CART
+
+0.7849
+
+0.7963
+
+0.8231
+
+0.7904
+
+0.8251
+
+0.7992
+
+0.8023
+
+0.7991
+
+0.8223
+
+0.7899
+
+Ensemble Algorithms
+
+RF
+
+XGBoost
+
+0.7073
+
+0.7030
+
+0.6932
+
+0.7098
+
+0.6798
+
+0.7021
+
+0.6902
+
+0.7023
+
+0.6929
+
+0.7095
+
+RF
+
+XGBoost
+
+0.8933
+
+0.8911
+
+0.8956
+
+0.8965
+
+0.8916
+
+0.8955
+
+0.8963
+
+0.8984
+
+0.8957
+
+0.8966
+
+Average 0.6784 0.6599 0.6458 0.6293 0.6587 Average 0.8357 0.8570 0.8574 0.8544 0.8570
+
+SMOTE-ENN, the F-score drops to 50.57% for Nearest Neighbor and 55.30% for CART. Since the Nearest Neighbor algorithm is mostly used to classify the new data point based on how its neighbors are classiﬁed, the decision boundary is sensitive to the sample composition. CART has the well-known weakness of non-robustness and a small change in the training data can result in a large change in the tree and consequently the ﬁnal predictions. Therefore, both algorithms are more likely to be over-ﬁtted when the minority class is over-sampled, and the performance on the more imbalanced testing data sets drops. We would not recommend applying imbalance methods for these simple non-linear algorithms.
+3) For ensemble algorithms, Random Forest and XGBoost, the improvement of model performance is also not obvious after applying imbalance methods. For both algorithms, the AUCs with or without imbalance methods are around 89% with few variation. The F-score for Random Forest decreases from the baseline 70.90% to 67-69% when pre-processed by imbalance methods, but for XGBoost, the values are almost the same. Since the ensemble algorithms already perform well on the imbalanced data sets, the impact of imbalance methods are not signiﬁcant.
+4) The RUSB and Easy Ensemble are ensemble algorithms that could handle data imbalance, where the AdaBoost model is trained iteratively on balanced samples with over-sampling or under-sampling. Since these two algorithms already re-balance the data in the training process, the additional imbalance methods in the data pre-processing step will not contribute further improvement to algorithm performance. For AUC, both algorithms perform best when trained on the original data sets. For F-score, we observe < 1% improvement for RUSB and slightly worse value for Easy Ensemble.
+The second set of comparison is conducted between modeling algorithms on imbalanced data sets. Still, the results are based on the grid search with AUC.
+1) For linear algorithms and simple non-linear algorithms, the AUC is greatly lower than more complex algorithms like ensemble algorithms and imbalance algorithms. The simpler algorithms tend to have better model interpretability than the more complex algorithms with scariﬁcing on performance. Speciﬁcally, the more complex algorithms combine the decisions from multiple model iterations and improve the overall model performance even with data imbalance. The simple non-linear
+
+5
+
+algorithms perform worst among all algorithm categories in AUC, and we would not recommend choosing these algorithms for imbalanced data sets.
+2) When measured by F-score, the ensemble algorithms (Random Forest and XGBoost) outperform other algorithm categories. It is showed that with similar AUCs, the ensemble algorithms achieve slightly better F-score than imbalance algorithms (RUSB and Easy Ensemble). Therefore, even without imbalance methods, the ensemble algorithms still work well for imbalanced data sets.
+Lastly, we compare the performance between grid search criteria. All eight modeling algorithms are tuned by grid search with AUC and F-score as criterion, and RUSB and Easy Ensemble could not be tuned by accuracy.
+1) The results are very close for different grid search criteria. Since the performance is measured by AUC and F-score, when the hyper-parameters are tuned by AUC, the algorithm performs better than other grid search criteria for the corresponding performance measurement. However, F-score is not consistently better when tuned by F-score.
+2) The simple non-linear algorithms (Nearest Neighbor and CART) are more sensitive to grid search criterion. The more complex ensemble and imbalance algorithms are less sensitive and achieve high AUC and F-score for all three grid search criteria.
+In summary, the linear algorithms perform better after applying imbalance methods in terms of AUC, without hurting F-score. For the more complex ensemble and imbalance algorithms, since these algorithms are not that sensitive to class imbalance, and already achieves high AUC score and F-Score, the improvement after applying imbalance methods is not so obvious. For simple non-linear algorithms (Nearest Neighbor and CART), applying class-imbalance methods on training data sets over ﬁts the models and the results on testing data do not have consistent performance improvement measured by both AUC and F-score, compared to the baseline values. Our results also show that the four different imbalance methods tested have similar performance. There is no strong evidence to prefer one imbalance method over the other based on the comparison.
+IV. CONCLUSION
+This paper provided an overview of different methodologies used to deal with imbalanced data. In the past 20 years, there are so many methodologies developed to deal with this problem since the publication of SMOTE (Chawla et al., 2002). It becomes difﬁcult to choose the right imbalance methods in a real problem. Our empirical study compared the performance of some typical imbalance methods on large number of real datasets. We also studied the interactions between class-imbalance methods and modeling algorithms. We found that imbalance methods do not always have consistent improvements. Their improvements are depending on which modeling algorithm is used. The imbalance methods are most suitable for simple linear algorithms. We also observed that different imbalance methods do not have signiﬁcant different behaviors. Using more complicated ensemble modeling algorithms will achieve best performance on imbalanced data, even without applying imbalance methods. If AUC or F-score is the main objective of the model, we recommend to use more complicated ensemble modeling algorithms without imbalance methods. If model interpretation is also a key objective, we recommend to use linear algorithms combined with any of the imbalance methods studied in the paper.
+V. DECLARATION OF INTEREST
+The authors report no conﬂicts of interest. The authors alone are responsible for the content and writing of the paper.
+VI. ACKNOWLEDGMENT
+We thank Singhal Harsh for useful discussion. We thank corporate risk - model risk at Wells Fargo for support.
+REFERENCES
+Alcala´-Fdez, J., Fernandez, A., Luengo, J., Derrac, J., Garc´ıa, S., Sa´nchez, L., and Herrera, F. (2011). Keel data-mining software tool: Data set repository. integration of algorithms and experimental analysis framework. Journal of Multiple-Valued Logic and Soft Computing.
+Batista, G., Prati, R., and Monard, M. (2004). A study of the behaviour of several methods for balancing machine learning training data. ACM SIGKDD Explorations Newslette.
+Buckland, M. and Gey, F. (1994). The relationship between recall and precision. Journal of the American Society for Information Science.
+Bunkhumpornpat, C., Sinapiromsaran, K., and Lursinsap, C. (2009). Safe-level-smote: Safe-level-synthetic minority oversampling technique for handling the class imbalanced problem. Paciﬁc-Asia Conference on Knowledge Discovery and Data Mining.
+Bunkhumpornpat, C., Sinapiromsaran, K., and Lursinsap, C. (2011). Dbsmote: Density-based synthetic minority over-sampling technique. Applied Intelligence.
+Chawla, N. V., Bowyer, K. W., Hall, L. O., and Kegelmeyer, W. P. (2002). Smote: Synthetic minority over-sampling technique. Journal of Artiﬁcial Intelligence Research.
+6
+
+Chawla1, N. V., Lazarevic, A., Hall, L. O., and Bowyer, K. (2003). Smoteboost: Improving prediction of the minority class in boosting. Knowledge Discovery in Databases: PKDD 2003.
+Chen, C., Liaw, A., and Breiman, L. (2004). Using random forest to learn imbalanced data. University of California, Berkeley, Technical Report.
+Freund, Y. and Schapire, R. E. (1996). Experiments with a new boosting algorithm. Machine Learning: Proceedings of the Thirteenth International Conference.
+Han, H., Wang, W.-Y., and Mao, B.-H. (2005). Borderline-smote: A new over-sampling method in imbalanced data sets learning. ICIC 2005: Advances in Intelligent Computing.
+Hart, P. (1968). The condensed nearest neighbour rule. IEEE Transactions on Information Theory. He, H., Bai, Y., Garcia, E. A., and Li, S. (2008). Adasyn: Adaptive synthetic sampling approach for imbalanced learning. In
+Proceedings of the 5th IEEE International Joint Conference on Neural Networks. Kubat, M. and Matwin, S. (1997). Addressing the curse of imbalanced training sets: One-sided selection. In Proceedings of
+the Fourteenth International Conference on Machine Learning. Laurikkala, J. (2001). Improving identiﬁcation of difﬁcult small classes by balancing class distribution. UNIVERSITY OF
+TAMPERE, DEPARTMENT OF COMPUTER AND INFORMATION SCIENCES, SERIES OF PUBLICATIONS A. Liu, X.-Y., Wu, J., and Zhi-Hua, Z. (2009). Exploratory undersampling for class-imbalance learning. IEEE Transactions on
+Systems, Man and Cybernetics. Seiffert, C., Khoshgoftaar, T. M., Van Hulse, J., and Napolitano, A. (2010). Rusboost: A hybrid approach to alleviating class
+imbalance. IEEE Transactions on Systems, Man, and Cybernetics-Part A: Systems and Humans. Sun, Y., Wong, A. K. C., and Wang, Y. (2005). Parameter inference of cost-sensitive boosting algorithm. Machine Learning
+and Data Mining in Pattern Recognition. Swets, J. (1988). Measuring the accuracy diagnostic systems. Science. Tomek, I. (1976). Two modiﬁcations of cnn. IEEE Transations on Systems, Man and Cybernetics. UCIdatabase (2020). https://archive.ics.uci.edu/ml/datasets.php. Wilson, D. L. (1972). Asymptotic properties of nearest neighbor rules using edited data. IEEE Transactions on Systems, Man,
+and Cybernetics. Zhang, J. and Mani, I. (2003). knn approach to unbalanced data distributions: A case study involving information extraction.
+Workshop on Learning from Imbalance Datasets II.
+7
+

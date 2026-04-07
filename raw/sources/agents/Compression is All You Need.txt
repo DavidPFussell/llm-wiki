@@ -1,0 +1,1122 @@
+arXiv:2603.20396v1 [cs.AI] 20 Mar 2026
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+Abstract. Human mathematics (HM), the mathematics humans discover and value, is a vanishingly small subset of formal mathematics (FM), the totality of all valid deductions. We argue that HM is distinguished by its compressibility through hierarchically nested definitions, lemmas, and theorems. We model this with monoids. A mathematical deduction is a string of primitive symbols; a definition or theorem is a named substring or macro whose use compresses the string. In the free abelian monoid 𝐴𝑛, a logarithmically sparse macro set achieves exponential expansion of expressivity. In the free non-abelian monoid 𝐹𝑛, even a polynomially-dense macro set only yields linear expansion; superlinear expansion requires near-maximal density. We test these models against MathLib, a large Lean 4 library of mathematics that we take as a proxy for HM. Each element has a depth (layers of definitional nesting), a wrapped length (tokens in its definition), and an unwrapped length (primitive symbols after fully expanding all references). We find unwrapped length grows exponentially with both depth and wrapped length; wrapped length is approximately constant across all depths. These results are consistent with 𝐴𝑛 and inconsistent with 𝐹𝑛, supporting the thesis that HM occupies a polynomially-growing subset of the exponentially growing space FM. We discuss how compression, measured on the MathLib dependency graph, and a PageRank-style analysis of that graph can quantify mathematical interest and help direct automated reasoning toward the compressible regions where human mathematics lives.
+1. Introduction
+In this paper, we argue that math is soft and squishy—that this is its defining characteristic. By “math” we do not mean the totality of all possible formal deductions, formal mathematics (FM), but rather human mathematics (HM), the type of arguments humans find and those we will appreciate when our AI agents find them for us.1 By “soft and squishy,” we mean compressible through the use of hierarchically nested concepts: definitions, lemmas, and theorems.
+The finding that math is about compression is not new. We were scooped 3,000 years ago by the invention of place notation. Consider N, the natural numbers, with generating set {1}. Place notation introduces additional symbols, or macros: “10” for ten ones, “100” for ten tens, and so
+Date: March 24, 2026. 1However mathematics is formalized, we know from Gödel and other sources that there will be true statements without proofs (such as consistency of the system). It is possible that extremely simple Π01 statements of Peano arithmetic, such as the Goldbach conjecture (GC: “Every even number > 2 is the sum of two primes”), could be both true and without any proof. Since our discussion is anchored to the concept of proof, we would not count GC as part of HM or even FM if that is the case, despite the fact that it is of interest to humans. A more subtle question: suppose GC has a proof but the shortest one is 10100 lines long—is it part of HM? Fortunately we do not have to adjudicate this; our results are not sharp enough to require us to identify an exact frontier to HM. Moreover, HM might more precisely be considered a measure on FM that fades out rather than abruptly terminating at the edge of a subset; see [BDF].
+1
+
+2
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+on. With logarithmically many macros, expressivity expands exponentially. This (exponential) expansion of expressivity is the flip side of notational compression. Creating and exploiting definitions expands what we can reach by compressing expressions written in a primitive, definitionpoor language. (Our theorems below will be stated in terms of expansion; our informal discussions often use compression.)
+Formal mathematics can be viewed as a directed hypergraph (DH) emerging from axioms and syntactical rules [BDF]. The DH records the full deduction space: every possible proof step, with each hyperedge specifying which premises are combined (Fig. 1, left). A proof is a sub-hypergraph of the DH; flattened into a linear sequence, it becomes a string of primitive symbols. We study finitely-generated monoids as models for such strings: word length measures size, and naming a substring for reuse—a macro—compresses it. (Monoids with relations can simulate Turing machines [Pos47], so, despite its simplicity, this basic framework is computationally universal.) The simplest case is 𝐴1 = N, the natural numbers. To study compression more generally, we consider the free abelian monoid 𝐴𝑛 and the free (non-abelian) monoid 𝐹𝑛 (with 𝑛 denoting the number of generators). In 𝐴𝑛, the generators commute, so only the multiplicities matter. In 𝐹𝑛, the order of generators is important, and there are no relations; since formal proofs are strings of symbols where order matters, 𝐹𝑛 might be presumed to model formal deduction. We will argue, contrary this expectation, that the compression exhibited by human mathematics is characteristic of 𝐴𝑛, not 𝐹𝑛.
+Our main theoretical results quantify the expansion that macros achieve in 𝐴𝑛 and 𝐹𝑛. In 𝐴𝑛, logarithmically many macros achieve exponential expansion (Theorem 1), and macros of polynomial density (growth exponent 1/𝑘) can yield infinite expansion—every element expressible with bounded length—via Waring’s theorem (Theorem 3). In 𝐹𝑛 even polynomially growing macros (polynomial as a function of radius, i.e., polylogarithmic as a function of volume) yield only linear expansion (Theorem 4). Superlinear expansion in 𝐹𝑛 requires an exponential number of macros (Theorem 5), in contrast with the logarithmically sparse macro set that suffices for exponential expansion in 𝐴𝑛. This difference reflects underlying growth rates: balls grow polynomially in 𝐴𝑛 but exponentially in 𝐹𝑛. Our study of macro sets in 𝐴𝑛 extends straightforwardly to the much larger class of free nilpotent monoids; they have nearly identical expansion properties to 𝐴𝑛 and can equally serve as models for HM according to the analysis presented here (see Sections 4.3 for details).
+We test these facts against MathLib [Mat20], a large repository of mathematics written in Lean 4 [dMU21] that contains hundreds of thousands of definitions, lemmas, and theorems. We use MathLib as a proxy for HM. MathLib can be viewed as a DAG extracted from the full deduction hypergraph (Fig. 1). Each MathLib element is a named subgraph of this DAG, rooted at the element itself and extending down to primitives. Flattening this subgraph by recursively expanding all references yields a string of primitives. The wrapped length counts the tokens in an element’s
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+3
+
+FM DH
+
+MathLib DAG
+
+𝐴∧𝐵∧𝐶
+
+𝐴∧𝐵∧𝐶
+
+𝐴∧𝐵
+
+𝐶𝐴
+
+𝐵∧𝐶
+
+𝐴∧𝐵
+
+𝐶
+
+Figure 1. A FM DH fragment (left) and a corresponding MathLib DAG (right) for deriving 𝐴 ∧ 𝐵 ∧ 𝐶 via ∧-introduction. In the DH, filled dots represent hyperedges: each groups the premises used in a single inference step. Both proofs (via 𝐴 ∧ 𝐵 and via 𝐵 ∧ 𝐶) are recorded. The DAG selects one proof and replaces the hyperedge
+with ordinary edges. If both proofs in the DH were recorded within a DAG, there
+would be an ambiguity in how a given conclusion followed from the premises. Note
+also that the above example is special in the sense that the hyperedges are reversible.
+
+defining expression; the unwrapped length counts the primitives in the flattened string. We find the longest element, when fully unwrapped, reaches approximately 10104 primitive terms—Googol, the number, not the company.2 Our primary observations about MathLib are as follows. First, unwrapped length grows exponentially with depth (the longest path to primitives in the dependency graph). Second, wrapped length is approximately constant across all depths. Third, unwrapped length grows exponentially with wrapped length. The MathLib data is consistent with the 𝐴𝑛 logarithmic-density regime and inconsistent with the 𝐹𝑛 alternatives we study.
+Our central inference is that HM is a thin subset of polynomial growth within the exponentially growing space FM. This is a stronger claim than the observation that HM is a vanishingly small subset of FM: the latter would hold if both grew exponentially at different rates [Sha48, CT06]. We propose 𝐴𝑛 as a model for HM and products 𝐹𝑛𝑖 as a model for FM. Since HM ⊂ FM, the models must respect this inclusion; 𝐴𝑛 embeds into 𝐹𝑛𝑖 by sending each generator to a distinct factor.
+Our toy models map HM to monoids. What we observe clearly in both source and target is compression and hierarchical depth: in the monoid, both are deduced from a postulated macro set; in MathLib, both can be measured. The comparison allows us to infer properties of a hypothetical “macro set” for HM. Physical models often gain power by defining abstractions not directly observed—the vector potential in electromagnetism, the Hilbert space in quantum mechanics. Similarly, our model may not be surjective: some abstractions in the monoid—notably the macro set itself—may have no direct counterpart on the HM side. We do not identify a precise “macro set”
+2AlgebraicGeometry.Scheme.exists_hom_hom_comp_eq_comp_of_locallyOfFiniteType in MathLib; see Section 3 for discussion.
+
+4
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+within MathLib (or HM more generally) that maps to the macro set in the monoid, but regard this as a deep open problem, tantamount to locating the owner’s manual for HM.
+Place notation demonstrates two features of mathematics that our models can capture. The first is hierarchy: the recursive fashion in which notation, ideas, definitions, and proofs are fitted together. The second is parsimony: we have limited storage for new concepts, so definitions must be chosen to strike a balance between marking out landmarks in an infinite structure and not overtaxing our capacity to remember them. HM works where compression is possible—it suits our minds and supports our inherent laziness, allowing large strides across the mathematical landscape with minimal effort. Logarithmic density, as in powers of 10, lies near this parsimony boundary. The results of Section 2 explore the parsimony/expansion tradeoff systematically, showing how expansion rates depend on macro density across several regimes. The MathLib data of Section 3 confirms the hierarchical structure quantitatively: log(unwrapped length) grows linearly with depth, with slope close to 1 bit per level.
+If compression characterizes human mathematics, it can also serve as a measure of mathematical interest. An element whose terse statement conceals an enormous proof body exhibits high deductive compression; an element that compresses dramatically when definitions are applied sits in a region where the definitional hierarchy is useful. We call the latter reductive compression. Section 5 develops these ideas into quantitative interest measures and a PageRank-style refinement [BP98] that accounts for an element’s role in supporting other high-value mathematics. The goal is to give AI agents exploring formal mathematics a sense of direction: stay where compression is possible.
+Various LLMs collaborated with us on the proofs of the theorems in Section 2. The Lean VERIFIED symbol below indicates that the theorem has been formally verified in Lean 4 by Aleph [Log25], a theorem-proving system developed by Logical Intelligence.
+The remainder of the paper is organized as follows. Section 2 develops the monoid models and proves the main expansion theorems. Section 3 presents the MathLib analysis. Section 4 further discusses the results and related ideas. Section 5 considers future work on automating mathematical interest and related open questions. Appendix A contains additional expansion theorems for 𝐴𝑛.
+
+2. Monoid Models
+We study two basic monoids on 𝑛 generators 𝐺 = {𝑎1, . . . , 𝑎𝑛}: the free abelian monoid 𝐴𝑛 and the free monoid 𝐹𝑛. In 𝐴𝑛, generators commute, so elements essentially live in N𝑛 with componentwise addition. In 𝐹𝑛, order matters and there are no relations; elements are finite strings over 𝐺. For an element or word 𝑤 in either monoid, write |𝑤|𝐺 for its length: the sum of coefficients for 𝐴𝑛, or the string length for 𝐹𝑛.
+A macro set 𝑀 = {𝑔𝑖} consists of additional generators, each defined by 𝑔𝑖 = 𝑤𝑖 for some word 𝑤𝑖 written in terms of elements from 𝐺. The augmented generating set is 𝐺′ = 𝐺 ∪ 𝑀, and |𝑤|𝐺′
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+5
+
+denotes the minimum number of 𝐺′-generators needed to represent 𝑤. Conceptually, while each 𝑔𝑖 ∈ 𝑀 is an individual macro, the set 𝑀 itself represents a compression strategy. 3
+We quantify the effectiveness of such a strategy with the expansion function,
+
+𝑓𝐺′ (𝑠) = sup{𝑟 ∈ N : 𝐵𝐺 (𝑟) ⊆ 𝐵𝐺′ (𝑠)}.
+
+Here, the ball of radius 𝑟 is 𝐵𝐺 (𝑟) = {𝑤 : |𝑤|𝐺 ≤ 𝑟 }, with 𝐵𝐺′ (𝑠) defined analogously. Since 𝐺 ⊆ 𝐺′, we have |𝑤|𝐺′ ≤ |𝑤|𝐺 and thus 𝐵𝐺 (𝑠) ⊆ 𝐵𝐺′ (𝑠). The expansion function measures the largest 𝐺-radius fully covered by the 𝐺′-ball of radius 𝑠.
+
+Our main results are summarized in Table 1. For concreteness, the table states the 𝐴𝑛 results for
+
+𝐴1 = N; they extend to general 𝐴𝑛 by taking 𝑛 copies of each macro (one per generator), with the
+
+same asymptotic expansion rates.
+
+In 𝐴𝑛, balls grow polynomially (|𝐵𝐺 (𝑟)| =
+
+𝑟 +𝑛 𝑛
+
+),
+
+and
+
+sparse
+
+macros yield dramatic expansion—exponential or even infinite. The polylogarithmic row reflects
+
+an upper bound (Theorem 2); we do not establish a matching lower bound, so the true expansion
+
+for such macros may lie strictly between exponential and quasi-exponential. In 𝐹𝑛, balls grow exponentially (|𝐵𝐺 (𝑟)| = 𝑛−1 𝑛𝑟+1−1 ), and expansion is linear for a polynomial-dense macro set and
+superlinear for an exponentially-growing macro set.
+
+Monoid
+𝐴1 𝐴1 𝐴1
+𝐴1 𝐴1 𝐹𝑛
+𝐹𝑛
+
+Macro 𝑀 {𝑚𝑘 : 𝑚 ≥ 1} {𝑏 𝑗 𝑝 : 𝑗 ≥ 1} {𝑏 𝑗 : 𝑗 ≥ 1} {𝑏𝑏𝑗 : 𝑗 ≥ 0}
+finite
+polynomial
+probabilistic
+
+Density 𝑟 1/𝑘
+(log 𝑟)1/𝑝 log 𝑟
+log𝑏 log 𝑟 𝑂 (1) 𝑟𝑝
+𝑛𝑟 /log 𝑟
+
+Expansion 𝑓𝐺′ (𝑠)
+∞ ≤ 𝑒𝑐·𝑠 log 𝑠 Θ(𝑏𝑐𝑠) 𝑠𝑏/(𝑏−1) to 𝑠(2𝑏−1)/(𝑏−1) Θ(𝑠) 𝑂 (𝑠)√ ≥ 𝑒𝑐 𝑠
+
+Theorem 3 2 1 6 7 4 5
+
+Table 1. Macro density versus expansion. For 𝐴𝑛 with 𝑛 > 1, expansion rates remain the same. The expansion properties for 𝐴𝑛 also hold for free nilpotent monoids. The 𝐹𝑛 polynomial result holds for any polynomial density and 𝑛 ≥ 2;
+up to constants, it holds for any finitely presented monoid of exponential growth. The 𝐹𝑛 probabilistic result gives a macro set of logarithmically-vanishing density (|𝑀 ∩ 𝑆𝑟 |/|𝑆𝑟 | ∼ 1/log(𝑟) → 0), where 𝑆𝑟 = {𝑤 : |𝑤|𝐺 = 𝑟 }.
+
+We now proceed to the theorems that characterize expansion of different macro sets in 𝐴𝑛 and 𝐹𝑛. The detailed proofs are not required for the later parts of the paper.
+
+2.1. Free Abelian Monoid. Place notation is the archetypal example of compression in 𝐴𝑛.
+
+3In logic and computer science, “macro” often refers to the transformation rule (the strategy) itself. Here, we maintain the monoid-theoretic convention where the macro is the resulting element, and the set 𝑀 constitutes the strategy.
+
+6
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+Theorem 1 (Place notation gives exponential expansion Lean VERIFIED ). For 𝐴𝑛 and any integer 𝑏 ≥ 2, the macro set 𝑀 = {𝑏 𝑗 𝑎𝑖 : 𝑖 = 1, . . . , 𝑛, 𝑗 ≥ 1} has logarithmic density and satisfies
+𝑏𝑠/(𝑛(𝑏−1))−1 ≤ 𝑓𝐺′ (𝑠) ≤ 𝑛𝑏 · 𝑏𝑠/(𝑛(𝑏−1))
+
+for all integers 𝑠 ≥ 1. In particular, 𝑓𝐺′ (𝑠) = Θ(𝑏𝑠/(𝑛(𝑏−1))).
+
+Proof. The macro set 𝑀 = {𝑔𝑖, 𝑗 = 𝑏 𝑗 𝑎𝑖 : 𝑖 = 1, . . . , 𝑛, 𝑗 ≥ 1} has logarithmic density: the number
+of macros with |𝑔𝑖, 𝑗 |𝐺 = 𝑏 𝑗 ≤ 𝑟 is 𝑛⌊log𝑏 𝑟⌋ = 𝑂 (log 𝑟).
+Lower bound. Any element 𝑤 ∈ 𝐴𝑛 can be written uniquely as 𝑤 = 𝑥1𝑎1 + 𝑥2𝑎2 + · · · + 𝑥𝑛𝑎𝑛 with 𝑥𝑖 ∈ N. Writing each nonzero 𝑥𝑖 in base 𝑏 as 𝑥𝑖 = 𝑗=0 𝐽𝑖 𝑐𝑖, 𝑗 𝑏 𝑗 with 𝑐𝑖, 𝑗 ∈ {0, 1, . . . , 𝑏 − 1} and 𝐽𝑖 = ⌊log𝑏 𝑥𝑖⌋, we have
+
+𝑥𝑖𝑎𝑖 = 𝑐𝑖,0𝑎𝑖 + 𝑐𝑖,1𝑔𝑖,1 + 𝑐𝑖,2𝑔𝑖,2 + · · · + 𝑐𝑖,𝐽𝑖 𝑔𝑖,𝐽𝑖 .
+The 𝐺′-length of 𝑥𝑖𝑎𝑖 is 𝑗=0 𝐽𝑖 𝑐𝑖, 𝑗 ≤ (𝑏 − 1) (𝐽𝑖 + 1) = (𝑏 − 1) ( ⌊log𝑏 𝑥𝑖⌋ + 1). For 𝑤 ∈ 𝐵𝐺 (𝑟), we have |𝑤|𝐺 = 𝑖 𝑥𝑖 ≤ 𝑟, so each 𝑥𝑖 ≤ 𝑟 and thus
+∑𝑛︁ |𝑤|𝐺′ ≤ (𝑏 − 1) ( ⌊log𝑏 𝑥𝑖⌋ + 1) ≤ 𝑛(𝑏 − 1) (log𝑏 𝑟 + 1).
+𝑖=1
+Therefore 𝐵𝐺 (𝑟) ⊆ 𝐵𝐺′ (𝑠) whenever 𝑠 ≥ 𝑛(𝑏 − 1) (log𝑏 𝑟 + 1), which gives 𝑓𝐺′ (𝑠) ≥ 𝑏𝑠/(𝑛(𝑏−1))−1. Upper bound. We exhibit a hard-to-compress element. For any integer 𝑘 ≥ 1, define 𝑤𝑘 =
+(𝑏𝑘 −1) (𝑎1 + · · · + 𝑎𝑛). Then |𝑤𝑘 |𝐺 = 𝑛(𝑏𝑘 −1). Since 𝑏𝑘 −1 = 𝑘− 𝑗 1 =0 (𝑏 −1)𝑏 𝑗 , |𝑤𝑘 |𝐺′ = 𝑛(𝑏 −1)𝑘. Now given 𝑠 ≥ 1, choose 𝑘 = ⌊𝑠/(𝑛(𝑏 − 1))⌋ + 1. Then |𝑤𝑘 |𝐺′ = 𝑛(𝑏 − 1)𝑘 > 𝑠, so 𝑤𝑘 ∉ 𝐵𝐺′ (𝑠).
+Since 𝑤𝑘 ∈ 𝐵𝐺 (𝑛(𝑏𝑘 − 1)) ⊆ 𝐵𝐺 (𝑛𝑏𝑘 ), we have 𝐵𝐺 (𝑛𝑏𝑘 ) ⊈ 𝐵𝐺′ (𝑠), and thus
+𝑓𝐺′ (𝑠) < 𝑛𝑏𝑘 ≤ 𝑛𝑏 · 𝑏𝑠/(𝑛(𝑏−1)) .
+
+Combining the bounds gives 𝑓𝐺′ (𝑠) = Θ(𝑏𝑠/(𝑛(𝑏−1))).
+
+□
+
+We next establish an upper bound: with polylogarithmically many macros, expansion is at most quasi-exponential.
+
+Theorem 2 (Polylogarithmic density gives quasi-exponential expansion 𝑀 ⊆ 𝐴𝑛 be a macro set with polylogarithmic growth:
+
+Lean VERIFIED ). For 𝐴𝑛, let
+
+|𝑀 ∩ 𝐵𝐺 (𝑟)| ≤ 𝑐(log(𝑒 + 𝑟))𝑞 for all 𝑟 ≥ 0,
+
+for some constants 𝑐, 𝑞 > 0. Then there exists a constant 𝐾 > 0 depending only on 𝑛, 𝑐, 𝑞 such that
+
+𝑓𝐺′ (𝑠) ≤ exp(𝐾 𝑠 log 𝑠) for all 𝑠 ≥ 2.
+
+Proof. Fix 𝑠 ∈ N and suppose 𝐵𝐺 (𝑟) ⊆ 𝐵𝐺′ (𝑠), i.e., every element of length ≤ 𝑟 can be expressed as a sum of at most 𝑠 generators from 𝐺′ = 𝐺 ∪ 𝑀. We derive an upper bound on 𝑟 in terms of 𝑠.
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+7
+
+Step 1: Only macros of length ≤ 𝑟 are relevant. Let 𝑤 ∈ 𝐵𝐺 (𝑟) and write 𝑤 = 𝑦1 + · · · + 𝑦𝑘 with 𝑘 ≤ 𝑠 and 𝑦𝑖 ∈ 𝐺′. Each 𝑦𝑖 has length |𝑦𝑖 |𝐺 ≥ 0, and additivity of length in N𝑛 gives |𝑤|𝐺 = |𝑦1|𝐺 + · · · + |𝑦𝑘 |𝐺. Since |𝑤|𝐺 ≤ 𝑟, all |𝑦𝑖 |𝐺 ≤ 𝑟; otherwise their sum would exceed 𝑟. Thus, in any representation of elements of 𝐵𝐺 (𝑟), only generators of length ≤ 𝑟 can appear.
+Define 𝑀𝑟 := 𝑀 ∩ 𝐵𝐺 (𝑟), so that |𝑀𝑟 | ≤ 𝑐(log(𝑒+𝑟))𝑞, and note that in every such representation each 𝑦𝑖 lies in 𝐺 ∪ 𝑀𝑟. Let
+𝑡 (𝑟) := |𝐺 ∪ 𝑀𝑟 | = 𝑛 + |𝑀𝑟 | ≤ (𝑛 + 𝑐) (log(𝑒 + 𝑟))𝑞.
+
+Step 2: Upper bound on the number of words of length ≤ 𝑠. The number of words of length ≤ 𝑠 over an alphabet of size 𝑡 (𝑟) is at most
+∑𝑠︁ 𝑁words(𝑟, 𝑠) := 𝑡 (𝑟)𝑘 ≤ (𝑠 + 1) (𝑛 + 𝑐)𝑠 (log(𝑒 + 𝑟))𝑞𝑠.
+𝑘 =0
+Each such word represents some element of 𝐴𝑛. By our assumption 𝐵𝐺 (𝑟) ⊆ 𝐵𝐺′ (𝑠) and Step 1, every element of 𝐵𝐺 (𝑟) is representable by at least one such word. Thus |𝐵𝐺 (𝑟)| ≤ 𝑁words(𝑟, 𝑠).
+Since |𝐵𝐺 (𝑟)| = 𝑛 𝑟+𝑛 ≥ 𝑛!𝑟𝑛 , we have 𝑟𝑛 ≤ (𝑠 + 1) (𝑛 + 𝑐)𝑠 (log(𝑒 + 𝑟))𝑞𝑠. 𝑛!
+Taking logarithms, for sufficiently large 𝑠:
+
+(1)
+
+𝑛 log 𝑟 ≤ (1 + log(𝑛 + 𝑐))𝑠 + 𝑞𝑠 log log(𝑒 + 𝑟).
+
+Step 3: Bounding 𝑟. We show that (1) fails for 𝐾 > 2𝑞/𝑛 and sufficiently large 𝑠 whenever log 𝑟 ≥ 𝐾 𝑠 log 𝑠. It suffices to consider log 𝑟 = 𝐾 𝑠 log 𝑠, since larger 𝑟 only further violates the inequality.
+For large 𝑠: log log(𝑒 + 𝑟) ≤ log 2 + log(𝐾 𝑠 log 𝑠) ≤ log(2𝐾) + 2 log 𝑠.
+
+Substituting into (1) gives:
+
+𝑛𝐾 𝑠 log 𝑠 ≤ (1 + log(𝑛 + 𝑐) + 𝑞 log(2𝐾))𝑠 + 2𝑞𝑠 log 𝑠.
+
+Dividing by 𝑠 log 𝑠:
+
+𝑛𝐾 ≤ 1 + log(𝑛 + 𝑐) + 𝑞 log(2𝐾) + 2𝑞. log 𝑠
+
+For large 𝑠, the right-hand side approaches 2𝑞, so choosing 𝐾 > 2𝑞/𝑛 yields a contradiction.
+
+Thus 𝑓𝐺′ (𝑠) < exp(𝐾 𝑠 log 𝑠) for all sufficiently large 𝑠. For small 𝑠, the bound in Step 2 shows
+
+𝑓𝐺′ (𝑠) is finite (since the polynomial growth in 𝑟 eventually beats the polylog growth in 𝑟), so by
+
+enlarging 𝐾 if necessary, the bound 𝑓𝐺′ (𝑠) ≤ exp(𝐾 𝑠 log 𝑠) holds for all 𝑠 ≥ 2.
+
+□
+
+Finally, we show that polynomial-density macros can yield infinite expansion.
+
+8
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+Theorem 3 (Polynomial density gives infinite expansion exists a macro set 𝑀 ⊆ 𝐴𝑛 such that:
+
+Lean VERIFIED ). For any integer 𝑘 ≥ 2, there
+
+|𝑀 ∩ 𝐵𝐺 (𝑟)| ≤ 𝑛𝑟1/𝑘 for all 𝑟 ≥ 1,
+
+and 𝑓𝐺′ (𝑠) = ∞ for all 𝑠 ≥ 𝑛𝑔(𝑘),
+
+where 𝑔(𝑘) is the Waring constant (the smallest integer such that every nonnegative integer is a sum of at most 𝑔(𝑘) 𝑘-th powers).
+
+Proof. For each generator 𝑎𝑖 ∈ 𝐺 and each 𝑚 ∈ N, define the macro 𝑔𝑖,𝑚 := 𝑚𝑘 𝑎𝑖. Let
+
+𝑀 := {𝑚𝑘 𝑎𝑖 : 𝑖 = 1, . . . , 𝑛, 𝑚 ≥ 1}.
+
+Growth bound. A macro 𝑚𝑘 𝑎𝑖 has 𝐺-length 𝑚𝑘 . The number of macros with |𝑔𝑖,𝑚 |𝐺 = 𝑚𝑘 ≤ 𝑟 is ⌊𝑟1/𝑘 ⌋ for each 𝑖, so
+|𝑀 ∩ 𝐵𝐺 (𝑟)| = 𝑛⌊𝑟1/𝑘 ⌋ ≤ 𝑛𝑟1/𝑘 .
+
+Infinite expansion. Any element 𝑤 ∈ 𝐴𝑛 can be written as 𝑤 = 𝑥1𝑎1 + · · · + 𝑥𝑛𝑎𝑛 with 𝑥𝑖 ∈ N. By Waring’s theorem, each 𝑥𝑖 is a sum of at most 𝑔(𝑘) 𝑘-th powers:
+
+𝑥𝑖 = 𝑚𝑖,1 𝑘 + · · · + 𝑚𝑖,𝑡𝑖 𝑘 , 𝑡𝑖 ≤ 𝑔(𝑘).
+
+Thus
+
+𝑥𝑖𝑎𝑖 = 𝑚𝑖,1 𝑘 𝑎𝑖 + · · · + 𝑚𝑖,𝑡𝑖 𝑘 𝑎𝑖,
+
+where each term 𝑚𝑖𝑘, 𝑗 𝑎𝑖 lies in 𝑀. Summing over all 𝑖, the total number of macro terms is at most
+
+𝑖=1 𝑛 𝑡𝑖 ≤ 𝑛𝑔(𝑘). Hence every element of 𝐴𝑛 lies in 𝐵𝐺′ (𝑛𝑔(𝑘)), giving 𝑓𝐺′ (𝑛𝑔(𝑘)) = ∞.
+
+□
+
+Remark 1. For 𝑘 = 2, Lagrange’s four-square theorem gives 𝑔(2) = 4, so a macro set of squares with growth exponent 1/2 achieves 𝑓𝐺′ (4) = ∞.
+
+Remark 2. The macro sets in Theorems 1 and 3 exhibit a sort of duality: Theorem 1 uses powers of a fixed base {𝑏 𝑗 𝑎𝑖 : 𝑗 ≥ 1}, while Theorem 3 uses fixed powers of varying bases {𝑚𝑘 𝑎𝑖 : 𝑚 ≥ 1}. The sparser logarithmic-density set achieves exponential expansion; the polynomial-density set achieves infinite expansion.
+
+Additional results for 𝐴𝑛, including the cases of double-logarithmic and finite macro density, appear in Appendix A.
+
+2.2. Free Monoid. In contrast to 𝐴𝑛, we now show that for 𝐹𝑛, a polynomially-growing macro set only achieves linear expansion and that superlinear expansion requires an exponentially-growing macro set. This reflects the exponential growth of the underlying monoid.
+
+Theorem 4 (Polynomial density gives linear expansion Lean VERIFIED ). For 𝐹𝑛 with 𝑛 ≥ 2, let 𝑀 be a macro set with at most 𝑐ℓ𝑝 macros of each 𝐺-length ℓ ≥ 2, for some constants 𝑐 > 0 and 𝑝 ≥ 0.
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+9
+
+Then there exists a constant 𝑑 = 𝑑 (𝑛, 𝑝, 𝑐) such that for all integers 𝑠 ≥ 1:
+
+𝑓𝐺′ (𝑠) < 𝑑𝑠.
+
+Moreover, it suffices to choose an integer 𝑑 ≥ 3 satisfying:
+
+(2)
+
+𝑛𝑑 > 4𝑒(𝑛 + 𝑐)𝑑 𝑝+1.
+
+Proof. Fix integers 𝑟, 𝑠 ≥ 1. Consider words of exact 𝐺-length 𝑟:
+
+𝑆𝑟 := {𝑤 ∈ 𝐹𝑛 : |𝑤|𝐺 = 𝑟 }, |𝑆𝑟 | = 𝑛𝑟 .
+
+We will show that for an appropriate choice of 𝑑, |{𝑤 ∈ 𝑆𝑑𝑠 : |𝑤|𝐺′ ≤ 𝑠}| < 𝑛𝑑𝑠, which implies 𝐵𝐺 (𝑑𝑠) ⊈ 𝐵𝐺′ (𝑠).
+Fix 𝑟 = 𝑑𝑠 and 1 ≤ 𝑘 ≤ 𝑠. Since 𝐹𝑛 has no relations, any representation 𝑤 = 𝑦1 · · · 𝑦𝑘 with 𝑦𝑖 ∈ 𝐺′ and |𝑤|𝐺 = 𝑑𝑠 is determined by:
+
+(1) A composition of 𝑑𝑠 into 𝑘 positive parts (ℓ1, . . . , ℓ𝑘 ), where ℓ𝑖 = |𝑦𝑖 |𝐺 (2) A choice of generator in 𝐺′ of 𝐺-length ℓ𝑖 for each 𝑖
+
+For each length ℓ ≥ 1, there are at most (𝑛 + 𝑐)ℓ𝑝 generators in 𝐺′ of that length (exactly 𝑛 for ℓ = 1, at most 𝑐ℓ𝑝 for ℓ > 1). Therefore:
+
+𝑘
+|{(𝑦1, . . . , 𝑦𝑘 ) : 𝑦𝑖 ∈ 𝐺′, |𝑦𝑖 |𝐺 = ℓ𝑖 }| ≤ (𝑛 + 𝑐)𝑘 ℓ𝑖𝑝 ≤ (𝑛 + 𝑐)𝑘
+𝑖=1
+
+𝑑𝑠 𝑝𝑘 ,
+𝑘
+
+where the right-most inequality follows from AM-GM with
+
+𝑘 𝑖=1
+
+ℓ𝑖
+
+=
+
+𝑑𝑠:
+
+𝑘
+ℓ𝑖 ≤
+𝑖=1
+
+𝑑𝑠 𝑘 .
+𝑘
+
+There are
+
+𝑑𝑠−1 𝑘 −1
+
+such compositions, so:
+
+|{𝑤 ∈ 𝑆𝑑𝑠 : |𝑤|𝐺′ = 𝑘}| ≤
+
+𝑑𝑠 − 1 (𝑛 + 𝑐)𝑘 𝑘 −1
+
+𝑑𝑠 𝑝𝑘 .
+𝑘
+
+Summing over 𝑘 ≤ 𝑠:
+
+∑𝑠︁ |{𝑤 ∈ 𝑆 𝑑𝑠 − 1 𝑑𝑠 : |𝑤|𝐺′ ≤ 𝑠}| ≤ (𝑛 + 𝑐)𝑘 𝑘=1 𝑘 − 1
+
+𝑑𝑠 𝑝𝑘 𝑘≤
+
+𝑑𝑠 − 1 ∑𝑠︁(𝑛 + 𝑐)𝑘 𝑠 − 1 𝑘=1
+
+𝑑𝑠 𝑝𝑘 .
+𝑘
+
+The second inequality uses the fact that for 𝑑 ≥ 2 and 1 ≤ 𝑘 ≤ 𝑠, we have
+
+𝑑𝑠−1 𝑘 −1
+
+≤
+
+𝑠−1 𝑑𝑠−1 .
+
+Define:
+
+∑𝑠︁ Σ𝑠 := (𝑛 + 𝑐)𝑘
+𝑘 =1
+
+𝑑𝑠 𝑝𝑘 .
+𝑘
+
+Writing 𝑏𝑘 :=
+
+(𝑛 + 𝑐)𝑑𝑝
+
+𝑠 𝑘
+
+𝑝 𝑘 , one can verify that if (𝑛+𝑐)𝑑 𝑝 ≥ 𝑒𝑝, the sequence 𝑏𝑘 is increasing
+
+in 𝑘 for 1 ≤ 𝑘 ≤ 𝑠. Since 𝑑 ≥ 3 and 𝑛 + 𝑐 ≥ 2, we have (𝑛 + 𝑐)𝑑 𝑝 ≥ 2 · 3𝑝 > 𝑒𝑝, so the monotonicity
+
+10
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+condition holds. Thus Σ𝑠 ≤ 𝑠 · 𝑏𝑠 = 𝑠 · ((𝑛 + 𝑐)𝑑 𝑝)𝑠 ≤ (2(𝑛 + 𝑐)𝑑 𝑝)𝑠. Using
+
+𝑑𝑠−1 𝑠−1
+
+<
+
+𝑑𝑠 𝑠
+
+≤ (𝑒𝑑)𝑠:
+
+|{𝑤 ∈ 𝑆𝑑𝑠 : |𝑤|𝐺′ ≤ 𝑠}| ≤ (𝑒𝑑)𝑠 (2(𝑛 + 𝑐)𝑑 𝑝)𝑠 = (2𝑒(𝑛 + 𝑐)𝑑 𝑝+1)𝑠.
+
+Choose 𝑑 such that 𝑛𝑑 > 4𝑒(𝑛 + 𝑐)𝑑 𝑝+1. Then
+
+|{𝑤 ∈ 𝑆𝑑𝑠 : |𝑤|𝐺′ ≤ 𝑠}| ≤ (2𝑒(𝑛 + 𝑐)𝑑 𝑝+1)𝑠 < (𝑛𝑑/2)𝑠 < 𝑛𝑑𝑠.
+
+Therefore not all words of 𝐺-length 𝑑𝑠 lie in 𝐵𝐺′ (𝑠), so 𝑓𝐺′ (𝑠) < 𝑑𝑠.
+
+□
+
+Remark 3. When 𝑝 = 0, condition (2) simplifies to 𝑛𝑑 > 4𝑒(𝑛 + 𝑐)𝑑, recovering the logarithmicdensity case.
+
+The next result shows that a macro set of vanishing sphere density—though still exponentially large in absolute terms—allows for superlinear expansion.
+
+Theorem 5 (Probabilistic sparse macros give superlinear expansion in 𝐹𝑛 Lean VERIFIED ). Let 𝐹𝑛 be the
+
+free monoid on 𝑛 ≥ 2 generators 𝐺 = {𝑎1, . . . , 𝑎𝑛}. There exists a macro set 𝑀 ⊂ 𝐹𝑛 such that
+
+|𝑀 ∩ 𝑆𝑟 | |𝑆𝑟 | −→ 0
+
+as 𝑟 → ∞,
+
+and
+
+𝑓𝐺′ (𝑠) −→ ∞
+
+as 𝑠 → ∞,
+
+𝑠
+
+where 𝑆𝑟 = {𝑤 ∈ 𝐹𝑛 : |𝑤|𝐺 = 𝑟 }, 𝐺′ = 𝐺 ∪ 𝑀, and 𝑓𝐺′ is the expansion function.
+
+quantitatively, there exist constants 𝐾, 𝑐 > 0 (depending only on 𝑛) such that
+
+More
+
+𝐵𝐺 (𝑟) ⊆ 𝐵𝐺′ 𝐾 (log 𝑟)2 for all sufficiently large 𝑟,
+
+and hence
+
+√ 𝑓𝐺′ (𝑠) ≥ exp 𝑐 𝑠 for all sufficiently large 𝑠.
+
+Proof. We build 𝑀 as a union of a small deterministic family of log-periodic words and an independent random family.
+
+Step 0: log-periodic words. For a word 𝑤 = 𝑏1 · · · 𝑏𝐿 ∈ 𝐹𝑛 of length 𝐿 = |𝑤|𝐺, say that 𝑤 has period 𝑑 if 1 ≤ 𝑑 ≤ 𝐿 and 𝑏 𝑗 = 𝑏 𝑗+𝑑 for all 1 ≤ 𝑗 ≤ 𝐿 − 𝑑. Write per(𝑤) for the least such 𝑑.
+Fix constants 𝐶 > 4 log 𝑛 and 𝐵 ≥ 2𝐶 (natural logarithms). Define the deterministic macro
+family 𝑃 := 𝑤 ∈ 𝐹𝑛 : per(𝑤) ≤ 𝐵 log 𝑒 + |𝑤|𝐺 .
+
+Step 1: random macros of density 1/log ℓ. Independently for each word 𝑢 ∈ 𝐹𝑛 of length ℓ ≥ 2, include 𝑢 in a random set 𝑅 with probability
+
+𝑝ℓ :=
+
+1.
+
+log(𝑒 + ℓ)
+
+Let 𝑀 := 𝑃 ∪ 𝑅 and 𝐺′ := 𝐺 ∪ 𝑀.
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+11
+
+Step 2: vanishing sphere density. We have |𝑆𝑟 | = 𝑛𝑟. First, count the deterministic part: any word in 𝑃 ∩ 𝑆𝑟 is determined by its period 𝑑 ≤ 𝐵 log(𝑒 + 𝑟) and its first 𝑑 letters, hence
+|𝑃 ∩ 𝑆𝑟 | ≤ ∑︁ 𝑛𝑑 ≤ 𝑛𝐵 log(𝑒+𝑟)+1 = 𝑂 𝑟 𝐵 log 𝑛 .
+𝑑≤𝐵 log(𝑒+𝑟)
+So |𝑃 ∩ 𝑆𝑟 |/𝑛𝑟 → 0. Second, |𝑅 ∩ 𝑆𝑟 | is Bin(𝑛𝑟, 𝑝𝑟) with mean 𝜇𝑟 = 𝑛𝑟/log(𝑒 + 𝑟). A Chernoff bound gives
+
+Pr |𝑅 ∩ 𝑆𝑟 | ≥ 2𝜇𝑟 ≤ exp(−𝜇𝑟/3),
+
+and 𝑟 exp(−𝜇𝑟/3) < ∞ since 𝜇𝑟 grows exponentially. By Borel–Cantelli, almost surely |𝑅 ∩ 𝑆𝑟 | ≤ 2𝑛𝑟/log(𝑒 + 𝑟) for all large 𝑟. Thus, almost surely,
+|𝑀 ∩ 𝑆𝑟 | |𝑆 ≤ 𝑟 | 𝑛𝑟 |𝑃 ∩ 𝑆𝑟 | + 𝑛𝑟 |𝑅 ∩ 𝑆𝑟 | ≤ 𝑜(1) + 2 log(𝑒 + 𝑟) −→ 0.
+
+Step 3: a halving lemma (one macro consumes half the word). Fix a length 𝑟 and set
+
+𝑘 (𝑟) := ⌈𝐶 log(𝑒 + 𝑟)⌉.
+
+For a word 𝑤 = 𝑏1 · · · 𝑏𝑟 ∈ 𝑆𝑟, consider the family of long early substrings
+
+C𝑟 (𝑤) := 𝑏𝑖𝑏𝑖+1 · · · 𝑏𝑖+ℓ−1 : 1 ≤ 𝑖 ≤ 𝑘 (𝑟), ⌈𝑟/2⌉ ≤ ℓ ≤ 𝑟 − 𝑖 + 1 .
+
+Each element of C𝑟 (𝑤) has length between ⌈𝑟/2⌉ and 𝑟.
+
+Claim. For every 𝑤 ∈ 𝑆𝑟, either C𝑟 (𝑤) contains an element of 𝑃, or else all words in C𝑟 (𝑤) are pairwise distinct.
+
+Indeed, if two elements of C𝑟 (𝑤) were equal, they must have the same length ℓ. So we would have
+
+𝑏𝑖 · · · 𝑏𝑖+ℓ−1 = 𝑏 𝑗 · · · 𝑏 𝑗+ℓ−1 for some 1 ≤ 𝑖 < 𝑗 ≤ 𝑘 (𝑟).
+
+Let 𝑑 = 𝑗 − 𝑖 ≤ 𝑘 (𝑟). Then the word 𝑢 = 𝑏𝑖 · · · 𝑏𝑖+ℓ+𝑑−1 has period 𝑑, hence
+
+per(𝑢) ≤ 𝑑 ≤ 𝑘 (𝑟) ≤ 𝐶 log(𝑒 + 𝑟) ≤ 𝐵 log 𝑒 + |𝑢|𝐺 ,
+
+for 𝑟 large (since |𝑢|𝐺 ≍ 𝑟 and 𝐵 ≥ 2𝐶). Thus 𝑢 ∈ 𝑃, and in particular C𝑟 (𝑤) contains an element
+
+of 𝑃. This proves the claim.
+
+Now suppose C𝑟 (𝑤) ∩ 𝑃 = ∅. Then the claim says C𝑟 (𝑤) is a set of distinct words. Also, a crude
+
+count gives
+
+𝑟 |C𝑟 (𝑤)| ≥ 𝑘 (𝑟) ⌊𝑟/2⌋ − 𝑘 (𝑟) ≥ 𝑘 (𝑟)
+4
+
+for all large 𝑟 (since 𝑘 (𝑟) = 𝑂 (log 𝑟)). Because each 𝑢 ∈ C𝑟 (𝑤) has length ≥ 𝑟/2, we have
+
+𝑝|𝑢|𝐺 ≥ 1/log(𝑒 + 𝑟). Independence of the random choice of 𝑅 across distinct words gives
+
+Pr C𝑟 (𝑤) ∩ 𝑅 = ∅
+
+∑︁
+
+=
+
+(1 − 𝑝|𝑢|𝐺 ) ≤ exp −
+
+𝑝|𝑢|𝐺
+
+𝑢∈C𝑟 (𝑤)
+
+𝑢∈C𝑟 (𝑤)
+
+≤ exp − |C𝑟 (𝑤)| . log(𝑒 + 𝑟)
+
+12
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+Using |C𝑟 (𝑤)| ≥ 4𝑟 𝑘 (𝑟) and 𝑘 (𝑟) = ⌈𝐶 log(𝑒 + 𝑟)⌉ gives
+
+Therefore, for every 𝑤 ∈ 𝑆𝑟,
+
+𝐶 Pr C𝑟 (𝑤) ∩ 𝑅 = ∅ ≤ exp − 𝑟 .
+4
+
+𝐶 Pr C𝑟 (𝑤) ∩ 𝑀 = ∅ ≤ exp − 𝑟 ,
+4
+
+since if C𝑟 (𝑤) meets 𝑃 then it certainly meets 𝑀.
+
+By a union bound over all 𝑤 ∈ 𝑆𝑟,
+
+Pr ∃ 𝑤 ∈ 𝑆𝑟 with C𝑟 (𝑤) ∩ 𝑀 = ∅ ≤ 𝑛𝑟 exp −𝐶 𝑟 = exp 𝑟 (log 𝑛 − 𝐶/4) . 4
+Since 𝐶 > 4 log 𝑛, the right-hand side is summable in 𝑟. By Borel–Cantelli, with probability 1
+
+there is 𝑟0 such that for all 𝑟 ≥ 𝑟0 every word 𝑤 ∈ 𝑆𝑟 satisfies C𝑟 (𝑤) ∩ 𝑀 ≠ ∅. Equivalently: for all large 𝑟, every length-𝑟 word has a macro (deterministic or random) of length ≥ 𝑟/2 starting within
+
+its first 𝑘 (𝑟) letters.
+
+Step 4: recursive parsing and the (log 𝑟)2 bound. Fix 𝑟 ≥ 𝑟0 and a word 𝑤 ∈ 𝑆𝑟. From Step 3, choose 1 ≤ 𝑖 ≤ 𝑘 (𝑟) and ℓ ≥ 𝑟/2 such that
+
+𝑢 := 𝑏𝑖 · · · 𝑏𝑖+ℓ−1 ∈ 𝑀 .
+
+Then we can write
+
+𝑤 = (𝑏1 · · · 𝑏𝑖−1) · 𝑢 · (𝑏𝑖+ℓ · · · 𝑏𝑟 ),
+
+where the prefix (𝑏1 · · · 𝑏𝑖−1) uses 𝑖 − 1 ≤ 𝑘 (𝑟) generators from 𝐺 (fillers), and 𝑢 is one macro. The suffix has length at most 𝑟 − ℓ ≤ 𝑟/2.
+Apply the same procedure to the suffix, and iterate. After at most ⌈log2 𝑟⌉ iterations the remaining suffix has bounded length and can be spelled out with generators. At each iteration, we spend at most 𝑘 (𝑟) + 1 = 𝑂 (log 𝑟) tokens (fillers plus one macro). Thus there is a constant 𝐾 such that every 𝑤 ∈ 𝑆𝑟 has
+|𝑤|𝐺′ ≤ 𝐾 (log 𝑟)2
+
+for all 𝑟 large. Since |𝑤|𝐺′ is monotone in |𝑤|𝐺, the same bound holds for every word of length
+
+≤ 𝑟, i.e.
+
+𝐵𝐺 (𝑟) ⊆ 𝐵𝐺′ 𝐾 (log 𝑟)2 for all large 𝑟.
+
+√︁
+
+This gives the claimed expansion bound. Writing 𝑠 = 𝐾 (log 𝑟)2 implies 𝑟 = exp( 𝑠/𝐾), so
+
+√
+
+√
+
+𝑓𝐺′ (𝑠) ≥ exp(𝑐 𝑠) with 𝑐 = 1/ 𝐾. In particular 𝑓𝐺′ (𝑠)/𝑠 → ∞.
+
+□
+
+Remark 4. The macro set 𝑀 exists almost surely under the random inclusion process, but no explicit construction is given.
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+13
+
+Remark 5. The sphere density of 𝑀 satisfies |𝑀 ∩ 𝑆𝑟 |/|𝑆𝑟 | ∼ 2/log 𝑟. In absolute terms, |𝑀 ∩ 𝑆𝑟 | ∼ 2𝑛𝑟/log 𝑟: a vanishing fraction of each sphere, but exponentially many macros at each radius. This contrasts with Theorem 4, where at most 𝑐ℓ𝑝 macros per length forces linear expansion.
+
+3. Interpreting Data from MathLib
+We now compare the results of Section 2 against MathLib. We will think of MathLib as a proxy for HM. Of course, MathLib’s structure is partly shaped by Lean’s type theory and by the choices of its contributor community. Because MathLib is still small (roughly 500,000 elements in the version used in this study4) and unevenly developed, we see prominent finite-size effects at its frontier. This limits our ability to infer precise dimensional properties, but the data is consistent with low-dimensional behavior more characteristic of 𝐴𝑛 than 𝐹𝑛.
+
+3.1. Constructing the dependency graph. We construct a dependency graph from MathLib’s internal Lean representation. The vertices are all MathLib elements: lemmas, theorems, definitions, structures, and inductive types, plus a synthetic node for types (Sort) and Lean core library elements (And, Nat, List, etc.) that have no further MathLib dependencies.
+Each MathLib element has two parts: a signature (the theorem statement or type definition) and an optional body (the proof or defining expression). For each element 𝑢, we count how many times each other element 𝑣 is referenced, producing a directed edge from 𝑢 to 𝑣 weighted by this count. Edges thus point toward dependencies. The resulting data for each element is a vector of reference counts. Note that this construction only records the multiplicity of each reference and forgets the order in which references appear within an element’s expression tree. For example, two proofs that apply the same lemmas with the same multiplicities but in different ways produce identical dependency graph entries.
+As a simple example, consider:
+1 lemma simple_lemma {A B : Prop} : A /\ B -> B := 2 fun h : A /\ B => And.right h
+
+For reference, its internal representation is:
+
+1 type: forallE (A : Sort 0), forallE (B : Sort 0),
+
+2
+
+forallE (_ : app (app And #1) #0), #1
+
+3 body: lam (A : Sort 0) => lam (B : Sort 0) =>
+
+4
+
+lam (h : app (app And #1) #0) => app (app (app And.right #2) #1) #0
+
+The signature contains two occurrences of Sort (for the Prop type of A and B) and one of And. The body contains Sort twice, And once, and And.right once. These produce weighted edges from simple_lemma to the corresponding elements.
+4Commit d167cc6dc962ab340507362ea2f4bcfcff44f01b, dated 17 October 2025.
+
+14
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+To extract these dependencies, we recursively traverse each MathLib element’s signature and body, collecting every const node (representing a reference to a named declaration):
+
+1 def collectElems (e : Expr) (acc : HashMap Name Nat := {}): HashMap Name Nat :=
+
+2 match e with
+
+3 | .const declName _
+
+=> acc.insert declName (acc.getD declName 0 + 1)
+
+4 | .app fn arg
+
+=> collectElems arg (collectElems fn acc)
+
+5 | .lam _ binderType body _
+
+=> collectElems body (collectElems binderType acc)
+
+6 | .forallE _ binderType body _ => collectElems body (collectElems binderType acc)
+
+7 | .letE _ type value body _
+
+=> collectElems body (collectElems value (collectElems
+
+type acc))
+
+8 | .mdata _ expr
+
+=> collectElems expr acc
+
+9 | .proj _ _ struct
+
+=> collectElems struct acc
+
+10 | .sort _
+
+=> acc.insert (Name.mkSimple "Sort") (acc.getD
+
+(Name.mkSimple "Sort") 0 + 1)
+
+11 | _
+
+=> acc
+
+The key case is .const declName _, which represents a reference to a named declaration; each such occurrence produces an edge in our graph. The other cases (app for function application, lam for lambda abstraction, forallE for dependent arrows, letE for let-bindings) simply recurse into their subexpressions. We also count .sort occurrences, treating Sort (which, for example, represents Prop) as a primitive.
+The resulting graph contains a small number of cycles (approximately 60 pairs of mutually dependent elements, all involving unsafe recursion). Since our analysis requires an acyclic graph, we collapse each strongly connected component into a single vertex, reducing the vertex count from 463,719 to 463,661.
+
+3.2. Wrapped and unwrapped lengths, and depth. Lean core library elements and Sort (primitive elements) form the sinks of the MathLib DAG and are analogous to the generators 𝐺 in our monoid models. We consider all other (non-primitive) elements to be analogous to the macro set 𝑀. Thus, we view MathLib as 𝐺′ = 𝐺 ∪ 𝑀.
+The unwrapped length of an element 𝑢, denoted by |𝑢|𝐺, is the total count of primitives when all references are recursively expanded. Primitives have unwrapped length 1. For any non-primitive element with edges to elements 𝑣1, . . . , 𝑣𝑘 with weights 𝑤1, . . . , 𝑤𝑘 :
+∑𝑘︁ |𝑢|𝐺 = 𝑤𝑖 · |𝑣𝑖|𝐺.
+𝑖=1
+As the notation indicates, unwrapped length corresponds directly to the 𝐺-length in the monoid model.
+The wrapped length of an element 𝑢 is its token length: the number of tokens in its definition written in Lean as produced by the Lean parser. Wrapped length corresponds to |𝑢|𝐺′\{𝑢} in the
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+15
+
+monoid model. One could alternatively define wrapped length as the number of references in the internal Lean representation, i.e., the total weight of outgoing edges in the dependency graph. However, tactics such as simp and rw expand during elaboration into many internal references to basic elements, inflating the reference count of some elements without introducing deep dependencies. Under the reference-count metric, this produces elements with large wrapped length but slowly growing unwrapped length—a plateau in the compression curve that reflects proof automation rather than mathematical content. Token count avoids this artifact: a tactic invocation is a single token regardless of how many references it generates internally. Some MathLib elements are generated internally by Lean and have no human-written source; we omit these when reporting wrapped lengths.
+The depth of an element is the length of the longest path to primitives in the dependency DAG, i.e., the maximum number of successive reference-expansion steps required to reach generators. Primitives have depth 0.
+
+3.3. Distributions of wrapped and unwrapped lengths, and depth. Figures 2(a)–(c) show the distributions of elements by log2(unwrapped length), wrapped length, and depth. In each case, the distribution is concentrated at low values with a long tail. The declines at large values reflect finite-size effects: MathLib’s coverage is uneven, and we expect the tails to extend and fill in as the library grows. A future analysis tracking MathLib’s evolution over time could measure how the frontier expands.
+
+12000 10000 8000 6000 4000 2000
+00
+
+50 100 150 200 250 300 350 log2(unwrapped length)
+(a)
+
+3000 2500 2000 1500 1000 500
+00
+
+50 100 150 200 250 300 350 Wrapped length
+(b)
+
+25000 20000 15000 10000 5000
+00
+
+50 100 150 200 250 300 Depth
+(c)
+
+Figure 2. Distributions of MathLib elements by (a) log2(unwrapped length), (b) wrapped length, and (c) depth.
+
+Number of elements Number of elements Number of elements
+
+3.4. Unwrapped length versus wrapped length. Figure 3 shows median log2(unwrapped length) versus wrapped length. While 𝑓𝐺′ (𝑠) measures the coverage of 𝐺′, these data points reflect the realized 𝐺-lengths |𝑢|𝐺 achieved by MathLib’s compression strategy. The approximately linear relationship between log2(unwrapped length) and wrapped length (slope ≈ 0.4 bits/token) indicates exponential expansion: each additional token yields a roughly constant multiplicative gain in
+primitive count. Further interpretation is provided in Section 3.7.
+
+16
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+Notice the spike at small wrapped length. This arises from the following types of elements, but not restricted to them: (1) abbreviations, such as isOpenMap_proj from the module Topology.VectorBundle.Basic with wrapped length 7 and unwrapped length 1048; (2) “final” theorems using complex intermediate ones, such as integrable from the module Analysis.Calculus.BumpFunction.Normed with wrapped length 9 and unwrapped length 2 · 1054; (3) special cases of complex statements, such as infinitesimal_zero from the module Analysis.Real.Hyperreal with wrapped length 8 and unwrapped length 3.6 · 1031. (Hyperlinks are located under the module name.)
+
+Median log2(unwrapped length)
+
+140 120 100 80 60 40 20
+0 0
+
+50 100 150 200 250 300 350 Wrapped length
+
+Figure 3. Median log2(unwrapped length) versus wrapped length. Each point represents the median over all elements at that wrapped length.
+
+3.5. Wrapped length versus depth. Figure 4 shows the median wrapped length as a function of depth. The relationship is approximately flat (with at most a mild positive slope): (ignoring outliers at large depth) median wrapped length hovers in the range of roughly 50–120 across depths 0–300, with no strong dependence on depth. This means that individual definitions do not become systematically longer as depth increases, reminiscent of the powers of 10 macro of place notation. This is not surprising since defining expressions are unlikely to become arbitrarily long; instead we expect modularization as wrapped length increases.
+3.6. Unwrapped length versus depth. Figure 5 shows the median log2(unwrapped length) as a function of depth. The relationship is approximately linear with slope close to 1, indicating that unwrapped length grows exponentially with depth: each additional layer of definitions provides a roughly constant multiplicative gain in primitive count. The maximum depth reaches approximately 300, consistent with the maximum unwrapped length of approximately 10104, achieved by the algebraic geometry entry noted in the introduction.
+
+Median wrapped length
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+17
+
+600
+
+500
+
+400
+
+300
+
+200
+
+100
+
+0 0 50 100 150 200 250 300 Depth
+
+Figure 4. Median wrapped length versus depth.
+
+Median log2(unwrapped length)
+
+300 250 200 150 100 50
+0 0
+
+50 100 150 200 250 300 Depth
+
+Figure 5. Median log2(unwrapped length) versus depth. The approximately linear relationship indicates exponential growth of unwrapped length with depth.
+
+3.7. Discriminating between regimes. To make contact between the MathLib measurements and the monoid models of Section 2, we need to establish a correspondence between unwrapped length, wrapped length, depth, and their analogs in the monoid. Unwrapped length corresponds directly to the 𝐺-length |𝑢|𝐺 in the monoid: both count the total number of primitive symbols after fully expanding all references.
+The wrapped length of an element 𝑢 ∈ 𝐺′ in the monoid is |𝑢|𝐺′\{𝑢}: the minimum cost to represent 𝑢 using all generators in 𝐺′ = 𝐺 ∪ 𝑀 except 𝑢 itself, where each generator (primitive or
+
+18
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+macro) contributes cost 1. This mirrors the MathLib convention, where the wrapped length of an
+element is its token count—the cost of writing the definition using all available named elements. The depth of an element 𝑢 in the monoid generated by 𝐺′ is defined recursively using optimal
+representations.5 Every primitive 𝑔 ∈ 𝐺 has depth 0. For any element 𝑢 with 𝑢 ∉ 𝐺, compute the optimal representation of 𝑢 in 𝐺′ \ {𝑢}; if this uses only primitives then depth(𝑢) = 1, and
+otherwise
+
+depth(𝑢) = 1 + max {depth(𝑣) : 𝑣 ∈ 𝑀 \ {𝑢}, 𝑣 appears in the optimal representation of 𝑢}.
+
+Depth thus measures the length of the longest chain of macro dependencies required to optimally express 𝑢, bottoming out at primitives. (Note that the expansion theorems of Section 2 impose only density conditions on the macro set.) This is analogous, but not identical to MathLib depth, which uses the longest path to primitives in the dependency DAG: MathLib depth reflects authorial choices, while monoid depth reflects the intrinsic hierarchical structure under optimal compression.
+We note that we measured these quantities on all named elements in MathLib, not on all possible expressions that could be formed from them. Accordingly, in each monoid regime we restrict to the elements of the generating set 𝐺′ = 𝐺 ∪ 𝑀, rather than to all elements of the ambient monoid.
+Table 2 summarizes the relationships among the three quantities for each monoid regime. The Parsimony column indicates whether the macro set grows at a strictly slower rate than the ambient monoid: subpolynomial macro growth in 𝐴𝑛, or subexponential macro growth in 𝐹𝑛. Parsimonious macro sets achieve exponential expansion in 𝐴𝑛 but only linear expansion in 𝐹𝑛. We discuss each row in turn below, specializing to 𝐴1 = N and 𝐹2 whenever no generality is lost.
+
+Regime 𝐴𝑛, log density 𝐴𝑛, Waring 𝐴𝑛, double-log 𝐹𝑛, polynomial 𝐹𝑛, probabilistic
+
+log |𝑤|𝐺 vs depth Linear Linear Exponential Degenerate Linear
+
+|𝑤|𝐺′\{𝑤} vs depth Flat∗ Flat Doubly exp. Degenerate Quadratic
+
+log |𝑤|𝐺 vs |𝑤|𝐺′\{𝑤} Degenerate∗ Degenerate Logarithmic Logarithmic
+√ Concave ( ·)
+
+Parsimony Yes No Yes Yes No
+
+Table 2. Predicted relationships among log |𝑤|𝐺 (log unwrapped length), |𝑤|𝐺′\{𝑤} (wrapped length), and depth for each monoid regime. Measurements are restricted to elements of 𝐺′ = 𝐺 ∪ 𝑀. “Degenerate” means the independent variable (i.e., the “x” in “y vs x”) is bounded. The asterisk (∗) indicates that if a generic element of the monoid is considered then Flat → Linear and Degenerate → Linear; see 3.7.6
+for discussion.
+
+3.7.1. 𝐴𝑛, logarithmic-density macros (Theorem 1). The macro set is 𝑀 = {𝑏 𝑗 𝑎𝑖 : 𝑖 = 1, . . . , 𝑛, 𝑗 ≥ 1}. We specialize to 𝐴1 with 𝑀 = {𝑏 𝑗 : 𝑗 ≥ 1}. Macro 𝑏 𝑗 has 𝐺-length 𝑏 𝑗 , so log |𝑏 𝑗 |𝐺 = 𝑗 log 𝑏. Its optimal representation in 𝐺′ \ {𝑏 𝑗 } uses 𝑏 copies of 𝑏 𝑗−1, giving wrapped length 𝑏, independent
+5For general monoids this definition will not be algorithmically computable due to lack of or limited cancellation; the definition is effective for 𝐴𝑛, 𝑁𝑖𝑙𝑛 (discussed later), and 𝐹𝑛.
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+19
+
+of 𝑗. Iterating this, depth(𝑏 𝑗 ) = 𝑗. Thus, log |𝑤|𝐺 is linear in depth, wrapped length is flat across all depths, and since wrapped length is constant while log |𝑤|𝐺 varies freely, the third relationship
+is degenerate. If one considers generic elements of 𝐴1 rather than restricting to macro elements, the picture
+changes for columns 2 and 3. A generic element 𝑥 ∈ N has a wrapped length ∼ log 𝑥 and depth ∼ log 𝑥. Thus wrapped length generally grows linearly with depth, and log |𝑥|𝐺 ∼ |𝑥|𝐺′\{𝑥.
+
+3.7.2. 𝐴𝑛, polynomial-density macros / Waring (Theorem 3). The macro set is 𝑀 = {𝑚𝑘 : 𝑚 ≥ 1} for fixed 𝑘 ≥ 2 (specializing to 𝐴1). Macro 𝑚𝑘 has 𝐺-length 𝑚𝑘 , so log |𝑚𝑘 |𝐺 = 𝑘 log 𝑚. By Waring’s theorem, 𝑚𝑘 can be written as a sum of at most 𝑔(𝑘) 𝑘-th powers of strictly smaller integers, so wrapped length is at most 𝑔(𝑘), independent of 𝑚. We don’t know the optimal decomposition at each stage, but can bound the depth: a halving strategy (expressing 𝑚𝑘 using 𝑘-th powers of integers ≈ 𝑚/2, then recursing) gives depth 𝑂 (log 𝑚) and a linear relationship in column
+1; slower reductions give greater depth and a sublinear relationship, down to logarithmic if depth ∼ 𝑚. In all cases, wrapped length remains bounded, so columns 2 and 3 are flat and degenerate
+respectively.
+The Waring and log-density regimes produce identical predictions in the first three columns of Table 2 but differ in parsimony. In contrast to the log-density case, for generic elements of 𝐴1 in the Waring regime, column 3 remains degenerate since every 𝑥 ∈ N has wrapped length at most 𝑔(𝑘).
+
+3.7.3. 𝐴𝑛, double-logarithmic density (Theorem 6). The macro set is 𝑀 = {𝑏𝑏 𝑗 : 𝑗 ≥ 0} (specializ-
+
+ing to 𝐴1). Macro 𝑚 𝑗 = 𝑏𝑏 𝑗 has log |𝑚 𝑗 |𝐺 = 𝑏 𝑗 log 𝑏, which grows exponentially in 𝑗 = depth(𝑚 𝑗 ). The optimal representation of 𝑚 𝑗 in 𝐺′ \ {𝑚 𝑗 } uses ⌊𝑚 𝑗 /𝑚 𝑗−1⌋ = 𝑏𝑏 𝑗−1(𝑏−1) copies of 𝑚 𝑗−1, so wrapped length ∼ 𝑏𝑏 𝑗−1(𝑏−1), which grows doubly exponentially in depth. Eliminating 𝑗:
+
+log(wrapped)
+
+∼
+
+𝑏 𝑗−1(𝑏 − 1) log 𝑏
+
+∼
+
+𝑏−1 𝑏
+
+log
+
+|𝑚
+
+𝑗
+
+|𝐺,
+
+so
+
+log |𝑚 𝑗 |𝐺
+
+∼
+
+𝑏 𝑏−1
+
+log(wrapped),
+
+giving
+
+a
+
+logarithmic relationship in column 3. The first three columns are inconsistent with the MathLib
+
+data.
+
+3.7.4. 𝐹𝑛, polynomial-density macros (Theorem 4). The macro set has at most 𝑐ℓ𝑝 elements of each 𝐺-length ℓ, out of 𝑛ℓ total words of that length in 𝐹𝑛. The fraction of words at length ℓ that are macros is therefore 𝑐ℓ𝑝/𝑛ℓ, which vanishes exponentially fast. For any macro 𝑚 with |𝑚|𝐺 = 𝑟, the probability that its optimal representation in 𝐺′ \ {𝑚} contains another macro is
+negligible: the exponentially sparse macro set cannot populate the exponentially growing spheres of 𝐹𝑛 densely enough to sustain hierarchical nesting. Consequently, essentially all macros have depth 1, with their optimal representations consisting almost entirely of primitives. Thus, log |𝑚|𝐺 vs depth and wrapped vs depth are degenerate. Since log |𝑚|𝐺 ≈ log(wrapped), the column 3 entry
+is logarithmic. Again, the first three column entries are inconsistent with MathLib.
+
+20
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+3.7.5. 𝐹𝑛, probabilistic sparse macros (Theorem 5). Here the macro set has ∼ 2𝑛𝑟/log 𝑟 elements at
+
+radius 𝑟: exponentially many, though a logarithmically vanishing fraction (|𝑀 ∩ 𝑆𝑟 |/|𝑆𝑟 | ∼ 2/log 𝑟)
+
+of the sphere. This contrasts with the polynomial case, where the fraction vanishes exponentially.
+
+The absolute density is sufficient for the halving scheme of Theorem 5 to work: (nearly) every
+
+word of length 𝑟 has a macro of length ≥ 𝑟/2 starting within its first 𝑘 (𝑟) = 𝑂 (log 𝑟) positions.
+
+Hierarchical depth develops as a result.
+
+For a macro 𝑚 with |𝑚|𝐺 = 𝑟, the halving scheme gives depth(𝑚) ∼ log2 𝑟, so log |𝑚|𝐺 ∼ depth.
+For the wrapped length: at each of the ∼ log2 𝑟 levels, we spend at most 𝑘 (𝑟𝑡) = 𝑂 (log 𝑟𝑡) primitive fillers plus one macro, where 𝑟𝑡 ≤ 𝑟/2𝑡 is the remaining length at level 𝑡. The total wrapped length
+
+is
+
+l∑og︁2 𝑟
+
+l∑og︁2 𝑟
+
+wrapped ≤ 𝑂 (log(𝑟/2𝑡)) = 𝑂 (log 𝑟 − 𝑡) = 𝑂 ((log 𝑟)2),
+
+𝑡=0
+
+𝑡=0
+
+where the sum is arithmetic with 𝑂 (log 𝑟) terms each of size 𝑂 (log 𝑟). Since depth ∼ log 𝑟,
+
+√︁
+
+√
+
+wrapped = 𝑂 (depth2). Eliminating depth: log |𝑚|𝐺 ∼ depth ∼ wrapped, giving a concave ( ·)
+
+relationship in column 3.
+
+3.7.6. Summary and Identifying the “Macro Set”. The MathLib data (Figures 3, 4, and 5) shows: an approximately linear relationship in column 1, an approximately flat relationship in column 2, and an approximately linear relationship in column 3. The 𝐹𝑛 regimes are inconsistent with the data in at least two of the three columns. The 𝐴𝑛 log-density and Waring regimes both match columns 1 and 2 for macro elements, but predict a degenerate column 3. For generic elements in the log-density regime (recall the asterisks in Table 2), columns 2 and 3 both become linear. The MathLib column 2 plot is approximately flat but may have a mild positive slope, consistent with a mixture of macro and generic elements in the log-density regime. This points to 𝐴𝑛 with log-density macros, which we note is also the parsimonious regime.
+We do not take the all-non-primitives identification seriously as the true “macro set” for MathLib. MathLib contains abbreviations and trivial specializations (see Section 3.4) that merely invoke deep elements, contributing little compression on their own. On the other hand, some elements contribute substantial compression, e.g., the filter abstraction that unifies many limit theorems into a single framework. The identification of the correct “macro set” is a central problem.
+One simple approach to refining the “macro set” is to filter by in-degree in the dependency graph, removing elements in the bottom 𝑥 percentile for varying 𝑥. Removing an element from 𝑀 leaves unwrapped lengths unchanged, but increases wrapped lengths and decreases depths. Another option is to restrict the “macro set” to definition-like elements, e.g., those whose resulting type is Sort; we found that the resulting macro set provides little compression. One could also formulate the problem as an optimization, e.g., given a dependency DAG, find the “macro set” of fixed size 𝑘 that minimizes the total wrapped length. Whether these or related approaches bring the three metrics into better agreement with the 𝐴𝑛 log-density predictions is an open question.
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+21
+
+The difficulty of identifying the “macro set” may reflect limitations of MathLib itself as a proxy for HM. An enriched representation that captures relationships MathLib leaves implicit (e.g., that a family of related theorems are instances of a single pattern), or permits (as a hypergraph does) storage of multiple proofs of the same theorem, might admit a more satisfactory “macro set.” Finding a representation with an identifiable “macro set” is not merely a question of library science: it could reveal new mathematical structure and help direct automated agents.
+
+4. Discussion
+4.1. Why monoids? Monoids model the sequential structure of proofs; for the dependency structure, where multiple premises are consumed simultaneously, 𝑛-categories and “globular magmas” offer alternative frameworks. Inspired by the “growth of groups” [Mil68], which is essentially independent of generating set, one might expect that the choice of formal system should not greatly affect the shape of mathematics. However, the recursive nature of mathematics leads to unexpectedly large distortions: rewriting between different formulations of a mathematical theory with identical proof power can be non-recursively inefficient (see [BDF] and references therein). If rules and syntax are fixed, the underlying minimal-proof DAG is a discrete metric space with the axioms as base point. This metric geometry is modeled by the Cayley-graph geometry of each monoid and underlies the concepts of polynomial and exponential growth.
+4.2. Why monoids rather than groups. Groups introduce inverses, and inverses complicate the expansion analysis. This difficulty has historical precedent: Post [Pos47] encoded the halting problem into the word problem for monoids in 1947, but extending this to groups required another decade of work by Boone and Novikov [Nov55,Boo59]. The gap reflects the technical complications that inverses introduce.
+For our purposes, the problem is concrete. In the free group, any word 𝑤 can be written with length 2 by choosing macros 𝑚 and 𝑚′ that nearly cancel: 𝑚𝑚′ = 𝑤. By making 𝑚 and 𝑚′ sufficiently long, we can do this for every word while keeping the macro density arbitrarily small. This “cancellation trick” trivializes the expansion question for groups.
+One might object that deduction rules like Modus Ponens (𝐴 → 𝐵, 𝐴 ⊢ 𝐵) involve a kind of cancellation. However, reversible logic is universal with only modest overhead [Ben73], so cancellation is not essential to computation. More pragmatically, free monoids admit exact analysis—we stand where the light is good.
+While on the topic of groups, there is a Lie-theoretic analogy worth noting: the inclusion 𝐴𝑛 ↩→ 𝑖=1 𝑛 𝐹𝑛𝑖 resembles the inclusion of a maximal torus 𝑇 𝑛−1 ↩→ 𝑆𝑂 (𝑛). If 𝐴𝑛 is broadened to free-nilpotent monoids 𝑁𝑖𝑙𝑛,𝑘 (𝑛 counting homological rank and 𝑘 the nilpotency level), then the inclusion 𝑁𝑖𝑙𝑛,𝑘 ↩→ 𝑖=1 𝑛 𝐹𝑛𝑖 is reminiscent of the Iwasawa decomposition 𝐺 = 𝐾 𝐴𝑁 of a semisimple Lie group.
+
+22
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+4.3. Nilpotent and solvable monoids. The dichotomy between 𝐴𝑛 and 𝐹𝑛 reflects different growth rates: polynomial versus exponential. This difference, not abelian versus non-abelian, is what matters.
+The nonnegative Heisenberg monoid illustrates the polynomial-growth case.6 It is nilpotent and non-abelian, and of polynomial growth. Here again, and in all free nilpotent monoids, logarithmicdensity macros yield exponential expansion, just as for 𝐴𝑛. The proof is simple. 𝑁𝑖𝑙𝑛,𝑘 is the monoid with 𝑛 “base” generators, with additional secondary generators to simulate commutation, and the minimal relations needed to encode the level-𝑘 right-nested commutators (recall we have no inverses in these monoids). All these generators, and their number is polynomial in 𝑛 and 𝑘, individually generate a copy of N. Build separate macro sets in each of these N-directions. Then take the union of these N-macro-sets to be the macro set for 𝑁𝑖𝑙𝑛,𝑘 . Up to polynomial factors it will have the same expansion function as the mini-macro-sets in each N. Among monoids with cancellation (meaning 𝑎𝑐 = 𝑏𝑐 implies 𝑎 = 𝑏, and 𝑐𝑎 = 𝑐𝑏 implies 𝑎 = 𝑏), the geometrically crucial property of “polynomial growth” is characterized (as in groups) by Gromov’s criterion [Gro81]: they are sub-monoids of finite index within a nilpotent monoid. So there is at hand a well-understood class of slow-growth monoids to help us model HM.
+The nonnegative sector of the SOL lattice illustrates the exponential-growth case. This monoid is solvable and non-abelian—more structured than a free monoid—but still has exponential growth. Counting arguments parallel to Theorem 4 show that it admits no poly-logarithmically growing macro with super-linear expansion.
+
+4.4. Why formal mathematics resists compression. That human mathematics compresses well is familiar from experience and confirmed by our MathLib analysis. Less obvious is that FM, as a whole, must contain vast regions that resist compression.
+By compression we mean something specific: reductive compression, the local substitution of definitions, not arbitrary algorithmic encoding. The digits of 𝜋 illustrate the distinction. The number 𝜋 has low Kolmogorov complexity—a short program computes it—but the digit string admits no known local compression via pattern substitution. Reductive compression requires finding a repeated structure to name. High reductive compressibility does, however, imply low Kolmogorov complexity, since the DAG of definitions encodes a short reconstruction procedure. Moreover, this procedure runs in at most linear time, so reductively compressible elements have low logical depth in the sense of Bennett [Ben88]. Thus reductive compressibility is a more restrictive condition than low Kolmogorov complexity.
+With this understanding, the incompressibility of most of FM follows from standard complexity assumptions. Consider theorems of the form “the Boolean formula 𝑆 is unsatisfiable.” We argue that for typical 𝑆 such theorems lie outside HM. Such statements are easy to write down, but for
+6The nonnegative Heisenberg monoid consists of 3 × 3 nonnegative integer matrices with zeros below the diagonal and ones on the diagonal. It can be presented as ⟨𝑎, 𝑏, 𝑧 | 𝑎𝑏 = 𝑏𝑎𝑧, 𝑎𝑧 = 𝑧𝑎, 𝑏𝑧 = 𝑧𝑏⟩.
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+23
+
+generic 𝑆 the shortest proofs are believed to be exponentially long—essentially, one must check all possible variable assignments. No system of definitions can shortcut this exhaustive search. If such proofs could be radically compressed, this would contradict the assumption 𝑃 ≠ 𝑁 𝑃.
+Thus HM consists of the compressible regions of FM—the mathematics where definitions provide leverage. This motivates our search for monoid models that are highly compressible (modeling HM) yet embed in larger monoids that resist compression (modeling FM). Compressibility may even serve as a first approximation to mathematical taste; Section 5 develops this idea, distinguishing reductive compression (shortening statements via definitions) from deductive compression (shortening proofs given statements) and using PageRank to combine both into an automated measure of mathematical interest.
+
+4.5. Comparison with cellular automata. Kolmogorov complexity anticipates the action of any possible algorithm and thus has no locality restriction, whereas reductive compression requires the algorithm to act locally. A cellular automaton (CA) also acts locally, but on a fixed lattice or graph. In reductive compression, the underlying lattice also undergoes collapsing at each step (as well as changing its site labels); this kind of dynamic may be called a “collapsing cellular automaton” (CCA), and is how we think of compression operationally.
+
+4.6. A self-referential remark. In writing this paper, we have introduced a new mathematical concept: the expansion function 𝑓𝐺′ (𝑠). This generalizes a notion from additive number theory. The additive rank of a subset 𝑆 ⊆ N is the fewest copies of 𝑆 whose sumset equals N; the asymptotic rank is the fewest copies whose sumset is cofinal in N. When 𝑆 is too sparse for any finite number of copies to cover N, these notions break down. Our expansion function measures instead how large a ball can be covered by sums of at most 𝑠 elements from 𝐺′—a natural generalization when infinite coverage is impossible.
+That we were led to introduce a definition while studying the role of definitions in mathematics is perhaps fitting. Definition formation is so natural to mathematical practice that even analyzing math requires new definitions.
+
+5. Application and Outlook
+Can we give AI agents a sense of direction—an automated criterion for which mathematical statements merit attention? Surely historical and cultural factors influence human judgments of mathematical interest, but here we attempt to identify observables intrinsic to the mathematical representations themselves (see also [BDF]).
+The central thesis of this paper suggests compressibility as a natural candidate. Here we consider two types. For any element 𝑢 in a mathematical corpus, whether a definition, lemma, or theorem, define the reductive compression:
+𝑇0(𝑢) = |𝑆|𝐺 + |𝐵|𝐺 , |𝑆|𝐺′\{𝑢} + |𝐵|𝐺′\{𝑢}
+
+24
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+𝐺 𝐺′ \ {𝑢}
+𝑆 |𝑆|𝐺 |𝑆|𝐺′\{𝑢} 𝐵 |𝐵|𝐺 |𝐵|𝐺′\{𝑢}
+
+Table 3. Four measures of an element with signature 𝑆 (statement) and body 𝐵
+(proof). The ratio across rows measures reductive compression; the ratio down the 𝐺′ \ {𝑢} column measures deductive compression.
+
+the ratio of unwrapped to wrapped length for the full element (signature plus body). Here, we are using the monoid notation defined in Section 3.7, where | · |𝐺 corresponds to unwrapped length and | · |𝐺′\{𝑢} to wrapped length. Table 3 summarizes the four resulting measures of an element. Elements with large 𝑇0 (“taste”) live in regions where definitions provide substantial leverage— precisely the regions we have identified with human mathematics. An agent exploring mathematics can track the average value of 𝑇0 as it explores from region to region. This might assist it in staying close to HM. Although this risks biasing the agent toward abstraction—which should not be pursued for its own sake—𝑇0 can contribute to an agent’s sense of direction.
+The ratio of wrapped body length to wrapped signature length measures another type of compressibility, deductive compression7:
+𝐼0(𝑢) = |𝐵|𝐺′\{𝑢} . | 𝑆 |𝐺 ′\{𝑢}
+Elements without bodies (primitives, structure declarations, inductive types) have 𝐼0 = 0; they may still achieve high 𝑇0 using definitions. Elements with large 𝐼0 (“interest”) have short statements but long proofs, even after compression. In MathLib, elements with high 𝐼0 include the deep theorems of algebraic geometry and category theory, where layers of abstraction compress enormous unwrapped expressions into manageable statements. One imagines that formalized versions of landmark results—Fermat’s Last Theorem, the Poincaré conjecture, resolution of singularities— would achieve exceptional compression ratios, their terse statements belying vast proof machinery.
+When statements become long enough to encode logical conundra, 𝐼0 can be gamed: metamathematical constructions produce arbitrarily large values for elements of questionable interest. For example (and with thanks to Sam Buss), the theorem asserting 𝑘-consistency: that a formal system has no proof of 0 = 1 in fewer than 𝑘 symbols, can have tiny compressed length, since recursive function theory allows the rapid description of certain enormously large integers k. However Pudlák [Pud86, Pud87] showed that any proof of k-consistency in a sufficiently rich (and consistent) system must have length Ω(𝑘1/2)—no system of definitions can shortcut it. By taking 𝑘 = BB(𝑛), BB denoting the Busy Beaver function, one obtains a family of theorems with phenomenally large 𝐼0 ≈ BB1/2(𝑘)/log 𝑘 that few would consider that interesting, at least on an individual basis, since
+7An alternative is |𝐵|𝐺/|𝑆|𝐺, i.e., measured in 𝐺 rather than 𝐺′ \ {𝑢}, which measures the primitive proof-to-statement ratio before compression. This would strongly reward theorems with naive statements (like Fermat’s Last Theorem) that require elaborate additional developments (the theory of elliptic curves) for their proof.
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+25
+
+this is merely one of a huge family, parameterized by 𝑘, of similar theorems; individually, they are logical curiosities rather than core mathematics.
+
+5.1. A PageRank-style refinement. The issue is that 𝐼0 treats all high-compression elements
+
+equally, regardless of their role in the broader mathematical structure. A refinement should
+
+incorporate not just the compression achieved by an element, but also its usefulness in building
+
+other high-value elements.
+
+Google’s PageRank algorithm [BP98] offers a natural framework. Consider the full dependency
+
+graph, with edges pointing from each element to its dependencies. A random walk on this graph
+
+would accumulate at primitives—the sinks of the DAG—which achieve low compression and are
+
+not mathematically interesting in the sense we seek. The standard fix is teleportation: at each step,
+
+with probability 𝛼 the walker follows an edge, and with probability 1 − 𝛼 it jumps to a random
+
+node. Even with uniform teleportation, this may produce nontrivial rankings by identifying useful
+
+elements from graph structure alone. We suggest biasing teleportation toward high-compression
+
+elements. We parametrically combine our two compression measures into 𝐽0 = 𝛽𝑇0 + (1 − 𝛽)𝐼0 (after normalizing each to comparable scales) for some 0 < 𝛽 < 1, and let an element 𝑢 be chosen
+
+as the teleportation destination with probability 𝐽0(𝑢)/ 𝑣 𝐽0(𝑣). The resulting transition matrix is
+
+𝑃(𝑣, 𝑢) = 𝛼 · 𝑤(𝑢, 𝑣) + (1 − 𝛼) · 𝐽0(𝑣) ,
+
+𝑊 (𝑢)
+
+𝑍
+
+where 𝑤(𝑢, 𝑣) is the number of times 𝑢 references 𝑣, 𝑊 (𝑢) = 𝑥 𝑤(𝑢, 𝑥) is the total reference count of 𝑢, and 𝑍 = 𝑥 𝐽0(𝑥).
+A stationary distribution 𝜋 satisfies 𝑢 𝑃(𝑣, 𝑢)𝜋(𝑢) = 𝜋(𝑣); standard PageRank theory (i.e., the Perron–Frobenius theorem) guarantees existence and uniqueness since every node has positive teleportation probability. Define
+𝐼1(𝑢) = 𝜋(𝑢).
+
+Elements score highly if they are either high-compression themselves (frequent teleportation destinations) or depended upon by elements that are visited often. This captures “load-bearing” elements: those that support the compressible regions of mathematics. We expect that 𝛼 will need to be properly tuned to avoid trivial 𝜋, such as when all mass is concentrated at either the axioms or the largest 𝐽0 elements in the DAG.
+
+5.2. Some Open Questions. First, the computational challenge: determining optimal compression requires searching over possible definitions, which is computationally expensive. Our interest measures assume a fixed set of definitions, but an agent exploring FM would need to propose new definitions on the fly. Can this be done efficiently enough to guide exploration?
+Second, definitional compression occupies one extreme of a spectrum. At the other extreme is Kolmogorov complexity, which allows arbitrary algorithmic compression but is uncomputable.
+
+26
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+Definitional compression is local and efficiently verifiable: applying a definition requires only checking that certain properties have been derived, and the process runs in at most linear time (in Bennett’s [Ben88] terminology, it has low “logical depth”). Is there useful middle ground—compression methods more powerful than local substitution but still computationally tractable?
+Finally, we note an empirical question for MathLib and similar repositories: Do the proofs of “interesting” statements stay close to the ground (using only shallow intermediate lemmas), or do they take flight through highly compressed intermediate statements? In physical terms, what potential barriers must be overcome to reach deep theorems? The depth and mass distributions in Section 3 offer preliminary data, but a systematic study correlating these metrics with human judgments of interest remains to be done.
+
+References
+
+[BDF] Maissam Barkeshli, Michael R. Douglas, and Michael H. Freedman, Artificial intelligence and the structure
+
+of mathematics. To appear.
+
+[Ben73] Charles H. Bennett, Logical reversibility of computation, IBM Journal of Research and Development 17
+
+(1973), no. 6, 525–532.
+
+[Ben88]
+
+, Logical depth and physical complexity, The Universal Turing Machine: A Half-Century Survey
+
+(1988), 227–257.
+
+[Boo59] William W. Boone, The word problem, Annals of Mathematics 70 (1959), no. 2, 207–265.
+
+[BP98] Sergey Brin and Lawrence Page, The anatomy of a large-scale hypertextual web search engine, Computer
+
+networks and ISDN systems 30 (1998), no. 1-7, 107–117.
+
+[CT06] Thomas M. Cover and Joy A. Thomas, Elements of information theory, 2nd ed., Wiley-Interscience, 2006.
+
+See Chapter 3 for the Asymptotic Equipartition Property and the size of the Typical Set.
+
+[dMU21] Leonardo de Moura and Sebastian Ullrich, The Lean 4 theorem prover and programming language, Auto-
+
+mated deduction – cade 28, 2021, pp. 625–635.
+
+[Gro81] Mikhael Gromov, Groups of polynomial growth and expanding maps, Publications Mathématiques de
+
+l’IHÉS 53 (1981), 53–78.
+
+[Log25] Logical Intelligence, Aleph, 2025.
+
+[Mat20] Mathlib Community, The Lean mathematical library, Proceedings of the 9th acm sigplan international
+
+conference on certified programs and proofs (cpp 2020), 2020, pp. 367–381.
+
+[Mil68] John Milnor, A note on curvature and fundamental group, Journal of Differential Geometry 2 (1968), no. 1,
+
+1–7.
+
+[Nov55] Pyotr S. Novikov, On the algorithmic unsolvability of the word problem in group theory, Trudy Matematich-
+
+eskogo Instituta imeni V.A. Steklova 44 (1955), 1–143.
+
+[Pos47] Emil L. Post, Recursive unsolvability of a problem of Thue, The Journal of Symbolic Logic 12 (1947), no. 1,
+
+1–11.
+
+[Pud86] Pavel Pudlák, On the length of proofs of finitistic consistency statements in first order theories, Logic
+
+colloquium ’84, 1986, pp. 165–196.
+
+[Pud87]
+
+, Improved bounds to the length of proofs of finitistic consistency statements, Logic and combinatorics,
+
+1987, pp. 309–331.
+
+[Sha48] Claude E. Shannon, A mathematical theory of communication, Bell System Technical Journal 27 (1948),
+
+no. 3, 379–423. The foundational text for the definition of entropy rate and redundancy in discrete sources.
+
+COMPRESSION IS ALL YOU NEED: MODELING MATHEMATICS
+
+27
+
+Appendix A. Additional Expansion Theorems
+
+The following results complete the picture for 𝐴1 = N summarized in Table 1.
+
+Theorem 6 (Double-logarithmic density gives polynomial expansion Lean VERIFIED ). For 𝐴1 = N and any integer 𝑏 ≥ 2, the macro set 𝑀 = {𝑏𝑏 𝑗 : 𝑗 ≥ 0} has double-logarithmic density and satisfies
+𝑐1 𝑠𝑏/(𝑏−1) ≤ 𝑓𝐺′ (𝑠) ≤ 𝑐2 𝑠(2𝑏−1)/(𝑏−1)
+for all 𝑠 ≥ 1, where 𝑐1, 𝑐2 > 0 depend only on 𝑏.
+
+Proof. Let 𝑚 𝑗 = 𝑏𝑏 𝑗 for 𝑗 ≥ 0. The number of macros with 𝐺-length at most 𝑟 is the number of 𝑗 with 𝑏𝑏 𝑗 ≤ 𝑟, i.e., 𝑗 ≤ log𝑏 log𝑏 𝑟. Thus 𝑀 has double-logarithmic density.
+
+Greedy representation of 𝑚𝑘 − 1. The largest macro not exceeding 𝑚𝑘 − 1 is 𝑚𝑘−1. The number
+
+of copies used is
+
+𝑚𝑘 − 1 = 𝑏𝑏𝑘−1 (𝑏−1) − 𝑏−𝑏𝑘−1 = 𝑏𝑏𝑘−1 (𝑏−1) − 1, 𝑚 𝑘 −1
+
+with remainder 𝑚𝑘−1 − 1. Letting 𝑇𝑘 = |𝑚𝑘 − 1|𝐺′, we obtain
+
+𝑇𝑘 = (𝑏𝑏𝑘−1(𝑏−1) − 1) + 𝑇𝑘−1, 𝑇0 = 𝑏 − 1.
+
+The first term dominates: 𝑇𝑘 ∼ 𝑏𝑏𝑘−1(𝑏−1).
+
+The elements 𝑚𝑘 − 1 are hardest to compress. Let 𝑆 𝑗 = max{|𝑥|𝐺′ : 𝑥 < 𝑚 𝑗 }. We claim
+
+𝑆 𝑗 = 𝑇𝑗 for all 𝑗 ≥ 0. The base case 𝑆0 = 𝑇0 = 𝑏 − 1 is clear. For the inductive step, suppose
+
+𝑆 𝑗 = 𝑇𝑗 and consider any 𝑥 with 𝑚 𝑗 ≤ 𝑥 < 𝑚 𝑗+1. Writing 𝑥 = 𝑐 𝑗 · 𝑚 𝑗 + 𝑟 with 0 ≤ 𝑟 < 𝑚 𝑗 , we have |𝑥|𝐺′ ≤ 𝑐 𝑗 + 𝑇𝑗 . Since 𝑐 𝑗 ≤ 𝑏𝑏 𝑗 (𝑏−1) − 1, we obtain 𝑆 𝑗+1 ≤ 𝑇𝑗+1. Equality holds at 𝑥 = 𝑚 𝑗+1 − 1.
+
+Upper bound. Fix 𝑠 ≥ 𝑏−1 and let 𝑘 satisfy 𝑇𝑘 ≤ 𝑠 < 𝑇𝑘+1. The element (𝑠−𝑇𝑘 +1)𝑚𝑘 + (𝑚𝑘 −1)
+has 𝐺′-length equal to (𝑠 −𝑇𝑘 +1) +𝑇𝑘 = 𝑠 +1, so it is not in 𝐵𝐺′ (𝑠). Thus 𝑓𝐺′ (𝑠) < (𝑠 +2)𝑚𝑘 . From the recurrence, 𝑇𝑘 ≥ 𝑏𝑏𝑘−1(𝑏−1) − 1, so 𝑇𝑘 ≤ 𝑠 implies 𝑏𝑏𝑘−1(𝑏−1) ≤ 𝑠 + 1 ≤ 2𝑠. Thus, 𝑏𝑘−1 ≤ 𝑏−1 log𝑏 (2𝑠) and we have 𝑚𝑘 = 𝑏𝑏·𝑏𝑘−1 ≤ (2𝑠)𝑏/(𝑏−1). Therefore 𝑓𝐺′ (𝑠) ≤ 𝑐2 𝑠(2𝑏−1)/(𝑏−1). For 𝑠 < 𝑏 − 1, we
+
+simply choose 𝑐2 sufficiently large.
+
+Lower bound. With 𝑘 as above, any 𝑥 = 𝑐 · 𝑚𝑘 + 𝑦 with 0 ≤ 𝑦 < 𝑚𝑘 satisfies |𝑥|𝐺′ ≤ 𝑐 + 𝑇𝑘 . If
+
+𝑐 ≤ 𝑠 − 𝑇𝑘 then 𝑥 ∈ 𝐵𝐺′ (𝑠), so 𝑓𝐺′ (𝑠) ≥ (𝑠 − 𝑇𝑘 + 1)𝑚𝑘 − 1.
+
+Case 𝑠 ≤ 2𝑇𝑘 . Then 𝑇𝑘 ≥ 𝑠/2, so 𝑚𝑘 = 𝑏𝑏𝑘 ≥ 𝑐 𝑇 𝑏/(𝑏−1) 𝑘 ≥ 𝑐 (𝑠/2)𝑏/(𝑏−1) ≥ 𝑐1 𝑠𝑏/(𝑏−1). Since
+
+𝑠 − 𝑇𝑘 + 1 ≥ 1, we obtain 𝑓𝐺′ (𝑠) ≥ 𝑐 𝑠𝑏/(𝑏−1).
+
+Case 𝑠 > 2𝑇𝑘 . Then 𝑠 − 𝑇𝑘 + 1 ≥ 𝑠/2. From 𝑠 < 𝑇𝑘+1 ≤ 𝐶𝑏𝑏𝑘 (𝑏−1) we obtain 𝑏𝑘 ≥ 𝑏−1 log𝑏 (𝑠/𝐶) and
+
+thus 𝑚𝑘 = 𝑏𝑏𝑘 ≥ (𝑠/𝐶)1/(𝑏−1). Therefore 𝑓𝐺′ (𝑠) ≥ (𝑠/2) (𝑠/𝐶)1/(𝑏−1) ≥ 𝑐1 𝑠𝑏/(𝑏−1).
+
+□
+
+Theorem 7 (Finite macro gives linear expansion set. Then 𝑓𝐺′ (𝑠) = Θ(𝑠).
+
+Lean VERIFIED ). For 𝐴1 = N, let 𝑀 be a finite macro
+
+Proof. Let 𝐿 = max{|𝑚|𝐺 : 𝑚 ∈ 𝑀 } be the largest 𝐺-length among all macros.
+
+28
+
+VITALY AKSENOV, EVE BODNIA, MICHAEL H. FREEDMAN, AND MICHAEL MULLIGAN
+
+Upper bound. Any element 𝑥 with |𝑥|𝐺′ ≤ 𝑠 is a sum of at most 𝑠 generators from 𝐺′ = 𝐺 ∪ 𝑀.
+
+Each generator has 𝐺-length at most 𝐿, so |𝑥|𝐺 ≤ 𝑠𝐿. Thus 𝐵𝐺′ (𝑠) ⊆ 𝐵𝐺 (𝑠𝐿), which gives
+
+𝑓𝐺′ (𝑠) ≤ 𝑠𝐿.
+
+Lower bound. Since 𝐺 ⊆ 𝐺′, we have |𝑥|𝐺′ ≤ |𝑥|𝐺 for all 𝑥. Thus 𝐵𝐺 (𝑠) ⊆ 𝐵𝐺′ (𝑠), which
+
+gives 𝑓𝐺′ (𝑠) ≥ 𝑠.
+
+Combining the bounds gives 𝑓𝐺′ (𝑠) = Θ(𝑠).
+
+□
+
+Remark 6. Theorems 6 and 7 extend to 𝐴𝑛 with the macro sets {𝑏𝑏 𝑗 𝑎𝑖 : 𝑖 = 1, . . . , 𝑛, 𝑗 ≥ 0} and any finite 𝑀 ⊆ 𝐴𝑛 respectively, yielding the same asymptotic expansion rates.
+
+Vitaly Aksenov, Logical Intelligence Email address: aksenov@logicalintelligence.com
+Eve Bodnia, Logical Intelligence Email address: evebodnia@logicalintelligence.com
+Michael H. Freedman, Logical Intelligence; Center of Mathematical Sciences and Applications, Harvard University, Cambridge, MA 02138, USA
+Email address: michael.freedman@logicalintelligence.com, mfreedman@cmsa.fas.harvard.edu
+Michael Mulligan, Logical Intelligence; Department of Physics and Astronomy, University of California, Riverside, CA 92521, USA
+Email address: michael.mulligan@logicalintelligence.com, michael.mulligan@ucr.edu
+

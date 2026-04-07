@@ -1,0 +1,1551 @@
+The Annals of Statistics 2016, Vol. 44, No. 2, 813–852 DOI: 10.1214/15-AOS1388 © Institute of Mathematical Statistics, 2016
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+BY DIMITRIS BERTSIMAS, ANGELA KING AND RAHUL MAZUMDER1
+Massachusetts Institute of Technology
+In the period 1991–2015, algorithmic advances in Mixed Integer Optimization (MIO) coupled with hardware improvements have resulted in an astonishing 450 billion factor speedup in solving MIO problems. We present a MIO approach for solving the classical best subset selection problem of choosing k out of p features in linear regression given n observations. We develop a discrete extension of modern ﬁrst-order continuous optimization methods to ﬁnd high quality feasible solutions that we use as warm starts to a MIO solver that ﬁnds provably optimal solutions. The resulting algorithm (a) provides a solution with a guarantee on its suboptimality even if we terminate the algorithm early, (b) can accommodate side constraints on the coefﬁcients of the linear regression and (c) extends to ﬁnding best subset solutions for the least absolute deviation loss function. Using a wide variety of synthetic and real datasets, we demonstrate that our approach solves problems with n in the 1000s and p in the 100s in minutes to provable optimality, and ﬁnds near optimal solutions for n in the 100s and p in the 1000s in minutes. We also establish via numerical experiments that the MIO approach performs better than Lasso and other popularly used sparse learning procedures, in terms of achieving sparse solutions with good predictive power.
+1. Introduction. We consider the linear regression model with response vector yn×1, model matrix X = [x1, . . . , xp] ∈ Rn×p, regression coefﬁcients β ∈ Rp×1 and errors ε ∈ Rn×1: y = Xβ + ε. We will assume that the columns of X have been standardized to have zero means and unit 2-norm. In many important classical and modern statistical applications, it is desirable to obtain a parsimonious ﬁt to the data by ﬁnding the best k-feature ﬁt to the response y. Especially in the high-dimensional regime with p n, in order to conduct statistically meaningful inference, it is desirable to assume that the true regression coefﬁcient β is sparse. Quite naturally, the last few decades have seen a ﬂurry of activity in estimating
+Received June 2014; revised August 2015. 1Supported by ONR-N00014-15-1-2342 and an Interface grant from the Moore Sloan Foundation. MSC2010 subject classiﬁcations. Primary 62J05, 62J07, 62G35; secondary 90C11, 90C26, 90C27. Key words and phrases. Sparse linear regression, best subset selection, 0-constrained minimization, lasso, least absolute deviation, algorithms, mixed integer programming, global optimization, discrete optimization.
+813
+
+814
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+sparse linear models with good explanatory power. Central to this statistical task lies the best subset problem [Miller (2002)] with subset size k, which is given by the following optimization problem:
+(1.1) min 1 y − Xβ 22 subject to β 0 ≤ k, β2
+where the 0 (pseudo)norm of a vector β counts the number of nonzeros in β and is given by β 0 = ip=1 1(βi = 0), where 1(·) denotes the indicator function. The cardinality constraint makes problem (1.1) NP-hard [Natarajan (1995)]. Indeed, state-of-the-art algorithms to solve problem (1.1), as implemented in popular statistical packages, like leaps in R, do not scale to problem sizes larger than p = 30. Due to this reason, it is not surprising that the best subset problem has been widely dismissed as being intractable by the greater statistical community.
+In this paper, we address problem (1.1) using modern optimization methods, speciﬁcally mixed integer optimization (MIO) and a discrete extension of ﬁrstorder continuous optimization methods. Using a wide variety of synthetic and real datasets, we demonstrate that our approach solves problems with n in the 1000s and p in the 100s in minutes to provable optimality, and ﬁnds near optimal solutions for n in the 100s and p in the 1000s in minutes. To the best of our knowledge, this is the ﬁrst time that MIO has been demonstrated to be a tractable solution method for problem (1.1). We note that we use the term tractability not to mean the usual polynomial solvability for problems, but rather the ability to solve problems of realistic size with associated certiﬁcates of optimality, in times that are appropriate for the applications we consider.
+
+Brief context and background. As there is a vast literature on the best subset problem, we present a brief and selective overview of related approaches. To overcome the computational difﬁculties of the best subset problem, computationally friendlier convex optimization based methods like Lasso [Chen, Donoho and Saunders (1998), Tibshirani (1996)] have been proposed as a surrogate for problem (1.1). For the linear regression problem, the Lagrangian form of Lasso solves
+
+(1.2)
+
+min 1 y − Xβ 22 + λ β 1, β2
+
+where the 1 penalty on β, that is, β 1 = i |βi| shrinks the coefﬁcients toward zero and produces a sparse solution by setting many coefﬁcients to be exactly zero. There has been a substantial amount of impressive work on Lasso [Bickel, Ritov and Tsybakov (2009), Candès and Plan (2009), Donoho (2006), Efron et al. (2004), Greenshtein and Ritov (2004), Knight and Fu (2000), Meinshausen and Bühlmann (2006), Wainwright (2009), Zhang and Huang (2008), Zhao and Yu (2006)] in terms of algorithms and understanding of its theoretical properties; see also the excellent books or surveys [Bühlmann and van de Geer (2011), Hastie,
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+815
+
+Tibshirani and Friedman (2009), Tibshirani (2011)]. Indeed, Lasso enjoys several attractive statistical properties. Under various conditions on the model matrix X and n, p, β, it can be shown that Lasso delivers a sparse model with good predictive performance [Bühlmann and van de Geer (2011), Hastie, Tibshirani and Friedman (2009)]. In order to perform exact variable selection, much stronger assumptions are required [Bühlmann and van de Geer (2011)]. Sufﬁcient conditions under which Lasso gives a sparse model with good predictive performance are the restricted eigenvalue conditions and compatibility conditions [Bühlmann and van de Geer (2011)]. These involve statements about the spectrum of submatrices of X and are difﬁcult to verify [Bandeira et al. (2013)] for a given data-matrix X. An important reason behind the popularity of Lasso is perhaps its computational efﬁciency and scalability to practical sized problems. Problem (1.2) is a convex quadratic optimization problem and there are several efﬁcient solvers for it; see, for example, Efron et al. (2004), Friedman et al. (2007), Nesterov (2013).
+In spite of its favorable statistical properties, Lasso has several shortcomings. In the presence of noise and correlated variables, in order to deliver a model with good predictive accuracy, Lasso brings in a large number of nonzero coefﬁcients (all of which are shrunk toward zero) including noise variables. Lasso leads to biased regression coefﬁcient estimates, since the 1-norm penalizes the large coefﬁcients more severely than the smaller coefﬁcients. In contrast, if the best subset selection procedure decides to include a variable in the model, it brings it in without any shrinkage thereby draining the effect of its correlated surrogates. Upon increasing the degree of regularization, Lasso sets more coefﬁcients to zero, but in the process ends up leaving out true predictors from the active set. Thus, as soon as certain sufﬁcient regularity conditions on the data are violated, Lasso becomes suboptimal as (a) a variable selector and (b) in terms of delivering a model with good predictive performance. The shortcomings of Lasso are also known in the statistics literature. In fact, there is a signiﬁcant gap between what can be achieved via best subset selection and Lasso: this is supported by empirical (for small problem sizes, i.e., p ≤ 30) and theoretical evidence; see, for example, Greenshtein (2006), Mazumder, Friedman and Hastie (2011), Raskutti, Wainwright and Yu (2011), Shen et al. (2013), Zhang, Wainwright and Jordan (2014), Zhang and Zhang (2012) and the references therein. Some discussion is also presented in Section 4.
+To address the shortcomings, nonconvex penalized regression is often used to “bridge” the gap between the convex 1 penalty and the combinatorial 0 penalty [Candès, Wakin and Boyd (2008), Fan and Li (2001), Frank and Friedman (1993), Friedman (2008), Mazumder, Friedman and Hastie (2011), Zhang (2010a, 2010b), Zhang and Huang (2008), Zou (2006), Zou and Li (2008)]. Written in Lagrangian form, this gives rise to continuous nonconvex optimization problems of the form
+
+(1.3) 1 y − Xβ 22 + p |βi|; γ ; λ ,
+
+2
+
+i
+
+816
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+where p(|β|; γ ; λ) is a nonconvex function in β with λ and γ denoting the degree of regularization and nonconvexity, respectively. Typical examples of nonconvex penalties include the minimax concave penalty (MCP), the smoothly clipped absolute deviation (SCAD) and γ penalties [see, e.g., Fan and Li (2001), Frank and Friedman (1993), Mazumder, Friedman and Hastie (2011), Zou and Li (2008)]. There is strong statistical evidence indicating the usefulness of estimators obtained as minimizers of nonconvex penalized problems (1.3) over Lasso; see, for example, Fan and Lv (2011, 2013), Loh and Wainwright (2013), Lv and Fan (2009), van de Geer, Bühlmann and Zhou (2011), Zhang (2010a), Zhang and Zhang (2012), Zheng, Fan and Lv (2014). In a recent paper, Zheng, Fan and Lv (2014) discuss the usefulness of nonconvex penalties over convex penalties (like Lasso) in identifying important covariates, leading to efﬁcient estimation strategies in high dimensions. They describe interesting connections between 0 regularized least squares and least squares with the hard thresholding penalty; and in the process develop comprehensive global properties of hard thresholding regularization in terms of various metrics. Fan and Lv (2013) establish asymptotic equivalence of a wide class of regularization methods in high dimensions with comprehensive sampling properties on both global and computable solutions. Problem (1.3) mainly leads to a family of continuous and nonconvex optimization problems. Various effective nonlinear optimization based methods [see, e.g., Candès, Wakin and Boyd (2008), Fan and Li (2001), Loh and Wainwright (2013), Mazumder, Friedman and Hastie (2011), Zhang (2010a), Zou and Li (2008) and the references therein] have been proposed in the literature to obtain good local minimizers to problem (1.3). In particular, Mazumder, Friedman and Hastie (2011) propose Sparsenet, a coordinate-descent procedure to trace out a surface of local minimizers for problem (1.3) for the MCP penalty using effective warm start procedures.
+The Lagrangian version of (1.1) given by
+
+(1.4)
+
+1 2p y − Xβ 2 + λ 1(βi = 0),
+2 i=1
+
+may be seen as a special case of (1.3). Note that, due to nonconvexity, problems (1.4) and (1.1) are not equivalent. Problem (1.1) allows one to control the exact level of sparsity via the choice of k, unlike (1.4) where there is no clear correspondence between λ and k. Problem (1.4) is a discrete optimization problem unlike continuous optimization problems (1.3) arising from continuous nonconvex penalties. Insightful statistical properties of problem (1.4) have been explored from a theoretical viewpoint in Greenshtein (2006), Greenshtein and Ritov (2004), Shen et al. (2013), Zhang and Zhang (2012), for example. Shen et al. (2013) points out that (1.1) is preferable over (1.4) in terms of superior statistical properties of the resulting estimator. The aforementioned papers, however, do not discuss methods to obtain provably optimal solutions to problems (1.4) or (1.1), and to the best of our knowledge, computing optimal solutions to problems (1.4) and (1.1) is deemed as intractable.
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+817
+
+Our approach. In this paper, we propose a novel framework via which the best subset selection problem can be solved to optimality or near optimality in problems of practical interest within a reasonable time frame. At the core of our proposal is a computationally tractable framework that brings to bear the power of modern discrete optimization methods: discrete ﬁrst-order methods motivated by ﬁrst-order methods in convex optimization [Nesterov (2004)] and mixed integer optimization (MIO); see Bertsimas and Weismantel (2005). We do not guarantee polynomial time solution times as these do not exist for the best subset problem unless P = NP. Rather, our view of computational tractability is the ability of a method to solve problems of practical interest in times that are appropriate for the application addressed. An advantage of our approach is that it adapts to variants of the best subset regression problem of the form
+
+min 1 y − Xβ qq s.t. β2
+
+β 0 ≤ k, Aβ ≤ b,
+
+where Aβ ≤ b represents polyhedral constraints and q ∈ {1, 2} refers to a least absolute deviation or the least squares loss function on the residuals r := y − Xβ.
+
+Approaches in the mathematical optimization literature. In a seminal paper Furnival and Wilson (1974), the authors describe a leaps and bounds procedure for computing global solutions to problem (1.1) (for the classical n > p case) which can be achieved with computational effort signiﬁcantly less than complete enumeration. leaps, a state-of-the-art R package uses this principle to perform best subset selection for problems with n > p and p ≤ 30. Bertsimas and Shioda (2009) proposed a tailored branch-and-bound scheme that can be applied to problem (1.1) using ideas from Furnival and Wilson (1974) and techniques in quadratic optimization, extending and enhancing the proposal of Bienstock (1996). The proposal of Bertsimas and Shioda (2009) concentrates on obtaining high quality upper bounds for problem (1.1) and is less scalable than the methods presented in this paper.
+
+Contributions. We summarize our contributions in this paper below:
+1. We use MIO to ﬁnd a provably optimal solution for the best subset problem. Our approach has the appealing characteristic that if we terminate the algorithm early, we obtain a solution with a guarantee on its suboptimality. Furthermore, our framework can accommodate side constraints on β and also extends to ﬁnding best subset solutions for the least absolute deviation loss function.
+2. We introduce a general algorithmic framework based on a discrete extension of modern ﬁrst-order continuous optimization methods that provide near-optimal solutions for the best subset problem. The MIO algorithm signiﬁcantly beneﬁts from solutions obtained by the ﬁrst-order methods and problem speciﬁc information that can be computed in a data-driven fashion.
+
+818
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+3. We report computational results with both synthetic and real-world datasets that show that our proposed framework can deliver provably optimal solutions for problems of size n in the 1000s and p in the 100s in minutes. For high-dimensional problems with n ∈ {50, 100} and p ∈ {1000, 2000}, with the aid of warm starts and further problem-speciﬁc information, our approach ﬁnds nearly optimal solutions in minutes but takes hours to provide certiﬁcates on the quality of the solution.
+4. We investigate the statistical properties of best subset selection procedures for practical problem sizes, which to the best of our knowledge, have remained largely unexplored to date. We demonstrate the favorable predictive performance and sparsity-inducing properties of the best subset selection procedure over its competitors in a wide variety of real and synthetic examples for the least squares and absolute deviation loss functions.
+The structure of the paper is as follows. In Section 2, we present a brief overview of MIO, including a summary of the computational advances it has enjoyed in the last twenty-ﬁve years. We present the proposed MIO formulations for the best subset problem as well as some connections with the compressed sensing literature for estimating parameters and providing lower bounds for the MIO formulations that improve their computational performance. In Section 3, we develop a discrete extension of ﬁrst-order methods in convex optimization to obtain near optimal solutions for the best subset problem and establish its convergence properties—the proposed algorithm and its properties may be of independent interest. Section 4 brieﬂy reviews some of the statistical properties of the best-subset solution, highlighting the performance gaps in prediction error, over regular Lasso-type estimators. In Section 5, we perform a variety of computational tests on synthetic and real datasets to assess the algorithmic and statistical performances of our approach for the least squares loss function for both the classical overdetermined case n > p, and the high-dimensional case p n. In Section 6, we report computational results for the least absolute deviation loss function. In Section 7, we include our concluding remarks. Due to space limitations, some of the material has been relegated to the supplemental article [Bertsimas, King and Mazumder (2015)].
+
+2. Mixed integer optimization formulations. We present a brief overview of MIO, including the simply astonishing advances it has enjoyed in the last twenty-ﬁve years. We then present the proposed MIO formulations for the best subset problem as well as some connections with the compressed sensing literature for estimating parameters. We also present completely data driven methods to estimate parameters in the MIO formulations that improve their computational performance.
+2.1. Brief background on MIO. The general form of a Mixed Integer Quadratic Optimization (MIO) problem is as follows:
+min αT Qα + αT a s.t. Aα ≤ b,
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+819
+
+αi ∈ {0, 1}, i ∈ I,
+αj ≥ 0, j ∈/ I,
+where a ∈ Rm, A ∈ Rk×m, b ∈ Rk and Q ∈ Rm×m (positive semideﬁnite) are the given parameters of the problem; the symbol “≤” denotes element-wise inequalities and we optimize over α ∈ Rm containing both discrete (αi, i ∈ I) and continuous (αi, i ∈/ I) variables, with I ⊂ {1, . . . , m}. For background on MIO, see Bertsimas and Weismantel (2005). Subclasses of MIO problems include convex quadratic optimization problems (I = ∅), mixed integer (Q = 0m×m) and linear optimization problems (I = ∅, Q = 0m×m). Some examples of modern integer optimization solvers include CPLEX, GLPK, MOSEK and GUROBI.
+In the period 1991–2015, the computational power of MIO solvers has increased at an astonishing rate. In Bixby (2012), to measure the speedup of MIO solvers, the same set of MIO problems were tested on the same computers using twelve consecutive versions of CPLEX and version-on-version speedups were reported. The versions tested ranged from CPLEX 1.2, released in 1991 to CPLEX 11, released in 2007. Each version released in these years produced a speed improvement on the previous version, leading to a total speedup factor of more than 29,000 between the ﬁrst and last version tested [see Bixby (2012), Nemhauser (2013) for details]. GUROBI 1.0, an MIO solver which was ﬁrst released in 2009, was measured to have similar performance to CPLEX 11. Version-on-version speed comparisons of successive GUROBI releases have shown a speedup factor of nearly 27 between GUROBI 6.0, released in 2015, and GUROBI 1.0 [Bixby (2012), Nemhauser (2013), Optimization Inc. (2015)]. The combined machine-independent speedup factor in MIO solvers between 1991 and 2015 is 780,000. This impressive speedup factor is due to incorporating both theoretical and practical advances into MIO solvers. Cutting plane theory, disjunctive programming for branching rules, improved heuristic methods, techniques for preprocessing MIOs, using linear optimization as a black box to be called by MIO solvers, and improved linear optimization methods have all contributed greatly to the speed improvements in MIO solvers [Bixby (2012)]. In addition, the past twenty years have also brought dramatic improvements in hardware. Figure 1 shows the exponentially increasing speed of supercomputers over the past twenty years, measured in billion ﬂoating point operations per second [Top500 Supercomputer Sites (2015)]. The hardware speedup from 1994 to 2015 is approximately 105.75 ∼ 570,000. When both hardware and software improvements are considered, the overall speedup is approximately 450 billion. Note that the speedup factors cited here refer to mixed integer linear optimization problems. The speedup factors for mixed integer quadratic problems are similar. MIO solvers provide both feasible solutions as well as lower bounds to the optimal value. As the MIO solver progresses toward the optimal solution, the lower bounds improve and provide an increasingly better guarantee of suboptimality, which is especially useful if the MIO solver is stopped before reaching the global optimum. In contrast, heuristic methods do not provide such a certiﬁcate of suboptimality.
+
+820
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+FIG. 1. Peak supercomputer speed in GFlop/s (log scale) from 1994–2015.
+
+The belief that MIO approaches to problems in statistics are not practically relevant was formed in the 1970s and 1980s and it was at the time justiﬁed. Given the astonishing speedup of MIO solvers and computer hardware in the last twenty-ﬁve years, the mindset of MIO as theoretically elegant but practically irrelevant perhaps needs to be revisited. In this paper, we provide empirical evidence of this fact in the context of the best subset selection problem.
+
+2.2. MIO formulations for the best subset selection problem. We ﬁrst present a simple reformulation to problem (1.1) as a MIO (in fact, a mixed integer quadratic optimization) problem:
+
+(2.1)
+
+Z1 = min 1 y − Xβ 22 β,z 2
+s.t. −MU zi ≤ βi ≤ MU zi,
+
+i = 1, . . . , p,
+
+zi ∈ {0, 1},
+p
+zi ≤ k,
+i=1
+
+i = 1, . . . , p,
+
+where z ∈ {0, 1}p is a binary variable and MU is a constant such that if β is a minimizer of problem (2.1), then MU ≥ β ∞. If zi = 1, then |βi| ≤ MU and if zi = 0, then βi = 0. Thus, ip=1 zi is an indicator of the number of nonzeros in β.
+Provided that MU is chosen to be sufﬁciently large with MU ≥ β ∞, a solution to problem (2.1) will be a solution to problem (1.1). Of course, MU is not known a priori, and a small value of MU may lead to a solution different from (1.1). The choice of MU affects the strength of the formulation and is critical for obtaining good lower bounds in practice. In Section 2.3, we describe how to
+ﬁnd appropriate values for MU . Note that there are other MIO formulations, presented herein [see problem (2.4)] that do not rely on a-priori speciﬁcations of MU . However, we will stick to formulation (2.1) for the time being, since it provides
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+821
+
+some interesting connections to the Lasso. Formulation (2.1) leads to interesting insights, especially via the structure of the convex hull of its constraints:
+
+p
+Conv β : |βi| ≤ MU zi, zi ∈ {0, 1}, i = 1, . . . , p, zi ≤ k
+i=1
+= β : β ∞ ≤ MU , β 1 ≤ MU k ⊆ β : β 1 ≤ MU k .
+
+Thus, the minimum of problem (2.1) is lower-bounded by the optimum objective value of both the following convex optimization problems:
+
+(2.2) Z2 := min 1 y − Xβ 22 subject to β2
+
+β ∞ ≤ MU , β 1 ≤ MU k,
+
+(2.3) Z3 := min 1 y − Xβ 22 subject to β2
+
+β 1 ≤ MU k,
+
+where (2.3) is the familiar Lasso in constrained form. This is a weaker relaxation than formulation (2.2), which in addition to the 1 constraint on β, has boxconstraints controlling the values of the βi ’s. It is easy to see that the following ordering exists: Z3 ≤ Z2 ≤ Z1, with the inequalities being strict in most instances. In terms of approximating the optimal solution to problem (2.1), the MIO solver begins by ﬁrst solving a continuous relaxation of problem (2.1). The Lasso formulation (2.3) is weaker than this root node relaxation. Additionally, MIO is typically able to signiﬁcantly improve the quality of the root node solution as the MIO solver progresses toward the optimal solution. To motivate the reader, we provide an example of the evolution (see Figure 2) of the MIO formulation (2.4) for the Diabetes dataset [Efron et al. (2004)], with n = 350, p = 64 (for further details on the dataset see Section 5).
+Since formulation (2.1) is sensitive to the choice of MU , we consider an alternative MIO formulation based on Specially Ordered Sets [Bertsimas and Weismantel (2005)] as described next.
+
+Formulations via specially ordered sets. Any feasible solution to formulation (2.1) will have (1 − zi)βi = 0 for every i ∈ {1, . . . , p}. This constraint can be modeled via integer optimization using Specially Ordered Sets of Type 1 [Bertsimas and Weismantel (2005)] (SOS-1), as follows:
+(1 − zi)βi = 0 ⇐⇒ (βi, 1 − zi) : SOS-1, for every i = 1, . . . , p. This leads to the following formulation of (1.1):
+min 1 y − Xβ 22 β,z 2 s.t. (βi, 1 − zi) : SOS-1, i = 1, . . . , p, (2.4)
+zi ∈ {0, 1}, i = 1, . . . , p,
+p
+zi ≤ k.
+i=1
+
+822
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+FIG. 2. The typical evolution of the MIO formulation (2.4) for the diabetes dataset with n = 350, p = 64 with k = 6 (left panel) and k = 7 (right panel). The top panel shows the evolution of upper and lower bounds with time. The lower panel shows the evolution of the corresponding MIO gap with time. Optimal solutions for both the problems are found in a few seconds in both examples, but it takes 10–20 minutes to certify optimality via the lower bounds. Note that the time taken for the MIO to certify convergence to the global optimum increases with increasing k.
+
+Problem (2.4) can also be used obtain global solutions to problem (1.1)— problem (2.4) unlike problem (2.1) does not require any speciﬁcation of the parameter MU .
+We now present a more structured representation of problem (2.4):
+
+min 1 βT XT X β − X y, β + 1 y 22
+
+β,z 2
+
+2
+
+s.t. (βi, 1 − zi) : SOS-1, i = 1, . . . , p,
+
+zi ∈ {0, 1}, i = 1, . . . , p, (2.5) p
+zi ≤ k,
+i=1
+−MU ≤ βi ≤ MU , i = 1, . . . , p,
+
+β 1≤M .
+
+We also provide problem-dependent constants MU and M ∈ [0, ∞]. MU provides an upper bound on the absolute value of the regression coefﬁcients and M
+provides an upper bound on the 1-norm of β. Adding these bounds typically leads
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+823
+
+to improved performance of the MIO, especially in delivering lower bound certiﬁcates. In Section 2.3, we describe several approaches to compute these parameters from the data.
+We also consider another formulation for (2.5):
+
+(2.6)
+
+min 1 ζ T ζ − X y, β + 1 y 22
+
+β,z,ζ 2
+
+2
+
+s.t. ζ = Xβ,
+
+(βi, 1 − zi) : SOS-1, i = 1, . . . , p,
+
+zi ∈ {0, 1}, i = 1, . . . , p,
+
+p
+zi ≤ k,
+i=1
+−MU ≤ βi ≤ MU ,
+
+i = 1, . . . , p,
+
+β 1≤M ,
+
+−MUζ ≤ ζi ≤ MUζ , i = 1, . . . , n,
+
+ζ 1 ≤ Mζ ,
+
+where the optimization variables are β ∈ Rp, ζ ∈ Rn, z ∈ {0, 1}p and MU , M , MUζ , Mζ ∈ [0, ∞] are problem speciﬁc parameters. Problem (2.6) is equivalent to the following variant of the best subset problem:
+
+(2.7)
+
+min 1 y − Xβ 22 β2
+
+s.t.
+
+β 0 ≤ k,
+
+β ∞ ≤ MU , Xβ ∞ ≤ MUζ ,
+
+β 1≤M , Xβ 1 ≤ Mζ .
+
+Formulations (2.5) and (2.6) differ in the size of the quadratic forms that are involved. The current state-of-the-art MIO solvers are better equipped to handle mixed integer linear over quadratic optimization problems. Formulation (2.5) has fewer variables but has a quadratic form in p variables—we ﬁnd this formulation more useful in the n > p regime, with p in the 100s. Formulation (2.6) on the other hand, has more variables, but involves a quadratic form in n variables—making it more useful for high-dimensional problems p n, with n in the 100s and p in the 1000s.
+As we said earlier, the bounds on β and ζ are not required, but if these constraints are provided, they improve the strength of the MIO formulation. In other words, formulations with tightly speciﬁed bounds provide better lower bounds to
+
+824
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+the global optimization problem in a speciﬁed amount of time, when compared to a MIO formulation with loose bound speciﬁcations. We next show how these bounds can be computed from given data.
+
+2.3. Speciﬁcation of parameters. We present herein methods to estimate the
+quantities MU , M , MUζ , Mζ such that an optimal solution to problem (2.7) is also an optimal solution to problem (1.1).
+
+2.3.1. Speciﬁcation of parameters via coherence and restricted eigenvalues. Herein, we describe methods relating the parameters to the notions of coherence and restricted strong convexity [Candes and Tao (2006), Donoho and Huo (2001)].
+
+Coherence and restricted eigenvalues of a model matrix. Given a model matrix X, Tropp (2006) introduced the cumulative coherence function
+
+μ[k] := max max
+|I |=k j ∈/I
+
+Xj , Xi ,
+
+i∈I
+
+where, Xj , j = 1, . . . , p represent the columns of X, that is, features. For k = 1,
+
+we obtain the notion of coherence introduced in Donoho and Elad (2003), Donoho
+
+and Huo (2001) as a measure of the maximal pairwise correlation in absolute value of the columns of X: μ := μ[1] = maxi=j | Xi, Xj |. Candès (2008), Candes and
+
+Tao (2006) [see also Bühlmann and van de Geer (2011) and references therein]
+
+introduced the notion that a matrix X satisﬁes a restricted eigenvalue condition if
+
+(2.8) λmin XI XI ≥ γk for every I ⊂ {1, . . . , p} such that |I | ≤ k,
+
+where λmin(XI XI ) denotes the smallest eigenvalue of the matrix XI XI . An inequality linking μ[k] and γk is as follows.
+
+PROPOSITION 1. The following bounds hold:
+(a) [Tropp (2006)]: μ[k] ≤ μ · k. (b) [Donoho and Elad (2003)]: γk ≥ 1 − μ[k − 1] ≥ 1 − μ · (k − 1).
+The computations of μ[k] and γk for general k are difﬁcult, while μ is simple to compute. Proposition 1 provides bounds for μ[k] and γk in terms of the coherence μ.
+
+Operator norms of submatrices. The (p, q) operator norm of matrix A is given by A p,q := max u q=1 Au p. We will use extensively here the (1, 1) operator norm. We assume that each column vector of X has unit 2-norm. The results derived in the next proposition (for a proof see Section 8.3 in the supplementary
+material [Bertsimas, King and Mazumder (2015)]) borrow and enhance techniques
+developed by Tropp (2006) in the context of analyzing the 1- 0 equivalence in compressed sensing.
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+825
+
+PROPOSITION 2. For any I ⊂ {1, . . . , p} with |I | = k, we have:
+
+(a) XI XI − I 1,1 ≤ μ[k − 1]. (b) If XI XI is invertible and
+1.
+1−μ[k−1]
+
+XI XI − I 1,1 < 1, then
+
+(XI XI )−1 1,1 ≤
+
+We note that part (b) also appears in Tropp (2006) for the operator norm (XI XI )−1 ∞,∞.
+Given a set I ⊂ {1, . . . , p} with |I | = k, we let βI denote the least squares regression coefﬁcients obtained by regressing y on XI , that is, βI = (XI XI )−1XI y.
+If we append βI with zeros in the remaining coordinates we obtain β, where, we suppress the dependence on I for notational convenience.
+Recall that Xj , j = 1, . . . , p represent the columns of X; and we will use xi, i = 1, . . . , n to denote the rows of X. As discussed above Xj = 1. We order the correlations | Xj , y |:
+
+(2.9)
+
+X(1), y ≥ X(2), y ≥ · · · ≥ X(p), y .
+
+We ﬁnally denote by xi 1:k the sum of the top k absolute values of the entries of xij , j ∈ {1, 2, . . . , p}. The following theorem (for a proof, see Section 8.4 [Bertsimas, King and Mazumder (2015)]).
+
+THEOREM 2.1. to (1.1) satisﬁes:
+
+(2.10)
+
+(a)
+
+For any k ≥ 1 such that μ[k − 1] < 1 any optimal solution β
+
+β 1≤ 1
+
+k
+X(j), y ,
+
+1 − μ[k − 1] j=1
+
+(2.11) (2.12) (2.13)
+
+1k
+
+21
+
+(b)
+
+β ∞ ≤ min
+
+X(j), y , √ y 2 ,
+
+γk j =1
+
+γk
+
+n
+
+√
+
+(c)
+
+Xβ 1 ≤ min
+
+xi ∞ β 1, k y 2 ,
+
+i=1
+
+(d)
+
+Xβ ∞ ≤ max xi 1:k β ∞.
+
+i=1,...,n
+
+Note that, above, the upper bound in part (a) becomes inﬁnite as soon as μ[k − 1] ≥ 1. In such a case, we can obtain bounds by using techniques described in Section 2.3.2. The interesting message conveyed by Theorem 2.1 is that the upper
+bounds on β 1, β ∞, Xβ 1 and Xβ ∞, corresponding to the problem (2.7) can all be obtained in terms of γk and μ[k − 1], quantities of fundamental interest appearing in the analysis of 1 regularization methods and understanding how close they are to 0 solutions [Candès (2008), Candes and Tao (2006), Donoho
+
+826
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+and Elad (2003), Donoho and Huo (2001), Tropp (2006)]. On a different note,
+Theorem 2.1 arises from a purely computational motivation and quite curiously, in-
+volves the same quantities: cumulative coherence and restricted eigenvalues. While quantities μ[k − 1], γk are difﬁcult to compute exactly, they can be approximated by Proposition 1 which provides bounds commonly used in the compressed sens-
+ing literature.
+
+2.3.2. Speciﬁcation of parameters via convex quadratic optimization. We present alternative purely data-driven way to compute the upper bounds to the parameters by solving several simple convex quadratic optimization problems.
+
+Bounds on βi ’s. For the case n > p, upper and lower bounds on βi can be
+
+obtained by solving the following pair of convex optimization problems:
+
+(2.14)
+
+ui+ := max βi
+β
+s.t. 1 y − Xβ 22 ≤ UB, 2
+
+ui− := min βi
+β
+s.t. 1 y − Xβ 22 ≤ UB, 2
+
+for i = 1, . . . , p. Above, UB is an upper bound to the minimum of problem (1.1). ui+ is an upper bound to βi , since the cardinality constraint β 0 ≤ k does not appear in the optimization problem. Similarly, ui− is a lower bound to βi . The quantity MiU = max{|u+i |, |u−i |} serves as an upper bound to |βi|. A reasonable choice for UB is obtained by using the discrete ﬁrst-order methods (as described
+
+in Section 3) in combination with the MIO formulation (2.4) (for a predeﬁned amount of time). Having obtained MiU as described above, we can obtain an upper bound to β ∞ and β 1 as follows: MU = maxi MiU and β 1 ≤ ik=1 MU(i) where, MU(1) ≥ MU(2) ≥ · · · ≥ MU(p). Similarly, bounds corresponding to parts (c)
+and (d) in Theorem 2.1 can be obtained by using the upper bounds on β ∞, β 1
+as described above. Note that the quantities ui+ and ui− are ﬁnite when the level sets of the least
+squares loss function are bounded—the bounds are loose when p > n. In the following, we describe methods to obtain nontrivial bounds on xi, β , for i =
+
+1, . . . , n that apply for arbitrary n, p.
+
+Bounds on xi, β ’s. Consider the following convex quadratic optimization
+
+problems:
+
+(2.15)
+
+vi+ := max xi, β
+β
+s.t. 1 y − Xβ 22 ≤ UB, 2
+
+vi− := min xi, β
+β
+s.t. 1 y − Xβ 22 ≤ UB, 2
+
+for i = 1, . . . , n. Note that the bounds obtained from (2.15) are nontrivial for
+
+both the under-determined and overdetermined cases. These bounds are upper
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+827
+
+and lower bounds since we drop the cardinality constraint on β. The quantity vi = max{|vi+|, |v−i |} serves as an upper bound to | xi, β |. In particular, this leads to simple upper bounds on Xβ ∞ ≤ maxi vi and Xβ 1 ≤ i vi and can be thought of completely data-driven methods to estimate bounds appearing in (2.12)
+and (2.13). Problems (2.14) and (2.15) can be computed efﬁciently, as we dis-
+cuss in Section 8.1 in the supplementary material [Bertsimas, King and Mazumder
+(2015)].
+
+2.3.3. Parameter speciﬁcations from advanced warm-starts. The methods in Sections 2.3.1 and 2.3.2 lead to provable bounds on the parameters: with these bounds problem (2.7) provides an optimal solution to problem (1.1). We now describe some alternatives that lead to excellent parameter speciﬁcations in practice.
+The discrete ﬁrst-order methods described in Section 3 provide good upper bounds to problem (1.1). These solutions when supplied as a warm-start to the MIO formulation (2.4) are often improved by MIO, thereby leading to high quality solutions to problem (1.1) within several minutes. If βhyb denotes an estimate obtained from this hybrid approach, then MU := τ βhyb ∞ with τ a multiplier greater than one (e.g., τ ∈ {1.5, 2, 5}) provides a good estimate for the parameter MU . A reasonable upper bound to β 1 is kMU . Bounds on the other quantities: Xβ 1, Xβ ∞ can be derived by using expressions appearing in Theorem 2.1, with aforementioned bounds on β 1 and β ∞.
+
+2.3.4. Some generalizations and variants. Some variations and improvements of the procedures described above are presented in Section 8.2 in the supplementary material [Bertsimas, King and Mazumder (2015)].
+
+Recommendations. We summarize our observations about the parameter choices based on some numerical experiments. For n > p examples, when X is full rank, methods in Sections 2.3.1, 2.3.2 are often quite similar—we thus recommend computing bounds via both these methods and taking the tighter of the two. For n < p examples, when k is small, Section 2.3.1 provides useful bounds on β, which are not available via Section 2.3.2. We recommend computing the implied bounds on all parameters appearing in parts (a)–(b) (Theorem 2.1) and taking the tightest bound. Bounds obtained via Section 2.3.3 are generally always tighter (provided τ is small) and are readily available as a by-product of our algorithmic framework—we recommend these bounds in practice, unless provably optimal bounds are of the essence. We remind the reader that these bounds are particularly useful while proving optimality of the solutions obtained via MIO. They are not as critical in obtaining good upper bounds to problem (1.1).
+
+3. Discrete ﬁrst-order algorithms. We develop a discrete extension of ﬁrstorder methods in convex optimization [Nesterov (2004, 2013)] to obtain near opti-
+
+828
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+mal solutions for problem (1.1) and the least absolute deviation (LAD) loss function. Our approach applies to the problem of minimizing any smooth convex function subject to cardinality constraints. In Section 5, we demonstrate how these methods enhance the performance of MIO.
+Our framework borrows ideas from projected gradient descent methods in ﬁrstorder convex optimization problems [Nesterov (2004)] and generalizes them to the discrete optimization problem (3.1). We also derive new global convergence results for our proposed algorithms as presented in Theorem 3.1. In the signal processing literature [Blumensath and Davies (2008, 2009)] proposed iterative hard-thresholding algorithms for problem (1.4). The authors establish convergence properties of the algorithm when X satisﬁes a coherence [Blumensath and Davies (2008)] or Restricted Isometry Property [Blumensath and Davies (2009)]. In the context of problem (1.1), our algorithm and its convergence analysis do not require any such condition on X. Our framework, with some novel modiﬁcations also applies to the nonsmooth least absolute deviation loss with cardinality constraints as discussed in Section 3.2.
+Consider the following optimization problem:
+
+(3.1)
+
+min g(β) subject to β 0 ≤ k,
+
+β
+
+where, g(β) ≥ 0 is2 convex and has Lipschitz continuous gradient:
+
+(3.2)
+
+∇g(β) − ∇g(β) ≤ β − β .
+
+The ﬁrst ingredient of our approach is the observation that when g(β) =
+
+β−c
+
+2 2
+
+for a given c, problem (3.1) admits a closed form solution (for completeness we
+
+present a proof in Section 9.2 of the supplementary material [Bertsimas, King and
+
+Mazumder (2015)]).
+
+PROPOSITION 3. (3.3)
+
+If β is an optimal solution to the following problem: β ∈ arg min β − c 22,
+β 0≤k
+
+then it can be computed as follows: β retains the k largest (in absolute value) elements of c ∈ Rp and sets the rest to zero, i.e., if |c(1)| ≥ |c(2)| ≥ · · · ≥ |c(p)|, denote the ordered values of the absolute values of the vector c, then
+(3.4) βi = ci, if i ∈ (1), . . . , (k) , 0, otherwise,
+
+where, βi is the ith coordinate of β. We will denote the set of solutions to problem (3.3) by the notation Hk(c).
+
+2The lower bound of zero in g(β) ≥ 0, can be relaxed to be any ﬁnite number.
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+829
+
+The notation “argmin” [appearing in problem (3.3) and other places that follow] denotes the set of minimizers. Operator (3.4) is also known as the hardthresholding operator [Donoho and Johnstone (1994)]—a notion that arises in the context of the following related optimization problem:
+
+(3.5)
+
+β ∈ arg min
+
+β −c
+
+2 2
+
++
+
+λ
+
+β
+
+0,
+
+β
+
+where, β admits a simple closed form expression given by βi = ci if |ci| > √λ and βi = 0 otherwise, for i = 1, . . . , p.
+
+REMARK 1. There is a subtle difference between the minimizers of problems (3.3) and (3.5). For prob√lem (3.5), the smallest (in absolute value) nonzero element in β is greater than λ in absolute value. On the other hand, in problem (3.3) there is no lower bound to the minimum (in absolute value) nonzero element of a minimizer. This issue arises while analyzing the convergence properties of Algorithm 1 (see Section 3.1).
+
+Given a current solution β, the second ingredient of our approach is to upper bound the function g(η) around g(β). To do so, we use ideas from projected gradient descent methods in ﬁrst-order convex optimization problems [Nesterov (2004, 2013)].
+
+PROPOSITION 4 [Nesterov (2013, 2004)]. For a convex function g(β) satisfying condition (3.2) and for any L ≥ , we have
+(3.6) g(η) ≤ QL(η, β) := g(β) + L η − β 22 + ∇g(β), η − β 2
+for all β, η with equality holding at β = η.
+
+Applying Proposition 3 to the upper bound QL(η, β) in Proposition 4, we obtain
+
+arg min QL(η, β)
+η 0≤k
+
+(3.7)
+
+= arg min L η − β − 1 ∇g(β)
+
+η 0≤k 2
+
+L
+
+= arg min η − β − 1 2 ∇g(β)
+
+η 0≤k
+
+L
+
+2
+
+21
+
+2
+
+− ∇g(β) 2 + g(β)
+
+2 2L
+
+= Hk β − 1 ∇g(β) , L
+where Hk(·) is deﬁned in (3.4). In light of (3.7), we are now ready to present Algorithm 1 to ﬁnd a stationary point (see Deﬁnition 1) of problem (3.1).
+
+830
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+ALGORITHM 1. Input: g(β), parameter: L and convergence tolerance: ε. Output: A ﬁrst-order stationary solution β∗.
+
+1. Initialize with β1 ∈ Rp such that β1 0 ≤ k. 2. For m ≥ 1, apply (3.7) with β = βm to obtain βm+1 as:
+
+(3.8)
+
+βm+1 ∈ Hk βm − 1 ∇g(βm) . L
+
+3. Repeat step 2, until g(βm) − g(βm+1) ≤ ε.
+
+3.1. Convergence analysis of Algorithm 1. We ﬁrst deﬁne the notion of ﬁrstorder optimality for problem (3.1).
+
+DEFINITION 1. Given an L ≥ , the vector η ∈ Rp is said to be a ﬁrst-order stationary point of problem (3.1) if η 0 ≤ k and it satisﬁes the following ﬁxedpoint equation:
+(3.9) η ∈ Hk η − 1 ∇g(η) . L
+
+We provide some intuition associated with the above deﬁnition. Consider η as
+
+in Deﬁnition 1. Since η 0 ≤ k, there is a set I ⊂ {1, . . . , p} such that ηi = 0, i ∈ I
+
+and the size of I c (complement of I ) is k. Since η ∈ Hk(η − L1 ∇g(η)), for i ∈/ I
+
+we
+
+have:
+
+ηi
+
+=
+
+ηi
+
+−
+
+1 L
+
+∇i g(η),
+
+where,
+
+∇i g(η)
+
+is
+
+the
+
+i th
+
+coordinate
+
+of
+
+∇ g (η).
+
+It
+
+thus
+
+follows: ∇ig(η) = 0, i ∈/ I . Since g(η) is convex in η, this means that η solves the
+
+following convex optimization problem:
+
+(3.10)
+
+min g(η) s.t. ηi = 0, i ∈ I.
+η
+
+Note, however, that the converse of the above statement is not true. That is, if I˜ ⊂ {1, . . . , p} is an arbitrary subset with |I˜c| = k then a solution ηI˜ to the restricted convex problem (3.10) with I = I˜ need not correspond to a ﬁrst-order stationary point. Any global minimizer to problem (3.1) is also a ﬁrst-order stationary point (see Proposition 7). The following proposition (for its proof see Section 9.3 in the supplementary material [Bertsimas, King and Mazumder (2015)]) sheds light on a ﬁrst-order stationary point η for which η 0 < k (i.e., the inequality is strict).
+
+PROPOSITION 5. If η satisﬁes the ﬁrst-order stationary condition (3.9) and η 0 < k, then η ∈ arg minβ g(β).
+
+We deﬁne the notion of an ε-approximate ﬁrst-order stationary point of problem (3.1).
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+831
+
+DEFINITION 2. Given an ε > 0 and L ≥ we say that η satisﬁes an εapproximate ﬁrst-order optimality condition of problem (3.1) if η 0 ≤ k and for some η ∈ Hk(η − L1 ∇g(η)), we have η − η 2 ≤ ε.
+We now introduce some notation. Let βm = (βm1, . . . , βmp) and 1m = (e1, . . . , ep) with ej = 1, if βmj = 0, and ej = 0, if βmj = 0, j = 1, . . . , p, that is, 1m represents the sparsity pattern of the support of βm. Suppose, we order the coordinates of βm by their absolute values: |β(1),m| ≥ |β(2),m| ≥ · · · ≥ |β(p),m|. Note that by deﬁnition (3.8), β(i),m = 0 for all i > k and m ≥ 2. We denote αk,m = |β(k),m| to be the kth largest (in absolute value) entry in βm for all m ≥ 2. Clearly, if αk,m > 0 then βm 0 = k and if αk,m = 0 then βm 0 < k. Let αk := lim supm→∞ αk,m and αk := lim infm→∞ αk,m.
+The following proposition, the proof of which can be found in Section 9.1 [Bertsimas, King and Mazumder (2015)], describes the asymptotic convergence properties of Algorithm 1.
+
+PROPOSITION 6. Consider g(β) and as deﬁned in (3.2). Let βm, m ≥ 1 be the sequence generated by Algorithm 1. Then we have:
+
+(a) For any L ≥ , the sequence g(βm) is decreasing, converges and satisﬁes
+
+(3.11)
+
+g(βm) − g(βm+1) ≥ L − 2
+
+βm+1 − βm 22.
+
+(b) If L > , then βm+1 − βm → 0 as m → ∞. (c) If L > and αk > 0, then the sequence 1m converges after ﬁnitely many iterations, that is, there exists an iteration index M∗ such that 1m = 1m+1 for all m ≥ M∗. Furthermore, the sequence βm is bounded and converges to a ﬁrst-order
+stationary point. (d) If L > and αk = 0 then lim infm→∞ ∇g(βm) ∞ = 0. (e) Let L > , αk = 0 and suppose that the sequence βm has a limit point. Then
+g(βm) → minβ g(β).
+
+REMARK 2. Note that the existence of a limit point in Proposition 6, part (e) is guaranteed under fairly weak conditions. One such condition is that sup{β : β 0 ≤ k, f (β) ≤ f0} < ∞, for any ﬁnite value f0. In words, this means that the k-sparse level sets of the function g(β) is bounded. In the special case where g(β)
+is the least squares loss function, the above condition is equivalent to every k-
+submatrix (XJ ) of X comprising of k columns being full rank. In particular, this holds with probability one when the entries of X are drawn from a continuous
+distribution and k < n.
+
+REMARK 3. Parts (d) and (e) of Proposition 6 correspond to unregularized solutions of the problem min g(β). The conditions assumed in part (c) imply that
+
+832
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+the support of βm stabilizes and Algorithm 1 behaves like vanilla gradient descent thereafter. The support of βm need not stabilize for parts (d), (e) and thus Algorithm 1 may not behave like vanilla gradient descent after ﬁnitely many iterations.
+However, the objective values (under minor regularity assumptions) converge to
+min g(β).
+
+The following proposition, the proof of which can be found in Section 9.4, establishes some additional properties of the ﬁxed-point equation (3.9).
+
+PROPOSITION 7. Suppose L > . We have the following:
+(a) If η satisﬁes a ﬁrst-order stationary point as in Deﬁnition 1, then the set Hk(η − L1 ∇g(η)) has exactly one element: η.
+(b) If β is a global minimizer of problem (3.1), then it is a ﬁrst-order stationary point.
+
+While Proposition 6 establishes the asymptotic convergence properties of Algorithm 1, the following theorem, the proof of which can be found in Section 9.5 [Bertsimas, King and Mazumder (2015)], characterizes the rate of convergence of the algorithm to a ﬁrst-order stationary point.
+
+THEOREM 3.1. Let L > and β∗ denote a ﬁrst-order stationary point of Al-
+
+gorithm 1. After M iterations, Algorithm 1 satisﬁes
+
+(3.12)
+
+2 2(g(β1) − g(β∗))
+
+min βm+1 − βm 2 ≤
+
+,
+
+m=1,...,M
+
+M(L − )
+
+where g(βm) ↓ g(β∗) as m → ∞.
+
+Theorem 3.1 implies that for any ε > 0 there exists M = O( 1ε ) such that for
+
+some 1 ≤ m∗ ≤ M, we have
+
+βm∗+1 − βm∗
+
+2 2
+
+≤
+
+ε.
+
+Note
+
+that
+
+the
+
+convergence
+
+rates derived above apply for a large class of problems (3.1), where, the function
+
+g(β) ≥ 0 is convex with Lipschitz continuous gradient (3.2). Tighter rates may be
+
+obtained under additional structural assumptions on g(·). For example, the adap-
+
+tation of Algorithm 1 for problem (1.4) was analyzed in Blumensath and Davies
+
+(2008, 2009) with X satisfying coherence [Blumensath and Davies (2008)] or Re-
+
+stricted Isometry Property (RIP) [Blumensath and Davies (2009)]. In these cases,
+
+the algorithm can be shown to have a linear convergence rate [Blumensath and
+
+Davies (2008, 2009)], where the rate depends upon the RIP constants.
+
+Note that by Proposition 6 the support of βm stabilizes after ﬁnitely many it-
+
+erations, after which Algorithm 1 behaves like gradient descent on the stabilized
+
+support. If g(β) restricted to this support is strongly convex, then Algorithm 1
+
+will enjoy a linear rate of convergence [Nesterov (2004)], as soon as the support
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+833
+
+stabilizes. This behavior is adaptive, that is, Algorithm 1 does not need to be modiﬁed after the support stabilizes. We next describe practical schemes via which ﬁrst-order stationary points of Algorithm 1 can be obtained by solving a low dimensional convex optimization problem, as soon as the support stabilizes. In our experiments, this algorithm (with multiple starting points) took at most 1–2 minutes for p = 2000 and a few seconds for smaller values of p.
+
+Polishing coefﬁcients on the active set. Algorithm 1 detects the active set after a few iterations. Once the active set stabilizes, the algorithm may take a number of iterations to estimate the values of the regression coefﬁcients on the active set to a high accuracy level. In this context, we found the following simple method to be quite useful. When the algorithm has converged to a tolerance of ε (≈ 10−4), we ﬁx the current active set, I, and solve a lower-dimensional convex optimization problem (3.10) with I = Ic—for the least squares and least absolute deviation problems, this can be solved very efﬁciently.
+We observed in our experiments that Algorithm 2, a minor variant of Algorithm 1 had better empirical performance. Algorithm 2 modiﬁes step 2 of Algorithm 1 by using a simple line search, as described below:
+
+ALGORITHM 2. Replace step 2 in Algorithm 1 by:
+
+2.
+
+β m+1
+
+=
+
+λmηm
+
++
+
+(1
+
+−
+
+λm )β m ,
+
+where,
+
+ηm
+
+∈
+
+Hk (β m
+
+−
+
+1 L
+
+∇ g (β m )),
+
+with
+
+λm
+
+∈
+
+arg minλ g(ληm + (1 − λ)βm).
+
+ηm produced by Algorithm 2 is k-sparse and the updates satisfy: g(βm+1) ≤ g(ηm). Algorithm 2 may be perceived as one that restarts Algorithm 1 with multiple starting points: βm. We observed empirically that λm ≈ 0 after a few iterations in which case, ηm, βm+1 have the same support, and thus Algorithm 2 behaves like Algorithm 1. For Algorithm 2, we use the following convergence criterion: we exit if |g(ηm+1) − g(ηm)| ≤ ε or run the algorithm for a maximum of N iterations and exit with ηm∗ , where, m∗ ∈ arg min1≤m≤N g(ηm). Algorithm 1 is then run with the resultant estimate—this usually takes at most a few additional iterations to converge.3
+
+3.2. Application to least squares subset selection. For problem (1.1), we have
+
+g (β )
+
+=
+
+1 2
+
+y − Xβ
+
+22, ∇g(β) = −X (y − Xβ) and
+
+= λmax(X X)—and the frame-
+
+work described above, applies readily. The polishing of coefﬁcients in the active
+
+set can be performed via a least squares problem on y, XJ , where J denotes the
+
+support of the k-sparse regression coefﬁcient.
+
+3We note that this step is hardly necessary in practice, but might be used to ensure a convergent algorithm.
+
+834
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+3.3. Application to least absolute deviation subset selection. We consider the LAD problem with support constraints in β:
+
+(3.13)
+
+min g1(β) := y − Xβ 1 s.t. β 0 ≤ k.
+β
+
+Since g1(β) is nonsmooth, our framework does not apply directly. We smooth the non-differentiable g1(β) so that we can apply Algorithms 1 and 2. Observing that g1(β) = sup w ∞≤1 y − Xβ, w we make use of the smoothing technique of Nesterov (2005) to obtain g1(β; τ ) = sup w ∞≤1( y − Xβ, w − τ2 w 22). g1(β; τ ) is a smooth approximation of g1(β), with = λmax(X X)/τ and our algorithmic framework applies.
+In order to obtain a good approximation to problem (3.13), we found the following strategy to be useful in practice:
+
+1. Fix τ > 0, initialize with β0 ∈ Rp and repeat the following steps 2–3 till
+
+convergence:
+
+2.
+
+Apply
+
+Algorithm
+
+1
+
+(or
+
+Algorithm
+
+2)
+
+to
+
+the
+
+smooth
+
+function
+
+g1
+
+(β
+
+;
+
+τ
+
+).
+
+Let
+
+β
+
+∗ τ
+
+be the limiting solution.
+
+3. Decrease τ ← τ γ for some predeﬁned constant γ = 0.8 (say), and go back to step 1 with β0 = β∗τ . Exit if τ < TOL, for some predeﬁned tolerance.
+
+4. A brief tour of statistical properties of problem (1.1). For the sake of
+
+completeness, we brieﬂy review some statistical properties of problem (1.1) and
+
+contrast it with Lasso based solutions. Suppose, data is generated via a linear
+
+0
+
+i.i.d.
+
+2
+
+model: y = Xβ + ε, with εi ∼ N(0, σ ) and let β be a solution to (1.1). In terms
+
+of the expected (worst case) predictive risk, it is well known [Bunea, Tsybakov
+
+and Wegkamp (2007), Raskutti, Wainwright and Yu (2011), Zhang, Wainwright
+
+and Jordan (2014)] that the following upper bound holds:
+
+(4.1)
+
+max 1 E Xβ0 − Xβ 22 β0: β0 0≤k n
+
+σ 2 k log(p) , n
+
+where, “ ” stands for “≤” up to universal constants. A natural question is: how
+
+do the bounds for Lasso-based solutions compare with (4.1)? Following Zhang,
+
+Wainwright and Jordan (2014), we deﬁne, for any subset S ∈ {1, 2, . . . , p}, with
+
+size |S| = k; C(S) := {β : j∈/S |βj | ≤ 3 j∈S |βj |}. X is said to satisfy a re-
+
+stricted eigenvalue type condition with parameter γ (X) if it satisﬁes:4
+
+1 n
+
+Xβ
+
+22 ≥
+
+γ (X)
+
+β
+
+2 2
+
+for
+
+β
+
+∈
+
+S C(S). Suppose β 1 solves (1.2) with λ = 4nσ
+
+n log p and let
+
+βTL denote its thresholded version, which retains the top k entries of β 1 in absolute value and sets the remaining to zero. Zhang, Wainwright and Jordan (2014)
+
+4Note that γ (X) ≤ 1 and γ (X) is related to the so called compatibility condition [Bühlmann and van de Geer (2011)].
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+835
+
+show that under such restricted eigenvalue type conditions the following holds:
+
+(4.2)
+
+σ 2 k1−δ log(p)
+
+γ (Xbad)2
+
+n
+
+max 1 E Xβ0 − XβTL 22 β0: β0 0≤k n
+σ 2 k log(p) γ (X)2 n .
+
+In particular, the lower bounds apply to bad design matrices Xbad for some arbitrarily small scalar δ > 0. In light of (4.1) and (4.2), there is a signiﬁcant gap between the predictive performances of subset selection procedures and Lasso based k-sparse solutions.5 If γ (X) is small (occurring, e.g., if the pairwise correlations between the features is quite high) this gap can be quite large.
+Zhang and Zhang (2012) study statistical properties of solutions to problem (1.4). Raskutti, Wainwright and Yu (2011), Zhang and Zhang (2012) study estimation errors in regression coefﬁcients, under additional minor assumptions on X. Shen et al. (2013), Zhang and Zhang (2012) provide interesting theoretical analysis of the variable selection properties of (1.1) and (1.4), demonstrating their superior variable selection properties over Lasso based methods. In passing, we remark that Zhang and Zhang (2012) develop statistical properties of inexact solutions to problem (1.4). This may serve as theoretical support for near global solutions to problem (1.1), where the certiﬁcates of suboptimality are delivered by our MIO framework in terms of global lower bounds.
+
+5. Computational experiments for subset selection with least squares loss. We present a variety of computational experiments to assess the algorithmic and statistical performances of our approach. We consider both the classical overdetermined case with n > p (Section 5.2) and the high-dimensional p n case (Section 5.3) for the least squares loss function with support constraints.
+
+5.1. Description of experimental data. We perform a series of experiments on both synthetic and real data.
+
+Synthetic datasets. We consider a collection of problems where xi ∼ N(0, ), i = 1, . . . , n are independent realizations from a p-dimensional multivariate nor-
+
+mal distribution with mean zero and covariance matrix := (σij ). The columns
+
+of the X matrix were subsequently standardized to have unit 2 norm. For a ﬁxed
+
+0
+
+i.i.d.
+
+2
+
+X, we generated y = Xβ + ε, with εi ∼ N (0, σ ). We denote the number of
+
+nonzeros in β0 by k0. We deﬁne the Signal-to-Noise Ratio (SNR) of the problem
+
+as: SNR = σ 2 var(x β0) . We consider the following examples.
+
+5In fact Zhang, Wainwright and Jordan (2014) establish a result stronger than (4.2), where βTL can be replaced by a k-sparse estimate delivered by a polynomial time method.
+
+836
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+EXAMPLE 1. We took σij = ρ|i−j| for i, j ∈ {1, . . . , p} × {1, . . . , p}. We consider different values of k0 ∈ {5, 10} and β0i = 1 for k0 equispaced values; rounding the indices to the nearest large integer value of i ∈ {1, 2, . . . , p} when required.
+
+EXAMPLE 2. We took = Ip×p, k0 = 5 and β0 = (15×1, 0p−5×1) ∈ Rp.
+
+EXAMPLE 3. We took = Ip×p, k0 = 10 and βi0 = 12 + (10 − 12 ) (ik−1) 0 , i =
+
+1, . . . , 10 and β0i = 0, ∀i > 10—i.e., a vector with ten nonzero entries, with the
+
+nonzero
+
+values
+
+being
+
+equally
+
+spaced
+
+in
+
+the
+
+interval
+
+[
+
+1 2
+
+,
+
+10].
+
+EXAMPLE 4. We took = Ip×p, k0 = 6 and β0 = (−10, −6, −2, 2, 6, 10, 0p−6), that is, a vector with six nonzero entries, equally spaced in the interval [−10, 10].
+
+Real datasets. We considered the Diabetes dataset [Efron et al. (2004)] with
+
+all the second order interactions included in the model, which resulted in 64 predictors. We reduced the sample size to n = 350 by taking a random sample and
+
+standardized the response and the columns of the model matrix to have zero means
+
+and unit 2-norm.
+
+In addition to the above, we also considered a real microarray dataset: the
+
+Leukemia data [Dettling (2004)] downloaded from http://stat.ethz.ch/~dettling/ bagboost.html, with n = 72 binary responses and more than 3000 predictors. We
+
+standardized the response and features to have zero means and unit 2-norm.
+
+We reduced the set of features to 1000 by retaining the features maximally cor-
+
+related (in absolute value) to the response. From the resulting matrix X with n = 72, p = 1000, we generated a semisynthetic dataset with continuous response as y = Xβ0 + ε, where the ﬁrst ﬁve coefﬁcients of β0 were taken as one and the
+
+i.i.d.
+
+2
+
+2
+
+rest as zero. The noise was distributed as εi ∼ N (0, σ ), with σ chosen to get a
+
+SNR = 7.
+
+Computer speciﬁcations and software. Computations were carried out in a linux 64 bit server—Intel(R) Xeon(R) eight-core processor @ 1.80 GHz, 16 GB of RAM for the overdetermined n > p case. For the p > n examples, all computations were carried out on Columbia University’s high performance computing facility, http://hpc.cc.columbia.edu/, on the Yeti cluster computing environment in a Dell Precision T7600 computer with an Intel Xeon E52687 sixteen-core processor @ 3.1 GHz, 128 GB of Ram. The discrete ﬁrst-order methods were implemented in MATLAB 2012b. We used GUROBI [Gurobi (2013)] version 5.5, for the MIO solvers.
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+837
+
+5.2. The overdetermined regime: n > p. Herein, we study the combined effect of using the discrete ﬁrst-order methods with the MIO approach using the Diabetes dataset and synthetic datasets. Together, these methods show improvements in obtaining good upper bounds and in closing the MIO gap to certify global optimality. Using synthetic datasets where we know the true linear regression model, we perform side-by-side comparisons of this method with several other state-of-the-art algorithms designed to estimate sparse linear models.
+
+5.2.1. Obtaining good upper bounds. We conducted experiments to evaluate the performance of our methods in terms of obtaining high quality solutions for problem (1.1). The following three algorithms were considered:
+(a) Algorithm 2 with ﬁfty random initializations.6 We took the solution corresponding to the best objective value.
+(b) MIO with cold start, that is, formulation (2.4) with a time limit of 500 seconds.
+(c) MIO with warm start. This was the MIO formulation (2.4) initialized with a solution obtained from (a). The combined run was for a total of 500 seconds.
+
+For the MIO formulation (2.4) above, since n > p, we massaged the objective function into the form (2.5), that is, a quadratic problem in p variables.
+To compare the different algorithms in terms of the quality of upper bounds, we run for every instance all the algorithms and obtain the best solution among them, say, f∗. If falg denotes the value of the best subset objective function for method alg ∈ {(a), (b), (c)}, we deﬁne the relative accuracy of the solution obtained by “alg” as
+
+(5.1)
+
+Relative accuracy = (falg − f∗)/f∗.
+
+Table 1 shows results for the Diabetes dataset for different values of k. For each algorithm, we report the time taken by it to reach the best objective value during the time of 500 seconds. Using the discrete ﬁrst-order methods in combination with the MIO algorithm resulted in ﬁnding the best possible relative accuracy in a matter of a few minutes.
+
+5.2.2. Improving MIO performance via warm starts. We performed a series of experiments on the Diabetes dataset to obtain a globally optimal solution to problem (1.1) via our approach and to understand the implications of using advanced warm starts to the MIO formulation in terms of certifying optimality. For each k, we ran Algorithm 2 with ﬁfty random initializations, which took less than a few
+
+6we took ﬁfty random starting values around 0 of the form min(i − 1, 1)ε, i = 1, . . . , 50, where ε ∼ N (0p×1, 4I). We chose Algorithm 2 since it provided better upper bounds than Algorithm 1. However, if Algorithm 1 is run with many more initializations, the best solution obtained is similar
+to Algorithm 2.
+
+838
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+TABLE 1 Quality of upper bounds for problem (1.1) for the Diabetes dataset, for different values of k. We observe that MIO equipped with warm starts deliver the best upper bounds in the shortest overall
+times. The run time for the MIO with warm start includes the time taken by the discrete ﬁrst-order method
+
+Discrete ﬁrst-order
+
+k
+
+Accuracy
+
+Time
+
+9
+
+0.1306
+
+1
+
+20
+
+0.1541
+
+1
+
+49
+
+0.1915
+
+1
+
+57
+
+0.1933
+
+1
+
+MIO cold start
+
+Accuracy
+
+Time
+
+0.0036
+
+500
+
+0.0042
+
+500
+
+0.0015
+
+500
+
+0
+
+500
+
+MIO warm start
+
+Accuracy
+
+Time
+
+0
+
+346
+
+0
+
+77
+
+0
+
+87
+
+0
+
+2
+
+seconds to run. We used the best solution as an advanced warm start to the MIO formulation (2.5). The MIO solver was provided with problem-speciﬁc bounds obtained via Section 2.3.3 with τ = 2. For each of these examples, we also ran the MIO formulation without any such additional problem-speciﬁc information, that is, formulation (2.4)—we refer to this as “Cold Start.” Figure 3 presents a representative subset of the results. We also experimented (not reported here, for brevity) with bounds implied by Sections 2.3.1, 2.3.2 and observed that the MIO formulation (2.5) armed with warm-starts and additional bounds closed the optimality gap faster than their “Cold Start” counterpart.
+
+FIG. 3. The evolution of the MIO optimality gap [in log10(·) scale] for problem (1.1), for the Diabetes dataset with n = 350, p = 64, for different values of k. Here, “Warm Start” indicates that the MIO was provided with warm starts and parameter speciﬁcations as in Section 2.3; and “Cold Start” indicates that MIO was not provided with any such problem-speciﬁc information. MIO (“Warm Start”) is found close the optimality gap much faster. In all of these examples, the global optimum was found within a very small fraction of the total time, but the proof of global optimality came later.
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+839
+
+5.2.3. Statistical performance. We considered datasets as described in Example 1, Section 5.1—we took different values of n, p with n > p, ρ with k0 = 10.
+
+Competing methods and performance measures. For every example, we considered the following learning procedures for comparison purposes: (a) the MIO7 formulation (2.4) equipped with warm starts from Algorithm 2 (annotated as “MIO” in the ﬁgure), (b) the Lasso, (c) Sparsenet and (d) stepwise regression (annotated as “Step” in the ﬁgure). In addition to the above, we have also performed comparisons with an unshrunk version of the Lasso, that is, performing unrestricted least squares on the Lasso support to mitigate the bias imparted by Lasso shrinkage.
+We used R to compute Lasso, Sparsenet and stepwise regression using the glmnet 1.7.3, Sparsenet and Stats 3.0.2 packages, respectively, which were all downloaded from CRAN at http://cran.us.r-project.org/.
+We note that Sparsenet [Mazumder, Friedman and Hastie (2011)] considers a penalized likelihood formulation of the form (1.3), where the penalty is given by the generalized MCP penalty family (indexed by λ, γ ) for a family of values of γ ≥ 1 and λ ≥ 0. The family of penalties used by Sparsenet is thus given by: p(t; γ ; λ) = λ(|t| − 2λγ t2 )I(|t| < λγ ) + 2 λ2γ I(|t| ≥ λγ ) for γ , λ described as above. As γ = ∞ with λ ﬁxed, we get the penalty p(t; γ ; λ) = λ|t|. This family includes as a special case (γ = 1), the hard thresholding penalty, recommended in Zheng, Fan and Lv (2014) for its useful statistical properties.
+For each procedure, we obtained the “optimal” tuning parameter by selecting the model that achieved the best predictive performance on a held out validation set. Once the model β was selected, we obtained the prediction error as
+
+(5.2)
+
+Prediction error = Xβ − Xβ0 22/ Xβ0 22.
+
+Note that, if the (sample) features are highly correlated, the selected model, may decide to choose a feature instead of its correlated surrogate—in such cases, variable selection error, measured in terms of Hamming distance with respect to the data-generating model, may be misleading. Size of the optimal model selected serves as a measure of the number of redundant variables selected by the model; and prediction error measures good data-ﬁdelity. Thusly motivated, we report “prediction error” and number of nonzeros in the optimal model in our results. The results were averaged over ten random instances: for every run, the training and validation data had a ﬁxed X but the noise ε was random.
+Figure 4 presents results for data generated as per Example 1 with n = 500 and p = 100. We see that the MIO procedure performs very well across all the examples. Among the methods, MIO performs the best, followed by Sparsenet,
+
+7Note that MIO formulation (2.6) with parameter bounds as in Section 2.3 may also be used here, with similar results.
+
+840
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+FIG. 4. Figure showing the sparsity (upper panel) and predictive performances (bottom panel) for different subset selection procedures for the least squares loss. Here, we consider data generated as per Example 1, with n = 500, p = 100, k0 = 10, for three different SNR values with (left panel) ρ = 0.5, (middle panel) ρ = 0.8, and (right panel) ρ = 0.9. The dashed line in the top panel represents the true number of nonzero values. For each of the procedures, the optimal model was selected as the one which produced the best prediction accuracy on a separate validation set, as described in Section 5.2.3.
+Lasso with Step(wise) exhibiting the worst performance—MIO consistently chose the sparsest model. Lasso delivers quite dense models and pays the price in predictive performance too, by selecting wrong variables. As the value of SNR increases, the predictive power of the methods improve, as expected. The differences in predictive errors between the methods diminish with increasing SNR values. With increasing values of ρ (from left panel to right panel in the ﬁgure), the number of nonzeros selected by the Lasso in the optimal model increases.
+We also performed experiments with the unshrunk version of the Lasso. The unrestricted least squares solution on the optimal model selected by Lasso (as shown in Figure 4) had worse predictive performance than the Lasso, with the same sparsity pattern. This is probably due to overﬁtting since the model selected by the Lasso is quite dense compared to n, p. We also tried some variants of unshrunk Lasso which led to models with better performances than the Lasso but the results were inferior compared to MIO—we provide a detailed description in Section 10.2 in the supplementary material [Bertsimas, King and Mazumder (2015)].
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+841
+
+We also did experiments (not reported here, for brevity) with n = 1000, p = 50 for Example 1 and found that MIO performed better compared to other competing methods.
+
+5.2.4. MIO model training. We trained a sequence of best subset models (indexed by k) by applying the MIO approach with warm starts. Instead of running the MIO solvers from scratch for different values of k, we used the callback feature of integer optimization solvers. For each k, the MIO best subset algorithm was terminated the ﬁrst time either an optimality gap of 1% was reached or a time limit of 15 minutes was reached.8 Additionally, we considered values of k from 5 through 25.
+
+5.3. The high-dimensional regime: p n. Herein, we investigate (a) the evolution of upper bounds in the high-dimensional regime (see Section 5.3.1) (b) the effect of a bounding box formulation on closing the optimality gap (see Section 5.3.2) and (c) the statistical performance of the MIO approach in comparison to other sparse learning methods (see Section 5.3.3).
+
+5.3.1. Obtaining good upper bounds. We performed experiments similar to those in Section 5.2.1, demonstrating the effectiveness of warm-starting MIO solvers with discrete ﬁrst-order methods. We considered a synthetic dataset corresponding to Example 2 with n = 30, p = 2000 for varying SNR values (see Table 2) over a time of 500 s. As before, using the discrete ﬁrst-order methods in combination with the MIO formulation (2.4) resulted in ﬁnding the best possible upper bounds in the shortest possible times.
+Figure 5 shows the evolution of the objective value of problem (1.1) for different values of k, for the Leukemia dataset. For each k, we warm-started the MIO solver for formulation (2.4) with the solution obtained by Algorithm 2 and allowed the MIO solver to run for 4000 seconds—the resultant solution is denoted by f∗. We plot Relative Accuracy, that is, (ft − f∗)/f∗, where ft is the objective value obtained after t seconds. The ﬁgure shows that the solution obtained by Algorithm 2 is improved by the MIO on various instances and the time taken to improve the upper bounds depends upon k. In general, for smaller values of k the upper bounds obtained by the MIO algorithm stabilize earlier, that is, MIO ﬁnds improved solutions faster than larger values of k.
+
+8We observed that it was possible to obtain speedups of a factor of 2–4 by carefully tuning the optimization solver for a particular problem, but chose to maintain generality by solving with default parameters. Thus, we do not report times with the intention of accurately benchmarking the best possible time but rather to show that it is computationally tractable to solve problems to optimality using modern MIO methods.
+
+842
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+TABLE 2 The quality of upper bounds for problem (1.1) obtained by Algorithm 2, MIO with cold start and MIO warm-started with Algorithm 2. We consider Example 2 with n = 30, p = 2000 and different values of SNR. The MIO method, when warm-started with the ﬁrst-order solution performs the best in terms of getting a good upper bound in the shortest time. Here, “Accuracy” is the same metric as deﬁned in (5.1). The ﬁrst-order methods work well, but need not lead to best quality solutions on their own. MIO improves the quality of upper bounds delivered by the ﬁrst-order methods and their
+combined effect leads to the best performance
+
+Discrete ﬁrst-order
+
+k Accuracy
+
+Time
+
+SNR = 3 5
+
+0.1647
+
+37.2
+
+6
+
+0.6152
+
+41.1
+
+7
+
+0.7843
+
+40.7
+
+8
+
+0.5515
+
+38.8
+
+9
+
+0.7131
+
+45.0
+
+SNR = 7 5
+
+0.5072
+
+45.6
+
+6
+
+1.3221
+
+40.3
+
+7
+
+0.9745
+
+40.9
+
+8
+
+0.8293
+
+40.5
+
+9
+
+1.1879
+
+44.2
+
+MIO cold start Accuracy Time
+
+1.0510
+
+500
+
+0.2769
+
+500
+
+0.8715
+
+500
+
+2.1797
+
+500
+
+0.4204
+
+500
+
+0.7737
+
+500
+
+0.5121
+
+500
+
+0.7578
+
+500
+
+1.8972
+
+500
+
+0.4515
+
+500
+
+MIO warm start Accuracy Time
+
+0
+
+72.2
+
+0
+
+77.1
+
+0
+
+160.7
+
+0
+
+295.8
+
+0
+
+96.0
+
+0
+
+65.6
+
+0
+
+82.3
+
+0
+
+210.9
+
+0
+
+262.5
+
+0
+
+254.2
+
+5.3.2. Bounding box formulation. With the aid of advanced warm starts as provided by Algorithm 2, the MIO obtains a very high quality solution very quickly—in most of the examples the solution thus obtained turns out to be the
+
+FIG. 5. Behavior of MIO aided with warm start in obtaining good upper bounds for the Leukemia dataset (n = 72, p = 1000). The vertical axis shows relative accuracy, that is, (ft − f∗)/f∗, where ft is the objective value after t seconds and f∗ denotes the best objective value obtained by the method after 4000 seconds. The colored diamonds correspond to the locations where the MIO (with
+warm start) attains the best solution. Note that MIO improves the solution obtained by the ﬁrst-order
+method in all the instances.
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+843
+
+global minimum. However, in the typical “high-dimensional” regime, with p n, we observe that the certiﬁcate of global optimality comes later as the lower bounds of the problem “evolve” slowly. This is observed even in the presence of warm starts and using the implied bounds as developed in Section 2.3 and is aggravated for the cold-started MIO formulation (2.4).
+To address this, we consider a more structured MIO formulation (5.3) (presented below) obtained by adding bounding boxes around a local solution. These restrictions guide the MIO in restricting its search space and enable the MIO to certify global optimality inside that bounding box. We consider the following additional bounding box constraints to the MIO formulation (2.6):
+
+β : Xβ − Xβ0 1 ≤ L ,loc ζ ∩ β : β − β0 1 ≤ L ,loc β ,
+
+where, β0 is a candidate sparse solution. The radii of the two 1-balls above, namely, L ,loc ζ and L ,loc β are user-deﬁned parameters and control the size of the feasible set. Using the notation ζ = Xβ, we have the following MIO formulation (equipped with the additional bounding boxes):
+
+(5.3)
+
+min 1 ζ T ζ − X y, β + 1 y 22
+
+β,z,ζ 2
+
+2
+
+s.t. ζ = Xβ,
+
+(βi, 1 − zi) : SOS type-1, i = 1, . . . , p,
+
+zi ∈ {0, 1}, i = 1, . . . , p,
+
+p
+zi ≤ k,
+i=1
+−MU ≤ βi ≤ MU ,
+
+i = 1, . . . , p,
+
+β 1≤M ,
+
+−MUζ ≤ ζi ≤ MUζ , i = 1, . . . , n,
+
+ζ 1 ≤ Mζ ,
+
+ζ − ζ 0 1 ≤ L ,loc ζ ,
+
+β − β0 1 ≤ L ,loc β .
+
+For large values of L ,loc ζ (resp., L ,loc β ) the constraints on Xβ (resp., β) become ineffective and one gets back formulation (2.6). To see the impact of these additional cutting planes in the MIO formulation, we consider a few examples as shown in Figures 6, 7 and Figure 11 (which can be found in the supplementary material [Bertsimas, King and Mazumder (2015)]).
+
+844
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+FIG. 6. The effect of MIO formulation (5.3) for the Leukemia dataset. Here, L ,loc ζ = ∞ and L ,loc β = Frac. For each k, the minimum obtained was the same for the different choices of L ,loc β .
+Interpretation of the bounding boxes. A local bounding box in the variable ζ = Xβ directs the MIO solver to seek for candidate solutions that deliver models with predictive accuracy “similar” (controlled by the radius of the ball) to a reference predictive model, given by ζ 0. In our experiments, we typically chose ζ 0 as the solution delivered by running MIO (warm-started with a ﬁrst-order solution) for a few hundred to a few thousand seconds. More generally, ζ 0 may be selected by any other sparse learning method. In our experiments, we found that the run-time behavior of the MIO depends upon how correlated the columns of X are—more
+
+FIG. 7. The effect of the MIO formulation (5.3) for a synthetic dataset as in Example 1 with ρ = 0.9, k0 = 5, n = 50, p = 500, for different values of k. (Left panel) L ,loc ζ = 0.5 Xβ0 1, L ,loc β = ∞ and SNR = 3. (Middle panel) L ,loc ζ = ∞, L ,loc β = β0 1/k and SNR = 1. (Right panel) L ,loc ζ = ∞, L ,loc β = β0 1/k and SNR = 3. The ﬁgure shows that the bounding boxes in terms of Xβ (left– panel) make the problem harder to solve, when compared to bounding boxes around β (middle and
+right panels). A possible reason is due to the strong correlations among the columns of X. The SNR
+values do not seem to have a big impact on the run-times of the algorithms (middle and right panels).
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+845
+
+correlation leading to longer run-times. Similarly, a bounding box around β directs the MIO to look for solutions in the neighborhood of a reference point β0. In our experiments, we chose the reference β0 as the solution obtained by MIO (warmstarted with a ﬁrst-order solution) and allowing it to run for a few hundred to a few thousand seconds. We observed that the MIO solver in presence of bounding boxes in the β-space certiﬁed optimality and in the process ﬁnding better solutions; much faster than the ζ -bounding box method. Note that the β-bounding box constraint leads to O(p) and the ζ -box leads to O(n) constraints. Thus, when p n the additional ζ constraints add a fewer number of extra variables when compared to the β constraints.
+
+Experiments. In the ﬁrst set of experiments, we consider the Leukemia dataset with n = 72, p = 1000. We took two different values of k ∈ {5, 10} and for each
+case we ran Algorithm 2 with several random restarts. The best solution thus ob-
+tained was used to warm start the MIO formulation (2.6), which we ran for an
+additional 3600 seconds. The solution thus obtained is denoted by β0. We then consider formulation (5.3) with L ,loc ζ = ∞ and different values of L ,loc β = Frac (as annotated in Figure 6)—the results are displayed in Figure 6.
+We consider another set of experiments demonstrating the performance of MIO
+in certifying global optimality for different synthetic datasets with varying n, p, k
+as well as with different structures on the bounding box. In the ﬁrst case, we generated data as per Example 1 with ρ = 0.9, k0 = 5. We consider the case with ζ 0 = Xβ0, L ,loc β = ∞ and L ,loc ζ = 0.5 Xβ0 1, where β0 is a k-sparse solution obtained from the MIO formulation (2.6) run with a time limit of 1000 seconds, af-
+ter being warm-started with Algorithm 2. The results are displayed in Figure 7 (left
+panel). In the second case (with data same as before), we obtained β0 in the same fashion as described before—we took a bounding box around β0, and left the box constraint around Xβ0 inactive, that is, we set L ,loc ζ = ∞ and L ,loc β = β0 1/k. We performed two sets of experiments, where the data were generated based on different SNR value—the results are displayed in Figure 7 with SNR = 1 (middle panel) and SNR = 3 (right panel).
+In the same vein, we have Figure 11 [Bertsimas, King and Mazumder (2015)]
+studying the effect of formulations (5.3) for synthetic datasets generated as per Example 1 with n = 50, p = 1000, ρ = 0.9 and k0 = 5.
+
+5.3.3. Statistical performance. To understand the statistical behavior of MIO when compared to other approaches for learning sparse models, we considered synthetic datasets for values of n ranging from 30–50 and values of p ranging from 1000–2000. The following methods were used for comparison purposes (a) Algorithm 2. Here, we used ﬁfty different random initializations around 0, of the form min(i − 1, 1)N (0p×1, 4I), i = 1, . . . , 50 and took the solution corresponding to the best objective value; (b) The MIO approach with warm starts from part (a); (c) The Lasso solution and (d) The Sparsenet solution.
+
+846
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+FIG. 8. The sparsity and predictive performance for different procedures: (Left panel) shows Example 1 with n = 50, p = 1000, ρ = 0.8, k0 = 5 and (right panel) shows Example 2 with n = 30, p = 1000—for each instance several SNR values have been shown.
+For methods (a), (b) we considered ten equispaced values of k in the range [3, 2k0] (including the optimal value of k0). For each of the methods, the best model was selected in the same fashion as described in Section 5.2.3. For some of the above examples, we also study the performance of the unshrunk version of the Lasso. In Figures 8 and 9, we present selected representative results from four different examples described in Section 5.1. In Figure 8, the left panel shows the performance of different methods for Example 1 with n = 50, p = 1000, ρ = 0.8, k0 = 5. In this example, there are ﬁve nonzero coefﬁcients: the features cor-
+
+FIG. 9. (Left panel) shows performance for data generated according to Example 3 with n = 30, p = 1000 and (right panel) shows Example 4 with n = 50, p = 2000.
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+847
+
+responding to the nonzero coefﬁcients are weakly correlated and a feature having a nonzero coefﬁcient is highly correlated with a feature having a zero coefﬁcient (in the generating model). In this situation, the Lasso selects a very dense model since it fails to distinguish between a zero and a nonzero coefﬁcient when the variables are correlated—it brings both the coefﬁcients in the model (with shrinkage). MIO (with warm-start) performs the best—both in terms of predictive accuracy and in selecting a sparse set of coefﬁcients. MIO obtains the sparsest model among the four methods and seems to ﬁnd better solutions in terms of statistical properties than the models obtained by the ﬁrst-order methods alone. Interestingly, the “optimal model” selected by the ﬁrst-order methods is more dense than that selected by the MIO. The number of nonzero coefﬁcients selected by MIO remains fairly stable across different SNR values, unlike the other three methods. For this example, we also experimented with the different versions of unshrunk Lasso [see results in Bertsimas, King and Mazumder (2015), Section 10.2 for details]. In summary: the best unshrunk Lasso models had performance marginally better than Lasso but quite inferior to MIO. Figure 8 (right panel) shows Example 2, with n = 30, p = 1000, k0 = 5 and all nonzero coefﬁcients equal one. Here, all methods perform similarly in terms of predictive accuracy. In fact, for the smallest value of SNR, the Lasso achieves the best predictive model. In all of the cases, however, the MIO achieves the sparsest model with favorable predictive accuracy. In Figure 9, for both the examples, the model matrix is an i.i.d. Gaussian ensemble. The underlying regression coefﬁcient β0 however, is structurally different than Example 2 (as in Figure 8, right-panel). The alternating signs of β0 is responsible for different statistical behaviors of the four methods across Figures 8 (right-panel) and Figure 9 (both panels). The MIO (with warm-starts) seems to be the best among all the methods. For Example 3 (Figure 9, left panel), the predictive performances of Lasso and MIO are comparable—the MIO, however, delivers much sparser models than the Lasso.
+The key conclusions are as follows:
+1. The MIO best subset algorithm has a signiﬁcant edge in detecting the correct sparsity structure for all examples compared to Lasso, Sparsenet and the stand-alone discrete ﬁrst-order method.
+2. For data generated as per Example 1 with large values of ρ, the MIO best subset algorithm gives better predictive performance compared to its competitors.
+3. For data generated as per Examples 2 and 3, MIO delivers similar predictive models like the Lasso, but produces much sparser models. In fact, Lasso seems to perform marginally better than MIO, as a predictive model for small values of SNR.
+4. For Example 4, MIO performs the best both in terms of predictive accuracy and delivering sparse models.
+
+848
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+6. Computations for subset selection with least absolute deviation loss.
+Herein, we study the properties of the best subset selection problem with LAD
+objective (3.13) via a few representative examples. The LAD loss is appropriate
+when the error follows a heavy-tailed distribution. The datasets used for the exper-
+iments parallel those described in Section 5.1, the difference being in the distribution of ε. We took εi i.i.d. from a double exponential distribution with variance σ 2. The value of σ 2 was adjusted to get different values of SNR.
+
+Datasets analysed. We consider a set-up similar to Example 1 (Section 5.1) with k0 = 5 and ρ = 0.9. Different choices of (n, p) were taken to cover both the overdetermined (n = 500, p = 100) and high-dimensional cases (n = 50, p = 1000 and n = 500, p = 1000).
+Other methods used for comparison were (a) discrete ﬁrst-order method (Section 3.3) (b) MIO warm-started with the ﬁrst-order solutions and (c) the LAD loss with 1 regularization:
+min y − Xβ 1 + λ β 1,
+which we denote by LAD-Lasso. The training, validation and testing were done in the same fashion as in the least squares case. For each method, we report the number of nonzeros in the optimal model and associated prediction accuracy (5.2).
+Figure 10 (left panel) compares the MIO approach with others for the overdetermined case (n > p). Figure 10 (middle and right panels) do the same for the highdimensional case (p n). The conclusions parallel those for the least squares
+
+FIG. 10. Figure showing the number of nonzero values and predictive performance for different values of n and p for problem (3.13). The data is generated as per Example 1 with ρ = 0.9, k0 = 5, for different problem sizes—(left panel) n = 500, p = 100; (middle panel) n = 50, p = 1000 and (right panel) n = 500, p = 1000. The acronym “Lasso” refers to LAD-Lasso. MIO is seen to
+deliver sparser models with better predictive accuracy when compared to the LAD-Lasso.
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+849
+
+case. Since, in the example considered, the features corresponding to the nonzero coefﬁcients are weakly correlated and a feature having a nonzero coefﬁcient is highly correlated with a feature having a zero coefﬁcient—the LAD-Lasso selects an overly dense model and misses out in terms of prediction error. Both the MIO (with warm-starts) and the discrete ﬁrst-order methods behave similarly— much better than 1 regularization schemes. As expected, we observed that subset selection with least squares loss leads to inferior models for these examples, due to a heavy-tailed distribution of the errors.
+Our ﬁndings here are similar to that in the least squares case. The MIO approach provides an edge both in terms of sparsity and predictive accuracy compared to Lasso both for the overdetermined and the high-dimensional case.
+
+7. Conclusions. In this paper, we have revisited the classical best subset selection problem of choosing k out of p features in linear regression given n observations using a modern optimization lens—MIO and a discrete extension of ﬁrstorder methods from continuous optimization. Exploiting the astonishing progress of MIO solvers in the last twenty-ﬁve years, we have shown that this approach solves problems with n in the 1000s and p in the 100s in minutes to provable optimality, and ﬁnds near optimal solutions for n in the 100s and p in the 1000s in minutes. Importantly, the solutions provided by the MIO approach often signiﬁcantly outperform other state of the art methods like Lasso in achieving sparse models with good predictive power. Unlike all other methods, the MIO approach always provides a guarantee on its suboptimality even if the algorithm is terminated early. Moreover, it can accommodate side constraints on the coefﬁcients of the linear regression and also extends to ﬁnding best subset solutions for the least absolute deviation loss function. While continuous optimization methods have played and continue to play an important role in statistics over the years, discrete optimization methods have not. The evidence in this paper as well as in Bertsimas and Mazumder (2014) suggests that MIO methods are tractable and lead to desirable properties (improved accuracy and sparsity among others) at the expense of higher, but still reasonable, computational times.
+
+Acknowledgments. We would like to thank the Associate Editor and two anonymous reviewers for their comments that helped us improve the paper.
+
+SUPPLEMENTARY MATERIAL
+Supplement to “Best subset selection via a modern optimization lens” (DOI: 10.1214/15-AOS1388SUPP; .pdf). Supporting technical material and additional experimental results including some ﬁgures and tables are presented in the supplementary material section.
+
+850
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+REFERENCES
+BANDEIRA, A. S., DOBRIBAN, E., MIXON, D. G. and SAWIN, W. F. (2013). Certifying the restricted isometry property is hard. IEEE Trans. Inform. Theory 59 3448–3450. MR3061257
+BERTSIMAS, D., KING, A. and MAZUMDER, R. (2015). Supplement to “Best subset selection via a modern optimization lens.” DOI:10.1214/15-AOS1388SUPP.
+BERTSIMAS, D. and MAZUMDER, R. (2014). Least quantile regression via modern optimization. Ann. Statist. 42 2494–2525. MR3277669
+BERTSIMAS, D. and SHIODA, R. (2009). Algorithm for cardinality-constrained quadratic optimizaiton. Comput. Optim. Appl. 43 1–22. MR2501042
+BERTSIMAS, D. and WEISMANTEL, R. (2005). Optimization Over Integers. Dynamic Ideas, Belmont.
+BICKEL, P. J., RITOV, Y. and TSYBAKOV, A. B. (2009). Simultaneous analysis of lasso and Dantzig selector. Ann. Statist. 37 1705–1732. MR2533469
+BIENSTOCK, D. (1996). Computational study of a family of mixed-integer quadratic programming problems. Math. Programming 74 121–140. MR1406746
+BIXBY, R. E. (2012). A brief history of linear and mixed-integer programming computation. Doc. Math. Extra Volume: Optimization Stories 107–121. MR2991475
+BLUMENSATH, T. and DAVIES, M. E. (2008). Iterative thresholding for sparse approximations. J. Fourier Anal. Appl. 14 629–654. MR2461601
+BLUMENSATH, T. and DAVIES, M. E. (2009). Iterative hard thresholding for compressed sensing. Appl. Comput. Harmon. Anal. 27 265–274. MR2559726
+BÜHLMANN, P. and VAN DE GEER, S. (2011). Statistics for High-Dimensional Data: Methods, Theory and Applications. Springer Series in Statistics. Springer, Heidelberg. MR2807761
+BUNEA, F., TSYBAKOV, A. B. and WEGKAMP, M. H. (2007). Aggregation for Gaussian regression. Ann. Statist. 35 1674–1697. MR2351101
+CANDÈS, E. J. (2008). The restricted isometry property and its implications for compressed sensing. C. R. Math. Acad. Sci. Paris 346 589–592. MR2412803
+CANDÈS, E. J. and PLAN, Y. (2009). Near-ideal model selection by 1 minimization. Ann. Statist. 37 2145–2177. MR2543688
+CANDES, E. J. and TAO, T. (2006). Near-optimal signal recovery from random projections: Universal encoding strategies? IEEE Trans. Inform. Theory 52 5406–5425. MR2300700
+CANDÈS, E. J., WAKIN, M. B. and BOYD, S. P. (2008). Enhancing sparsity by reweighted l1 minimization. J. Fourier Anal. Appl. 14 877–905. MR2461611
+CHEN, S. S., DONOHO, D. L. and SAUNDERS, M. A. (1998). Atomic decomposition by basis pursuit. SIAM J. Sci. Comput. 20 33–61. MR1639094
+DETTLING, M. (2004). Bagboosting for tumor classiﬁcation with gene expression data. Bioinformatics 20 3583–3593.
+DONOHO, D. L. (2006). For most large underdetermined systems of linear equations the minimal l1-norm solution is also the sparsest solution. Comm. Pure Appl. Math. 59 797–829. MR2217606
+DONOHO, D. L. and ELAD, M. (2003). Optimally sparse representation in general (nonorthogonal) dictionaries via l1 minimization. Proc. Natl. Acad. Sci. USA 100 2197–2202 (electronic). MR1963681
+DONOHO, D. L. and HUO, X. (2001). Uncertainty principles and ideal atomic decomposition. IEEE Trans. Inform. Theory 47 2845–2862. MR1872845
+DONOHO, D. L. and JOHNSTONE, I. M. (1994). Ideal spatial adaptation by wavelet shrinkage. Biometrika 81 425–455. MR1311089
+EFRON, B., HASTIE, T., JOHNSTONE, I. and TIBSHIRANI, R. (2004). Least angle regression. Ann. Statist. 32 407–499. MR2060166
+FAN, J. and LI, R. (2001). Variable selection via nonconcave penalized likelihood and its oracle properties. J. Amer. Statist. Assoc. 96 1348–1360. MR1946581
+
+BEST SUBSET SELECTION VIA A MODERN OPTIMIZATION LENS
+
+851
+
+FAN, J. and LV, J. (2011). Nonconcave penalized likelihood with NP-dimensionality. IEEE Trans. Inform. Theory 57 5467–5484. MR2849368
+FAN, Y. and LV, J. (2013). Asymptotic equivalence of regularization methods in thresholded parameter space. J. Amer. Statist. Assoc. 108 1044–1061. MR3174683
+FRANK, I. and FRIEDMAN, J. (1993). A statistical view of some chemometrics regression tools (with discussion). Technometrics 35 109–148.
+FRIEDMAN, J. (2008). Fast sparse regression and classiﬁcation. Technical report, Dept. Statistics, Stanford Univ., Stanford, CA.
+FRIEDMAN, J., HASTIE, T., HÖFLING, H. and TIBSHIRANI, R. (2007). Pathwise coordinate optimization. Ann. Appl. Stat. 1 302–332. MR2415737
+FURNIVAL, G. and WILSON, R. (1974). Regression by leaps and bounds. Technometrics 16 499– 511.
+GREENSHTEIN, E. (2006). Best subset selection, persistence in high-dimensional statistical learning and optimization under l1 constraint. Ann. Statist. 34 2367–2386. MR2291503
+GREENSHTEIN, E. and RITOV, Y. (2004). Persistence in high-dimensional linear predictor selection and the virtue of overparametrization. Bernoulli 10 971–988. MR2108039
+GUROBI, I. (2013). Optimization. Gurobi optimizer reference manual. Available at http://www. gurobi.com.
+HASTIE, T., TIBSHIRANI, R. and FRIEDMAN, J. (2009). The Elements of Statistical Learning: Data Mining, Inference, and Prediction, 2nd ed. Springer Series in Statistics. Springer, New York. MR2722294
+KNIGHT, K. and FU, W. (2000). Asymptotics for lasso-type estimators. Ann. Statist. 28 1356–1378. MR1805787
+LOH, P.-L. and WAINWRIGHT, M. (2013). Regularized M-estimators with nonconvexity: Statistical and algorithmic theory for local optima. In Advances in Neural Information Processing Systems 476–484. Curran Associates, Red Hook, NY.
+LV, J. and FAN, Y. (2009). A uniﬁed approach to model selection and sparse recovery using regularized least squares. Ann. Statist. 37 3498–3528. MR2549567
+MAZUMDER, R., FRIEDMAN, J. H. and HASTIE, T. (2011). SparseNet: Coordinate descent with nonconvex penalties. J. Amer. Statist. Assoc. 106 1125–1138. MR2894769
+MEINSHAUSEN, N. and BÜHLMANN, P. (2006). High-dimensional graphs and variable selection with the lasso. Ann. Statist. 34 1436–1462. MR2278363
+MILLER, A. (2002). Subset Selection in Regression, 2nd ed. Monographs on Statistics and Applied Probability 95. Chapman & Hall/CRC, Boca Raton, FL. MR2001193
+NATARAJAN, B. K. (1995). Sparse approximate solutions to linear systems. SIAM J. Comput. 24 227–234. MR1320206
+NEMHAUSER, G. (2013). Integer programming: The global impact. 2013–12–2013–04, Rome, Italy. Presented at EURO, INFORMS, Accessed. Available at https://smartech.gatech.edu/handle/1853/ 49829.
+NESTEROV, Y. (2004). Introductory Lectures on Convex Optimization: A Basic Course. Applied Optimization 87. Kluwer Academic, Boston, MA. MR2142598
+NESTEROV, YU. (2005). Smooth minimization of non-smooth functions. Math. Program. 103 127– 152. MR2166537
+NESTEROV, YU. (2013). Gradient methods for minimizing composite functions. Math. Program. 140 125–161. MR3071865
+OPTIMIZATION INC. (2015). Gurobi 6.0 performance benchmarks. Available at http://www.gurobi. com/pdfs/benchmarks.pdf. Accessed 5 September 2015.
+RASKUTTI, G., WAINWRIGHT, M. J. and YU, B. (2011). Minimax rates of estimation for high-dimensional linear regression over q -balls. IEEE Trans. Inform. Theory 57 6976–6994. MR2882274
+
+852
+
+D. BERTSIMAS, A. KING AND R. MAZUMDER
+
+SHEN, X., PAN, W., ZHU, Y. and ZHOU, H. (2013). On constrained and regularized highdimensional regression. Ann. Inst. Statist. Math. 65 807–832. MR3105798
+TIBSHIRANI, R. (1996). Regression shrinkage and selection via the lasso. J. Roy. Statist. Soc. Ser. B 58 267–288. MR1379242
+TIBSHIRANI, R. (2011). Regression shrinkage and selection via the lasso: A retrospective. J. R. Stat. Soc. Ser. B Stat. Methodol. 73 273–282. MR2815776
+TOP500 SUPERCOMPUTER SITES (2015). Directory page for Top500 lists. In Result for each list since June 1993. Accessed: 09-15-2015. Available at http://www.top500.org/statistics/sublist/.
+TROPP, J. A. (2006). Just relax: Convex programming methods for identifying sparse signals in noise. IEEE Trans. Inform. Theory 52 1030–1051. MR2238069
+VAN DE GEER, S., BÜHLMANN, P. and ZHOU, S. (2011). The adaptive and the thresholded Lasso for potentially misspeciﬁed models (and a lower bound for the Lasso). Electron. J. Stat. 5 688– 749. MR2820636
+WAINWRIGHT, M. J. (2009). Sharp thresholds for high-dimensional and noisy sparsity recovery using 1-constrained quadratic programming (Lasso). IEEE Trans. Inform. Theory 55 2183–2202. MR2729873
+ZHANG, C.-H. (2010a). Nearly unbiased variable selection under minimax concave penalty. Ann. Statist. 38 894–942. MR2604701
+ZHANG, T. (2010b). Analysis of multi-stage convex relaxation for sparse regularization. J. Mach. Learn. Res. 11 1081–1107. MR2629825
+ZHANG, C.-H. and HUANG, J. (2008). The sparsity and bias of the LASSO selection in highdimensional linear regression. Ann. Statist. 36 1567–1594. MR2435448
+ZHANG, Y., WAINWRIGHT, M. and JORDAN, M. I. (2014). Lower bounds on the performance of polynomial-time algorithms for sparse linear regression. Preprint. Available at arXiv:1402.1918.
+ZHANG, C.-H. and ZHANG, T. (2012). A general theory of concave regularization for highdimensional sparse estimation problems. Statist. Sci. 27 576–593. MR3025135
+ZHAO, P. and YU, B. (2006). On model selection consistency of Lasso. J. Mach. Learn. Res. 7 2541–2563. MR2274449
+ZHENG, Z., FAN, Y. and LV, J. (2014). High dimensional thresholded regression and shrinkage effect. J. R. Stat. Soc. Ser. B. Stat. Methodol. 76 627–649. MR3210731
+ZOU, H. (2006). The adaptive lasso and its oracle properties. J. Amer. Statist. Assoc. 101 1418–1429. MR2279469
+ZOU, H. and LI, R. (2008). One-step sparse estimates in nonconcave penalized likelihood models. Ann. Statist. 36 1509–1533. MR2435443
+
+D. BERTSIMAS R. MAZUMDER MIT SLOAN SCHOOL OF MANAGEMENT
+AND OPERATIONS RESEARCH CENTER MASSACHUSETTS INSTITUTE OF TECHNOLOGY CAMBRIDGE, MASSACHUSETTS USA E-MAIL: dbertsim@mit.edu
+rahulmaz@mit.edu
+
+A. KING OPERATIONS RESEARCH CENTER MASSACHUSETTS INSTITUTE OF TECHNOLOGY CAMBRIDGE, MASSACHUSETTS USA E-MAIL: aking10@mit.edu
+

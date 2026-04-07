@@ -1,0 +1,736 @@
+Approximate
+
+Nearest Neighbors: Towards Removing the Curse of Dimensionality
+
+PIOTR
+
+INDYK*
+
+RAJEEV MoTwd
+
+Department of Computer Science
+
+Stanford University
+
+Stanford, CA 94305
+
+{indyk,rajeev}Qcs.stanford.edu
+
+Abstract
+The nearest neighbor problem is the follolving: Given a set of n points P = (PI, . . . ,p,} in some metric space X, preprocess P so as to efficiently answer queries which require finding bhe point in P closest to a query point q E X. We focus on the particularly interesting case of the d-dimensional Euclidean space where X = Wd under some Zp norm. Despite decades of effort, t,he current solutions are far from saabisfactory; in fact, for large d, in theory or in practice, they provide litt,le improvement over the brute-force algorithm which compares the query point to each data point. Of late, t,here has been some interest in the approximate newest neighbors problem, which is: Find a point p E P that is an c-approximate nearest neighbor of the query q in t,hat for all p’ E P, d(p, q) < (1 + e)d(p’, q).
+We present two algorithmic results for the approximate version t,hat significantly improve the known bounds: (a) preprocessing cost polynomial in n and d, and a truly sublinear query t.ime (for 6 > 1); and, (b) query time polynomial in log-n and d, and only a mildly exponential preprocessing cost* O(n) x 0(1/~)~. Furt.her, applying a classical geometric lemma on random projections (for which we give a simpler proof), we obtain t.he first known algorithm with polynomial preprocessing and query t.ime polynomial in d and log n. Unfortunately, for small E, the latter is a purely theoretical result since bhe e?rponent depends on l/e. Experimental resuits indicate that our tit algori&m offers orders of magnitude improvement on running times over real data sets. Its key ingredient is the notion of locality-sensitive hashing which may be of independent interest; here, we give applications to information ret,rieval, pattern recognition, dynamic closest-pairs, and fast clustering algorithms.
+*Supported by a Stanford Graduate Fellowship and NSF
+
+1 Introduction
+The nearest neighbor search (NNS) problem ix Given a set of n points P = (PI, . . . ,p,) in a metric space .Y wit,h distance function d, preprocess P so as to efficiently auswcr queries for finding the point in P closest to a query point q E X. We focus on the particularly interesting case of the d-dimensional Euclidean space where X = Bd under some a, norm. The low-dimensional case is well-solved [26], so t,hc main issue is that of dealing with the ‘,curse of dimcnsionality” [16]. The problem was originally posed in t.he 1960s by Minsky and Papert [53, pp. 222-2251, and despite decades of effort the current solutions are far from satisfactory. In fact, for large d, in theory or in practice, they provide little improvement over a brute-force algorithm which composes a query q to each p E P. The known algorithms are of two types: (a) low preprocessing cost but query time linear in n and d; and, (b) query time sublinear in n and polynomial in d, but with severely exponential preproceeging cozt nd. This unfortunate situation carries over to average-tax analysis, and even to the c-approximate nearest neighbors (e-NNS) problem: Find a point p E P t,hnt is an e-approximate nearest neighbor of the query g, in t.hot for
+au P’ E P, 4h q) I (1 + +W, 9).
+We present two algorithms for the approsimoto vemion that significantly improve the known bounds: (a) prcprocessing cost polynomial in n and d, and a truly nublinear query time (for B > 1); and, (b) query time polynomial in log n and d, and only a mildly exponential preprocessing cozt O(n) x 0(1/~)~. tither, by applying a classical geomet,ric lemma on random projections (for which we give a eimplcr proof), we obtain the first known algorithm with polynomial preprocessing and query time polynomial in d and log n. Unfortunately, for small E, this is a purely theoretical result as the exponent depends on l/e. Experimental results [36] indicate that the first algorithm offers orders of magnitude improvement on running times over real data sets. Ito key ingredient is the notion of locality-sensitive hashing which may be of independent interest; we give applications to information retrieval, pattern recognition, dynamic closest-pairs, and fast clustering.
+Motivation. The nearest neighbors problem is of major importance to a variety of applicat,ions, usually involving
+
+604
+
+similarity searching. Some examples are: data compresslon [3G]; databases and data mining [12, 381; information retrieval [lo, 20, 571; image and video databases [28, 30, 55, 601; machine learning [18]; pattern recognition [19, 251; and, statistics nnd data analysis [21,44]. Typically, the features of the objects of interest (documents, images, etc) are rcprescntcd as points in 81dand a distance metric is used to measure (die)oimilarity of objects, The basic problem then is to perform indexing or similarity searching for query objects, The number of features (i.e., the dimensionality) rangcn anywhere from tens to thousands. For example, in multimedia applications such as IBM’s QBIC (Query by Image Content), the number of features could be several hundreds [28, 301. In information retrieval for text documents, vector-space representations involve several thousands of dimensions, and it is considered to be a dramatic improvement that dimension-reduction techniques, such as LSI (latent semantic indexing) [8, 10, 201, principal components analyoio [39] or the Karhunen-Lo&e transform [43,49], can reduce the dimenoionality to a mere few hundreds!
+Of late, there has been an increasing interest in avoiding the curse of dimensionality by resorting to approsimatenearcot nciglbor scorching:. Since the selection of features and the use of a distance metric in the applications are rather heuristic and merely an attempt to make mathematically precise what is after all an essentially aesthetic notion of similarity, it seemslike an overkill to insist on the absolute nearest neighbor; in fact, determining an c-approximate nearest nclghbor for a reasonable value of c, say a small constant, should suflicc for most practical purposes. Unfortunately, oven this relaxation of goals has not removed the curse of dimcnsionality, although the recent results of Kleinberg [45] given some improvements.
+
+Prcvlouo Work. Samet [58] surveys a variety of data struc-
+
+turca for nearest neighbors including variants of I;-d trees,
+
+R-trees, nnd structures based on space-filling curves; more
+
+recent results are surveyed in [59]. While some perform well
+
+in 2-3 dimensions, in high-dimensional spaces they all ex-
+
+hibit poor behavior in the worst case and in typical cases
+
+1w1well (c,g., ace Arya, Mount, and Narayan [3]). Dobkin
+
+and Lipton [22] were the first to provide an algorithm for
+
+nearcot neighbors in f.Rd,with query time 0(2dlogn) and
+
+* 1
+
++tl Clarkson [15] reduced the
+
+g~$~~~~~~~~ t~~\n~‘~l(r+ 1i), while increasing the query
+
+time to 0(2 o(d’ogd,log n). Later results, e.g., Agarwal and
+
+MatouiSck [l], Matoudek [50], and Yao and Yao [64], all suffer
+
+from a query time that is exponential in d. Meiser [Sl] ob-
+
+tnincd query time O(d” log n) but after O(ndtd) preprocess-
+
+ing, The so-called “vantage point” technique [ll, 12,61,62]
+
+is n recently popular heuristic, but we are not aware of
+
+nny nnalyais for high-dimensional Euclidean spaces. In gen-
+
+cml, even the average-case analysis of heuristic5 for points
+
+diotributcd over regions in !Xd gives an exponential query
+
+time [6, 34, 581.
+
+The situation is only slightly better for approximate nearcat neighbors, Arya and Mount [2] gave an algorithm with
+
+lThroughout, preprocessing cost refers to the space requirement; typically, the preprocessing time is roughly the same.
+
+query time O(l/c)dO(log n) and preprocessing O(l/e)dO(n). The dependence on c was later reduced by Clarkson [16] and Ghan [14] to c-td-r)12. Arya, Mount, Netanyahu, Silverman, and Wu [4] obtained optimal O(n) preprocessing cost, but with query time growing as O(dd). Bern [7] and Chan [14] considered error c polynomial in d and managed to avoid exponential dependence in that case. Recently, Kleinberg [45] gave an algorithm with o(n log d)2d preprocessing and query time polynomial in d, c, and log n, and another algorithm with preprocessing polynomial in d, c, and n but with query time O(n + dlog3 n). The latter improves the O(dn) time bound of the brute-force algorithm.
+For the Ramming space (0, l}d, Dolev, Harari, and Parnas [24] and Dolev, Harari, Liial, Nisan, and Parnas [23] gave algorithm5 for retrieving all point5 within distance r of the query q. Unfortunately, for arbitrary P, these algorithms are exponential either in query time or preprocessing. Greene, Parnas, and Yao [37] present a scheme which, for binary data chosen uniformly at random, retrieves all points within distance r of q in time O(dn’ld), using O(dnltrld) preprocessing.
+Very recently, Kushilevitz, OstrovsLy and Rabani [46] obtained a result similar to Proposition 3 below.
+Overview of Results and Techniques. Our main results are algorithms2 for c-NNS described below.3
+Proposition 1 Fore > 1, there is an algorithm for r-NNS
+in !Rd under thel, norm forp E [l, 21 which uses d(n’+‘lc+ dn) preprocessing and requires b(dn’/‘) query time.
+Proposition 2 For 0 < c < 1, there is an algorithm for e-NNS in 8’ under any I,, “prm which uses 8(n) x 0(1/~)~ preprocessing and requires O(d) query time.
+Proposition 3 For any r > 0, there is an algorithm for e-NNS in 92’ under the Z, norm for p E [l, 21 ulhich uses (nd)‘(‘) preprocessing and requires 6(d) query time.
+We obtain these results by reducing c-NNS to a new problem, viz., point location in equal balls. This is achieved by means of a novel data structure called ring-cover trees, described in Section 3. Our technique can be viewed as a variant of parametric search [52], in that they allow us to reduce an optimization problem to its decision version. The main difference is that in our case in answering a query we can only ask for a solution to a decision problem belonging to a prespecilled set, since solving the decision problem (i.e., point location in equal balls) requires data structures created during preprocessing. We believe this technique will find further applications to problems where parametric search has been helpful.
+In Section 4, we give two solution5 to the point location problem. One is based on a method akin to the Rlias bucketing &or-i&m [63] - we decompose each ball into a
+20~r al&orithms are randomized and return an approsimate nearest neighbor wifh constant probability. To reduce the error probability to a, we can use several datastructuresin paralleland return the best result, increasing complexity by a factor O(loga),
+3For the sake of clarity, the 6 notation is used to hide terms that are poly-logarithmic in n.
+
+605
+
+bounded number of cells ed store them in a dictionary. This allows us to achieve O(d) query t.ime, while the preprocessing is e?rponentiaI in d, implying Proposition 2. For the second solution, we introduce the technique of localitysensitive hashing. The key idea is to use hash functions such that. the probability of collision is much higher for objects that are close to each other than for those that are far apart. We prove that esisbence of such functions for any domain (not necessarily a metric space) implies the existence of fast C-NNS algorit,hms for t,hat domain, with preprocessing cost only linear in d and sublinear in n (for e > 1). We then present. two families of such functions - one for a Hamming space and the ot,her for a family of subsets of a set under the resemblance measure used by Broder et al [9] to cluster web documents. The algorithm based on the first family is used to obtain a nearest-neighbor algorithm for data sets from Xd, by embedding the points from Zd onto a Hamming cube in a distance-preserving manner. The algorithm for the resemblance measure is shown to have several applications to information retrieval and pat,tern recognition. We also give additional applications of locality-sensitive hashing to dynamic closest-pair problem and fast clustering algorithms. All our algorithms based on this method are easy to implement and have ot,her advantages - they exploit sparsity of data and the running times are much lower in practice [36] than predicted by t,heoret,ical analysis. We esTect these results mill have a significant practical impact.
+An elegant. technique for reducing complexity owing to dimensionality is to project the points into a random subspace of lower dimension, e.g., by project.ing P onto a small collection of random lines through the origin. Specifically, we could employ hhe result, of Frankl and Maehara [32], which improves upon bheJohnson-Lindenstrauss Lemma [41], showing t,hat a projection of P onto a subspace defined by roughly 9cm-2In n random lines preserves all inter-point distames to &hin a relative error of e, 1vivit.high probability. Applying this result to an algorithm wit.h querytime o(l)d,
+we obtain an algorit.hm with query time nse . Unfortunately, this would lead to a sublinear query time only for large values of E. In Se&ion A of the Appendix, we give a version of the random projection result using a much simpler proof t,han that of l+ankl and Maehara. We also consider the extensions of the random projection approach to a, norms for p # 2. Using random projecbions and ProposiGon 2, we obtain the algorithm described in Proposition 3. Unfortunately, the high preprocessing cost (its exponent grows with l/e) makes this algorithm impractical for small e.
+2 Preliminaries
+We use 2; to denote t,he space Zd under the 1, norm. For at-w point u f Xd we denote by IIGIIp the a, norm of the vector v’; we omit’the subscript when p = 2. Also, Hd = ((0, l}d,d~) mill denote the Hamming metric space of dimension d. Let M = (S,d) be any metric space, P c S, and p E S. We will employ bhe following notation: d(p, P) = mine d(p, q), and A(P) = maxp,qEPd@,q) is the diameter of P,
+
+Definition 1 The ball of radius r centered at p is defined as B(P, r) = {q E X I d(p, q) 5 r}. The ring R(p, rl, rz) centeredatp is definedas R(p, rl, r2) = B(p, rs)-B(p, rl) =
+
+hEXIr1
+
+Id(p,q)5r2}.
+
+Let &f(r) denote th e volume of a ball of radius r in 1;. The following fact is standard [56, page 111.
+
+Fact 1 Let I’(.) denote the gamma function. Then k$(r) =
+
+(2r(1 + lh)drd and Vz”(,.) - 2nd12 r d.
+
+V + n/p)
+
+dWl2)
+
+3 Reduction to Point Location in Equal Balls
+
+The key idea is to reduce the e-NNS to the following problems of point location in equal balls.
+Deflnition 2 (Point Location in Equal Balls (PLEB)) Given n radius-r balls centered at G = (cl,, . . , c,) in M = (X,d), devise a data structure which for any query point q E X does the following: if there exists ci E G such tlrat q E B(ci, r) then return ci, else return NO.
+Definition 3 (e-Point Location in Equal Balls (r-PLEB)) Given n radius-r balls centered at C = (cl, , . . , cn} in M = (X,d), devise a data structure which for any query point q E X does the following:
+l if there exists ci E C with q E B(ci, r) then return YES and a point c: such that q E B(c:, (1 + c)r),
+l if q # B(ci, (l-l- r)r) for all C, E C then return NO,
+l if for the point c; closest to q we have r < d(q, ci) 2 ((1 + e)r) then return either YES or NO.
+Observe that PLEB (e-PLEB) can be reduced to NNS (e-NNS), with the same preprocessing and query costs, ns follows: it suffices to find an exact (e-approximate) nearest neighbor and then compare its diskwe from q with r. The main point of this section is to show bhat there is a rcduct,ion in reversefrom e-NNS to e-PLEB, with only a small overhead in preprocessing and query costs. This reduct,ion relies on a dat,a structure called a ring-cover tree. This structure exploits the fact that for any point set P, we can eit,hcr find a ring-separator or a cover. Either construct allows us to decompose P into smaller sebs Sl, . . . , St such t,hat for dl i, ISil < cIPI for some c < 1, and xi ISil $ LIPI for b < 1 f l/log’ n. This decomposition has t,he property t,hnt while searching P it is possible to quickly restrict t,he search to one of the sets S,.
+There is a simpler but much weaker reduction from CNN to GPLEB. Let R be the ratio of the smallest and t.hc largest inter-point distances in P. For each 1 E {l+c)‘, (l+ e)l,..., R}, generate a sequenceof balls B’ = {Bi, . . . , Bf} of radius 1centered at p1 , . . . ,pn . Each sequenceB’ form8 an in&axe of PLEB. Then, given query q, we find via binary search the minimal I for which there exists an i such t,hnt q E B,! and return pi as an approximate nearest neighbor. The overall reduction parameters are: query time overhead factor O(loglog R) and space overhead factor O(log R), The simplicity of this reduction is very useful in practice. On t,he
+
+606
+
+other hnd, the O(log R) space overhead is unacceptable when R is large; in general, R may be unbounded. In the final vcmion, WCwill show that by using a variation of this method, storage can be reduced to O(n2 log n), which still does not give the desired O(l/e)d6(n) bound.
+
+Doflnltion 4 A ring R(p, t-1,r2) is an (al, as,@)-ring separator for P if IP rl B(p, rl)[ > a:[Pl and IP \ B(p, f2)I 2 a2lPl, where r2/rl = j3.
+
+Daflnltion C A set S c P is a (r,b)-cluster for P iffor
+cuwPES,lp nB(Pr,W%l 5 WI-
+
+Dafinition 0 A sequenceAl,, . . , Al of setsAi C P is called a (t, o,d)-cover for S c P, if there esists an r 2 dA(A) for A=U,Ar suchthatSCA andfori=l,...,I,
+
+l IP n (QA~%,
+
+r))l 2 Wilt
+
+. IAil5 @lo
+
+Thaoram 1 For any P, 0 < a < 1, and/3 > 1, one of the jollowing two properties must hold:
+1, P ho an (a,cr,/3)-ring separator, or
+
+2. P contains u ($, a)-cluster of size at feast (l-2a)lPI.
+
+Proof Sketch: First note that for a > l/2, property (1) must be false but then property (2) is trivially true. In general, assume that (1) does not hold. Then, for any point p nnd radius r d&me:
+
+l f7^3(r=) Ip - BhPr)l, l fj(r) = IPn%, r)l.
+
+Clearly, f?(O) = n, f?(m) = 0, f:(O) = 0, and j:(m) = n. Alno, notice that f?(r) is monotonically decreasing and f;(r) ia monotonically increasing. It follows that there must cxiot a choice of r (say rp) such that fF(rp) = $!(r,). Since (1) does not hold, for any value of r tve must have mW,blir), f~,“(r)) I an, which implies that f,“(rp) = fi(rp) 5 ffn,
+
+Let (I be a point such that rp is minimal. Define S =
+
+P II R(q, r,,fir,); it follows that ISI >, (1 - 2a)n. Also,
+
+noticc that for any 3,s’ E S, d(a,s’) 5 2pr,, implying that
+
+A(S) < 2@r,. Finally, for any s E S, IP n B(s,r,)l 5
+
+IP n B(8,rs)l 5 an.
+
+n
+
+Thaoram 2 Let S be a (r, 6)-cluster for P. Then for any
+
+0, tlrcre is an algorithm which produces a sequenceof sets
+
+AI, , , , , A/, C P constituting a (b, 6, hi)-couerfor
+
+S.
+
+Proof Sketch:
+The algorithm below greedily computes a good cover for S,
+Algorithm Cover: S = P n R(q, rq,/3rq); r+e;jcO; rapollt
+j t j + 1; choose somepj E S; B: t (pj}; i f- 1;
+
+while IP n uqEBtB(q, r)I > blB$ do B3t+l c knu acq W7,r);
+iti+l endwhile; AjtBj;S+S-Aj;P+P-Aj until S = 4; hi-j.
+In order to prove the correctness of the algorithm, it suffices to make the following four claims.
+.ScA = UjAj - Follows from the termination condition of the outer loop.
+0 foraUjE {I,..., h) and my P E S, IPn%EAjB(P, r)I 5 blAj I - Follows from the termination condition of the inner loop.
+l for all j E (1, . . . , I;}, IAjl 5 SIPI - Clearly, for any j, the inner loop is repeated at most 10g~n times. Hence, maxq&Q d(pj, q) < r log, n 5 rA(S). As S is a (y, @cluster, we have that IB(p,, yA(S)) n PI 2 SIPI. Hence, IAjl 5 alPI.
+or< - 0+r&fqb r.8- Since A(A) 5 A(S) + rlog, n = A(S) f yA(S) = (l+ y)A(S).
+Corollary 1 For any P, 0 < a < 1, j3 > 1, b > 1, one of the following properties must hold:
+I. P hos an (a,a,&ring separator R(p, r,Pr), or
+2. There is a (b,a,d)-cower for some S c P such that
+PI 2 (I- Wn andd= 12p+1;l,o,.gb
+3.1 Constructing Ring-Cover Trees
+The construction of a ring-cover tree is recursive. For any given P at the root, we use properties (1) and (2) in Coroliary 1 to decompose P into some smaller set; Sl, . . . , SI; these sets are assigned to the children of the node for P. Note the base case case is when P is sticiently small and we omit that in this abstract. We also store some additional information at the node for P which enables us to restrict the nearest neighbor search to one of the children of P, by using distance computations or point location queries. For simplicity, assume that we can invoke an exact PLEB (not e-PLEB); th e construction can be easily modified for approximate point location. There are two cases depending on which of the two properties (1) and (2) holds. Let P=2(1+f),b=&,anda=w.
+Case 1. In this case,we will call P a ring node. We define its children to be & = P n B(p,pr) and S2 = P B(p, r). Also, we store the information about the ring separator R at the node P.
+Case 2. Here, we call P a cover node. We define Si = P n Up~~;B@, r) and SO = S - A. The information stored at P is as follows. Let ro = (1 + l/e)A(A)
+
+607
+
+and let ri = r~/(l+e)~ for i E {l,...,k}, where L =
+logI+, I’+l’c”ogan + 1. Notice that rk = r. For ea& r,, generate an instance l% B(p, ri) for p E A; all instances are stored at P.
+
+We now describe how to efficiently search a ring-cover tree. It suffices to show t,hat for any node P we can restrict the search to one of its children using a small number of tests. Let min&,p’) denote t.he point out of p and p’ that is closer to q. The search procedure is as follows; we omit the obvious base case.
+
+Procedure Search:
+
+1. if P is a ring node with an (“,a,@-ring R@, r, /3r) then:
+
+separator
+
+(a) ifq E B(p, r(l+l/e)) then return Search(q, Sl); (b) else compute p’ = Search(q, Sz); return min,@, p’).
+
+2. if P is a cover node with a (b, c, &)-cover Al,. . . , Al of radius r for S c P then:
+(a) if q $ B(a, ro) then for all a E A then compute P = Search(q, P - A), choose any a E A, and return min,(p, a);
+(b) else if q E B(a,ro) for some a E A but q 4 B(a’, rl;) for all a’ E A then using binary search on r*s, find an e-NN p of q in A, compute p’ = Search(g, P - A), and return min,(p,p’);
+(c) else if q E B(a, rk) for some a E Ai then return Search(g, Si).
+
+3.2 Analysis of Ring-Cover Trees
+
+We begin bhe analysis of the ring-cover tree construction by establishing the validity of t,he search procedure.
+
+Lemma 1 Procedure Search(q, P) produce8 an e-nearest neighbor for q in P.
+
+Proof Sketch: Consider t.he two cases:
+
+1. P is a ring node.
+
+(a) Consider any Y E P-So. Then d(8,p) 5 d(s, q)+
+4w4, impl@x that. W 4 2 d(8,~) - d(q, p). Since Y 4 SI, we know that d(s,p) 2 pr = 2(1+ l/e)r, while d(p,q) 5 r(l + l/e). Then, d(s,q) 2
+Cl+ l/e)r 1 d(w).
+
+(b) For an3’ 8 E B(P, r), d(q,p) 5 d(q, 8) +d(s,p), im-
+
+pkng aat d(q, $1 2 d(q, p) - 48, p) I d(q, p) - r.
+
+It follows that s 5 $$& = 1 + e
+
+5
+
+1+e.
+
+2. P is a cover node. (a) Similar to Case l(b), (b) Obvious. (c) For any p E P - S,, d(p,a) 2 r. Since q E B(a, rk), we have d(q,a) 5 rl; = & 5 $$$. w
+
+The proofs of Lemmas 2 and 3 are omitted.
+
+Lemma 2 The depth of a ring-cover O(log2 n).
+
+tree is 0(10g,~~, n) =
+
+Lemma 3 Procedure Search requires O(10g2 n x log/~) distance computations or PLEB queries.
+
+Lemma 4 A ring-cover tree requires space at most O(hnb “gll~~ “(1+2(1-2~))‘“~“) = O(npolylog n) not counting the additional non-data storage used by algorithms implementing PLEBs.
+
+Proof Sketch: Let S(n) be an upper bound on the space requirement for a ring-cover t.ree for point-set P of size n. Then for a cover node:
+
+S(n) 5 mau
+
+mas
+
+1 A~...A,, A, disjoint, IA,I~wI,
+
+[Al>(l-2a)n
+
+[k S(blAiI)] i-1
+
++ S(n - IAl) -I- IAlbl;
+
+For a ring node:
+
+S(n) 5 25(:(1+2(1-
+
+24)) + 1
+
+The bound follows by solving this recurrence.
+
+II
+
+Corollary 2 Given an algorithm for PLEB which uws f (n) space on an instance of size n where f(n) is convex, a ringcover tree for an n-point set P requires total space
+
+O(f (npobk
+
+n)) -
+
+Fact 2 For any PLEB instance (C,r) generated by a ring-
+
+cover tree, y=O(Tlogbn).
+
+4 Point Location in Equal Balls
+We present two techniques for solving the e-PLEB problem. The first is based on a method similar to the Ella3 bucketing algorithm [63] and works for any 1, norm, establishing Proposibion 2. The second uses localitpscnsitivc hashing and applies directly only to Hamming spaces (thin bears some similarity to the indexing technique inbroduced by Greene, Parnas, and Yao [37] and the algorithm for allpairs vector intersection of Karp, Waarts, and Zwcig [<17], although the technical development is very different). However, by exploiting Facts 2 and 6 (Appendix A), t,he instances of +PLEB generated while solving c-NN for If can bc reduced to e-PLEB in H”‘, where on = dlog‘n >:mnx(l/e, e). Also, by Fact 5 (Appendix A), we can reduce 1: to lF(d) for any p E [l, 23. Hence, locality-sensitive hashing can be used for any Z,,norm where p E [1,2], establishing ProposXon 1. It can also be used for the set resemblance measure wed by Broder et al [Q] to cluster web documents. We assume, without loss of generality, that all balls are of radius 1.
+
+608
+
+4,l The Bucketing Method
+
+Asnumc for now that p = 2. Impose a uniform grid of spaclng n = c/d on Rd. Clearly, the distance between any two points belonging to one grid cuboid is at most e. By Fact 2, each aide of the smallest cuboid containing balls from C is of length at most O(fllog, n max(l/c,e)) times the sidelength of a grid cell, For each ball Bi, define z; to be the act of grid cells intersecting Bi. Store all elements from Ud& in a hash table [33,54], together with the information about the corresponding ball(s). (We can use hashing since by the preceding discussion the universe is of bounded size.) After preprocessing, to answer a query q it suffices to compute the cell which contains q and check if it is stored in the table.
+We claim that for 0 < e < 1, IDI = O(~/C)~. To see this, observe that IEil is bounded by the volume of a ddimcnsjonal ball of radius r = 2/c&, which by Fact 1 is 2°(d)rd/dd/z C O(l/e)d. Hence, the total space required is O(n) x O(l/er;d. The query time is the time to compute the hnrlh function. We use hash functions of the form:
+
+WQ, I. e ,Sd)) = (Wl + . . . +adzd
+
+mod P) mod &f
+
+where P ia a prime, M is the hash table size, and al,. . . , ad E 2), This family gives a static dictionary with O(1) access time [33], The hash functions can be evaluated using O(d) arithmetic operations. For general 1, norms, we modify s to 4 ‘/P, The bound on JBj applies unchanged.
+
+Thoorom 3 For 0 < e < 1, there is an algorithm for cPLEB in 1; using O(n) x O(l/c~)~ preprocessing and O(1) ovaluationa of a hash function for each query.
+
+4,2 Locality-Sensitive Hashing
+We introduce the notion of locality-sensitive hashingand apply it to aublincar-time similarity searching. The definition makcano assumptions about the object similarity measure. In fact, it is npplicnble to both similarity and dissimilarity mcasuren; nn example of the former is dot product, while any distance metric is an instance of the latter. To unify notation, wc defme a ball for a similarity measure D as B(q,r) =: (r, : D(q,p) 2 r}. We also generalize the notion of e-PLEB to (ri , rz)-PLEB where for any query point (I we requiro the answer to be YES if P tl B(q, rz) # 0 and NO otherwise.
+Daflnitlon 7 A family31 = {h : S + (I} is called(rl,rz,pl,pz)acnsitivc for D if for anyq,p,p' ES
+l if p E B(q, r1) then b[h(q) = h(p)1 2 PI!
+0 if p $ B(q, rz) then h&(q) = W)] I ~2.
+In order for a locality-sensitive family to be useful, it has to satisfy inequalities p1 > pz and rl C r2 when D is a dinsimilarity measure, or PI > M and r1 > r2 when D is a oimilnrity measure.
+For 1~opccified later, define a function family 9 = (g : S -+ U”} such that g(p) = (hi(p), . . . , hk(p)), where hi E 31.
+
+The algorithm is as follows. For an integer I we choose I functions g1, . . . ,gl from 9 independently and uniformly at random. During preprocessing, we store each p E P in the bucket gj(p), for j = l,..., 1. Since the total number of buckets may be large, we retain only the non-empty buckets by resorting to hashing [33,54]. If any bucket contains more than one element, we retain an arbitrary one. To process a queryq,wesearcbalIbucketsgl(p) ,..., 91(p). LetpI ,..., pt be the points encountered therein. For each pi, if p, E B(q, r2) then we return YES and pj, else we return NO.
+Let Wa(q) = P- B(q, a), and p* be the point in P closest to q. The parameters k and I are chosen so as to ensure that with a constant probability there exists gJ such that the following properties hold:
+1. gjb’) # gj(q)t for a~ P’ E wr,(q), and
+2. if p* E B(q, r1) then gj (p’) = 91(q).
+Lemma 5 If properties (I) and (2) hold for aome g,, the search procedure works correctly.
+Proof Sketch:
+Case 1 w E B(q, rl)}: By property (l), the bucket B = gj(q) cannot contain any points from IV,,. By prop erty (2), p* is contained in B. Therefore, B is nonempty and contains only elements p such that D(q,p) 5 (19 e)r, and our algorithm wilI pick one such element and answer YES.
+Case 2 (p’ 6 B(q, t-2)): There are no points belonging to B(q, rz), thus the algorithm answers NO.
+H
+Theorem 4 Suppose there is a (rl, rz,pl,B)-aenaitivefamily 31 for D. Then there eziats an algorithm for (rl,rz)PLEB under measure D which usesO(dn+n’SP) apaceand O(nP) evaluations of the hash function for each query, where
+p=-**
+Proof Sketch: It s&ices to ensure properties (1) and (2) for some gj with a constant probability. Assume that p* E B(q, rl); the proof is similar when p* $ B(q, ~‘2). Consider any point p’ E W,,(q). Clearly
+A = P&b0 = &)I 1 P?
+
+P2 = W3b’) = 9Ml9@*) = 9kdl = Wdf-0 = g(4) &W) = 9Ml PrMP I= &)I
+< WW = s(q)1 - W[W = dq~l
+k 5 4
+0 PI
+
+Setting k = log% 2n, we can bound P2 by
+
+logPJ2n
+
+pz
+
+pa
+
+=’
+
+0 P1
+
+2n’
+
+609
+
+Therefore, if gj satisfies property (1), then it also satisfies property (2) with probability at least
+
+Therefore,
+
+W-‘(1 - &)I ln e+
+
+It is sufficient to bound Pr from below. By substit,uting for k we obtain that
+
+Choosing 1= rap functions gj, we ensure that with constant
+
+probability at least one function satisfies both properties (1)
+
+and (2).
+
+n
+
+We apply Theorem 4 to two measures: the Hamming metric and set resemblance [9]; the latter is a similarity measuroidefined for any pair of se& A and B as D(A,B) =
+t-AtUB ’ For the first measure, we apply a family of proje&ons for fast hashing with AC0 operations [5]. For the second measure, we use &etch functions used earlier [9] for estimat,ion of the resemblance between given sets A and B.
+
+Proposition 4 ([5]) Let S = Yld and D(‘p,q) be the Ham-
+
+ming metric for p,q E 31. Then for any r,e > 0, the family
+
+31={h, :hi((bl,...bd))=bi,
+
+i=l...n} is
+
+(r, ~(1 + e), 1 - f, 1 - w)-sensitive.
+
+Corollary 3 For any r > 1, there exists an algorithm forePLEB in Hd (or, 1: for anyp E [1,2]) using O(dn+n’t’/c)
+space and O(n lie) hash function evaluations for each query. The hash function can be evaluated using O(d) operations.
+
+Proof Sketch: We use Proposition 4 and Theorem 4. Fiit, we need to estimate t,he value of p = - rn’~P;,, , where PI =
+1 -f andp2=1- 9. Without loss of generality, we assume that r < &, since we can increase dimensionahty by adding a sufficiently long string of OSat the end of each point. Observe t,hat
+
+E = 1 - r/d
+
+1
+
+pz 1 - r(1 + e)/d ’ werld’
+
+Thus,
+
+P -- hP1 = hPl/rn
+
+< -W - 4-9 = h(* - r/d)
+
+h&
+
+hr(1 - w/d)
+
+Multiplying both the numerator and the denominator by $ we obtain bhat:
+
+g hr(1 - r/d) In(1 - r/d)d/’
+
+U
+
+’ = iln(l- w/d) = hr(1 - er/d)d/r = z’
+
+In order to upper bound p, we need to bound U from below and L from above; note t.hat both U and L are negative. To this end we use the following inequalities [54]:
+
+(1 - er/d)d/’ < eDe and (1 - r/d)d/’ > e-‘(1 - 2). d/r
+
+= l/e- w - $7) < I/s-ln(l-El/lnn)
+
+where the last step uses the assumptions that r > 1 and r<&. We conclude that
+
+np < n’/% --In(l-l/In
+
+n) = r+(l- l/Inn)-‘“” = O(n’/C).
+
+n
+The hash function evaluation can be made faster than O(d) for sparse data, i.e., when the number of non-zero coordinates of a query point is small. It suffices to somplc the bits from the non-zero entries of the vectors; a similar method works for the functions used to build a stohic dictionary. Moreover, our experience is that the preprocessing space and query time are much lower than the above bound indicates. In particular, we have implemented a variant of the above data structure for the case when data is stored on disk [36]. For a data set of 20,000 d-color histograms for images (with d ranging up to 64) only 3-9 disk accesseswere required in order to achieve smah average error.
+
+Proposition 5 ([9]) Let S be the set of all subsets of X = (1.. .x} and let D be the set resemblance measure. Then, for 1 > r1 > r2 > 0, the following hash family is (rr , ra, rt , t-2). sensitive:
+
+3t = (h, : h,(A) = rrrzr(a), x is a permutation of A’}.
+
+Corollary 4 For 0 < e < r < 1, there exists an a/go-
+
+rithm for (r,rr)-PLEB under set resemblance mcatwre D
+
+usingO(dn+n’tP)
+
+ap ace and O(nP) evaluations of the hash
+
+function for each query, where p = -2,
+
+We now discuss further applications of the above corollary. For any pair of points p, q E N”, consider the similarity measure D(p,q) defined as the dot product p * q. The dot product is a common measure used in information retrieval applications [31]; it is also of use in molecular clustering [13]. By using techniques by Indyk, Motwani, and Venkat,asubramanian [40] it can also be used for solving the approximate largest common point set problem, which has many applications in image retrieval and pattern recognition. By a simple substitution of parameters, we can prove that for a set of binary vectors of approximately the same weight, PLEB under dot product measure (for queries of a fixed weight) can be reduced to PLEB under set resemblance measure. The fixed weight assumption can be easily satisfied by splitting the data points into O(log d) groups of approsimntcly the same weight, and then making the same partition for weights of potential queries.
+
+610
+
+43 Further Applications of PLEB Algorithms
+The PLEB procedures described above can also be used in cMea where points are being inserted and deleted over time. In the randomized indexing method, insertion can be performed by adding the point to all indices, and deletion can be performed by deleting the point from all indices. In the bucketing method, insertion and deletion can be performed by adding or deleting all elements of B in the hash table. However, in order to apply these methods, we have to assumc that the points have integer coordinates with absolute value bounded by, say, M. Let n be the maximum number of pointa preecnt at any time.
+Corokwy 6 There is a data structure for c-PLEB in (1.. . M}d wlticlr performs insertions, deletions, and queries in time o(l/e)dpO~~lOg M, log n) using storage O(l/c)dn.
+Corollary 6 There is a data structurefore-PLEB in (1.. . M}d ~hiclr performs insertions, deletions, and queries in time O(Mdn’IL) using storage O(dn + n’+‘l’).
+By keeping several copies of PLEB as in the simple method described At the beginning of Section 3, we can answer approximate closest-pair queries. It is sufficient to check for every radius whether any cell (in the bucketing method) or any bucket (in the randomized indexing method) contains two different points; the smallest radius having this property gives an approximation to the closest-pair distance. The time bounda for all operations are as in the above corollarien, but multiplied by a factor O(loglog,+, M).
+Combining both techniques, we obtain a method for dynamic estimation of closest pair. Eppstein [27] showed recently that dynamic closest-pair problem has many application to hierarchical agglomerative clustering, greedy matching a,“d other problems, and provided a data structure making O(n) distance computations per update operation. Our achemc gives an approximate answer in sublinear time.
+
+Rofcrancco
+
+P,K, Agarwal and J. Matougek. Ray shooting and parametric search. In: Proceedings of the Turenty-
+
+Fourth Annual ACM Symposium on Theory of Com-
+
+puting, 1992, pp. 517-526. S, Arya and D. Mount. Approximate nearest neighbor scnrching. In: Proceedings of the Fourth Annual
+
+AUM-SIAM Symposium on Discrete Algorithms, 1993, pp. 271-280, S, Arya, D,M, Mount, and 0. Narayan, Accounting for boundary effects in nearest-neighbor searching. Dia-
+
+Crete and Computational Geometry, 16(1996):155-176. S, Arya, D.M. Mount, N.S. Netanyahu, R. Silverman, and A, Wu. An optimal algorithm for approximate nearest neighbor searching, In: Proceedings of the Fijth Annual ACM-SIAM Symposium on Discrete Algorithms, 1994, pp. 573-582. A, Andersson, P. B, Miltersen, S. Riis, M. Thorup, Static dictionaries on AC0 RAMS: Query time
+
+O(dm)
+
+is necessary and sufficient. In:
+
+Proceedings of the 97th Annual IEEE Symposium on
+
+Foundations of Computer Science, 1996, pp. 441-450.
+
+PI J.L. Bentley. Multidimensional binary search trees used
+for associative searching. Communications of bhe AChl, 18(1975):509-517.
+M M. Bern. Approximate closest-point queries in high di-
+mensions. Information Processing Letters, 45(1993):9599.
+PI M.W. Berry, S.T. Dumais, and A.T. Shippy. A case
+study of latent semantic indexing. U.T. Knoxville Technical Report CS-95-271, January 1995. PI A. Broder, S. Glassman, M. Manasse, and G. Zweig. Syntactic clustering of the Web. In: Proceedings of
+the Sixth International orld Ide Ib Conference,
+pp. 391-404, 1997.
+PO1C. Buckley, A. Singhal, M. Mitra, and G. Salton. New
+Retrieval Approaches Using SMAIYT: TREC 4. In: PFOceedinga of the Fourth Text Retrieval Conference, National Institute of Standards and Technology, 1995.
+WI W.A. Burkhard and R.M. Keller. Some approaches
+to Best-Match File Searching. Communications of 6he ACM, 16(1973):230-236.
+WI T. Bozkaya and M. Ozsoyoglu. Distance-Based Index-
+ing for High-Dimensional Metric Spaces, In: Proceedings of the ACM SIGMOD International Conference on hfanagement of Data (SIGMOD), 1997. P31 F. Cazals. Effective Nearest Neighbours Searching on the Hyper-Cube, with Applications to Molecular Clw
+tering. In Proceedings of the 14th Annual AChf Symposium on Computational Geometry, 1998. P41 T.M. Chan. Approximate Nearest Neighbor Queries Revisited. In: Proceedings of the 13th Annual ACM Symposium on Computational Geometry, 1997, pp. 352-358.
+P51K. Clarkson. A randomized algorithm for closest-point
+queries. SIAM Journal on Computing, 17(1988):830-
+647.
+P61K. Clarkson. An algorithm for approximate closest-
+point queries. In: Proceedings of the Tenth Annual AChf Symposium on Computational Geometry, 1994, pp. 160-164.
+D71K. Clarkson. Nearest Neighbor Queries in Metric
+Spaces. In: Proceedings of the Twenty-Ninth Annual ACM Symposium on Theory of Computing, 1997, pp. 609-617.
+P31S. Cost and S. Salzberg. A weighted nearest neighbor
+algorithm for 1earning with symbolic features. hfachine Learning, 10(1993):57-67. 1191T.M. Cover and P.E. Hart, Nearest neighbor pattern classification. IEEE Tmnaactiona on Information Theory, 13(1967):21-27. [20] S. Deerwester, S.T. Dumais, T.K.Landauer, G.W. Furnas, and R.A. Harsbman. Indexing by latent semantic analysis. Journal of the Society fo$ Information Sciences, 41(1990):391-407. [21] L. Devroye and T.J. Wagner, Nearest neighbor methods in discrimination. In: Handbook of Statistics, vol. 2, P.R. Krishnaiah and L.N. Kanal, eds., North-Holland, 1982. [22] D. Dobkin and R. Lipton. Multidimensional search problems. SIAM Journal on Compubing, 5(1976):181-
+186. [23] D. Dolev, Y. Harari, N. Linial, N. Nisan, and M. Par-
+nas. Neighborhood preserving hashing and approximate queries. In: Proceedings of the Fifth Annual ACM-SIAM Symposium on Discrete Algorithms, 1994, pp. 251-259.
+
+611
+
+[24] D. Dolev, Y. H arm-i, and M. Parnas. Finding the neigh-
+
+borhood of a query in a dictionary. IQ: Proceedings of
+
+the 2nd Israel Symposium on Theory and Computing
+
+Systems, 1993, pp. 33-42.
+
+[25] R.O. Duda and P.E. Hart. Pattern Classification and
+
+Scene Analysis. John Wiley & Sons, NY, 1973.
+
+[?6] H. Edelsbrunner. Algorithms in Combinatorial Geom-
+
+etry. Springer-Verlag, 1957.
+
+[‘s7] D. Eppstein, Fast hierarchical &u&ring and other ap
+
+plicat.ions of dynamic closest pairs. IQ: Proceedings of
+
+the Ninth .4ChLSIAlf Symposium on Discrete Algo-
+
+rithms, 199s.
+
+[2S] C. FaIoutsos, R. Barber, M. FIickner, W. Niblack,
+
+D. Pebkovic, and W. Equit,z. Efficient and effective
+
+querying by image coment. Journal of Intelligent In-
+
+formation Systems, 3(1994):231-262.
+
+[29] W. Feller. An IntrOdUCbionto Probability Theory and
+
+its Applications. John Wiley Sr Sons, NY, 1991.
+
+[JO] M. FIickner, H. Saxhney, W. Niblack, J. Ashley,
+
+Q. Huang, B. Dom, M. Gorkani, J. Hafner, D. Lee,
+
+D. Pet,kovic, D. Steele, and P. Yanker. Query by image
+
+and video content: the QBIC system. IEEE Computer,
+
+28( 1995):23-32.
+
+[31] W. Frakes and R. Baeza-Yates, editors. Injormation
+
+Retrieval: Data Structures and Algorithms. Prentice-
+
+HaI& 1992.
+
+[32] P. FrankI and H. Maehara. The Johnson-Lmdenstrauss
+
+Lemma and the Sphericity of Some Graphs. Journal of
+
+Combinatorial Theory B, 44(1955):355-362.
+
+[33] M.L. Fredman, J. KomIb, and E. Szemer&Ii. Storing a
+
+sparse table 1vit.hO(1) rvorst cae accesstime. Journal
+
+of the ACM, 31(1954):533-544.
+
+[31] J.K. Friedman, J.L. Bentley, and R.A. Finkel. An algo-
+
+rithm for finding best matches in Iogarithmic expected
+
+time. ACllI Transactions on Mathematical Software,
+
+3(1977):209-226.
+
+[35] A. Gersho and R.M. Gray. Vector Quantization and
+
+Data Compression. Khnver, 1991.
+
+[36] A. Gionis, P. Indyk, and R. Motxani. Similarity Search
+
+in High Dimensions via Hashing. hfanuscript, 1997.
+
+[37] D. Greene, AI. Parnas, and F. Yao. Multi-index hajhing
+
+for information retrieved. IQ: Proceedings of the 35th
+
+Annual IEEE Symposium on Foundations of Computer
+
+Science, 1994, pp. 722-731.
+
+[33] T. Hastie and R. Tibshirani. Discriminant adaptive
+
+nearest neighbor classification. In: First International
+
+Conference on Knowledge Discovery U Data hiining,
+
+1995, pp. 142-149.
+
+[39] H. HoteIIing. Amdysis of a comples of statist,icaI vari-
+
+ables into principal components. Journal of Educational
+
+Psychology, 27(1933):417-441.
+
+[40] P. Indvk, R. Motwvani, and S. Venkat~asubramanian.Ge-
+
+ornet& AIatching Under Noise - Combmatorid Bounds
+
+and AlgorXhms. Manuscript, 1997.
+
+[41] W.B. Johnson and J. Lindenstrauss. Estensions of Lip
+
+shibz mapping into HiIbert space. Contemporary Uath-
+
+cmatics, 26(19S4):1S9-206.
+
+[42] W.B. JO~SOQand G. Schechtman. Embedding Zpninl to IT. Acta dlathematica, 149(1952):71-55.
+
+[43] K. Karhunen. Uber Iineare Methoden in der
+
+~~‘~cheinlichkeitsre~ung.
+
+Ann. Acad. Sci. Fenni-
+
+cae, Ser. A137, 1947.
+
+[44] V. Koivune and S. Kassam. Nearest neighbor filters for
+
+m&variate data. IEEE Krhshop on NonlinearSignal
+
+and Image Processing, 1995.
+
+[45] J. Kleinberg. Two Algorithms for Near&-Neighbor Search in High Dimensions. In: Procecdingg of the
+Twenty-Ninth Annual AChI Symposium on Theory of
+Computing, 1997.
+[46] E. Kushilevitz, R. Ostrovsky, and Y. Rabani. Efficient search for approximate nearest neighbor in high dimensional spaces. These proceedings.
+[47] R.M. Karp, 0. Waarts, and G. Zweig. The bit vector intersection problem. In: Proceedings of YGth :innuol IEEE Symposium on Foundations of Computer Science, 1995, pp. 621-630.
+[49] N. LiniaI, E. London, and Y. Rabinovich. The geomctry of graphs and some of its algorithmic applicnbionn. In: Proceedings of 35th Annual IEEE Symposium on Foundations of Computer Science, 1994, pp. 577-591.
+[49] M. Lo&e. Fonctions aleastoires de second ordcrc. Processus Stochastiques et mouvement Brownian, Hermann, Paris, 1945.
+[50] J. MatouSek. Reporting poinbs in halfspnccs. In:
+Computational Geometry: Theory and Applications,
+2(1992):169-166. [51] S. Meiser. Point location in arrangemenm of hyper-
+planes. Information and Computation, 106(1993):296303. [52] N. Megiddo. Applying paraIIeI computahion algorihhma in the design of serial algorithms. Journal of the ACh1
+31(1953), pp. 852-S65. [53] M. Minsky and S. Papert. Perceptrons. MIT Press,
+Cambridge, MA, 1969. [54] R. Motwani and P. Raghavan. Randomized Algoritlrmo.
+Cambridge University Press, 1995. [55] A. Pentkurd, R.W. Picard, and S. Sclaroff. Photo-
+book: tooIs for content-based manipuIat.ion of image databases. In Proceedings of the SPIE Confertaec an Storage and Retrieval of Image and Video Databases II,
+1994. [56] G. Pisier. The volume of convex bodies and Banach
+space geometry. Cambridge University Press, 1989. [57] G. SaIton and M.J. McGill. Introduction to hfodern
+Information Retrieval. McGraxv-HiII Book Company, New York, NY, 1983. [58] H. Samet. The Design and Analysis of Spatial Data Structures. Addison-Wesley, Reading, MA, 19%. 1591T. Se&, N. Roussopoulos and C. FaIoutsos. Multidimensional Access Methods: Trees Have Grovrn Everywhere. Proceedings of the 23rd International Confercncc on Very Large Data Bases (VLDB), 1997, pp. 13-X. [60] A.W.M. SmeuIders and R. Jail, eds. Image Databases and hlulti-media Search. Proceedings of the First International Workshop, IDB-AIMS ‘96, Amsterdam University Press, Amsterdam, 1996. [61] J.K. UhImann. Satisfying General Prosimit.y/Similarity Queries with Metric Trees. Information Processing Let-
+ters, 40(1991):175-179. [62] P.N. Yiannilos. Data Structures and Algorit.hms for
+Nearest Neighbor Search in General Met.& Spnces. In: Proceedings of the Second Annual AChLSL4hf Symposium on Discrete Algorithms, 1993, pp. 311-321. [63] T. Welch. Bounds on the information ret,rievaI efficiency of static IiIe structures. Technic& Report 83, MIT, June 1971. [64] A.C. Yao and F.F. Yao, A general approach to ddimensional geometric queries. In: Proceedings of the Seventeenth Annual AChf Symposium on Theory of Computing, 1935, pp. 163-168.
+
+612
+
+A The Dlmenslon Reduction Technique
+We firat outline our proof for the random projections technique for dimension reduction. Combining this with Propo&ion 2, we obtain the result given in Proposition 3.
+Daflnition 8 Let M = (X,d) and M’ = (X’,d’) be two metric opacee, The apace M is aaid to have a c-isometric ambcdding, or simply a c-embedding, in M’ if there ezioto a map j : M + M’ such that
+(1 - 4dh 4 < d’(fCp), f (4) < (1 I- 4% 4
+for all p, q E X. IY call c the distortion of the embedding; i/c z 1, we call the embedding isometric.
+Rank1 and Maehara [32] gave the following improvement to the Johnson-Lindenstrauss Lemma [41] on (1 + e)embedding of any S c I$ in l~(‘“g Is’),
+Lamma 0 (Frankl-Maehara [32]) For any 0 < c < $, any (auflcientlylarge) set S of points in IRd, andk = [9(e22e3/3)“’ In ISI] -J-l, there esiata a map j : S + IR” such that for all u, v E S,
+(1- 4llu - VII”< Ilf (4 - f WII’ < 0 +4kJ - 412.
+The proof proceeds by showing that the square of the length of a projection of any unit vector u on a random kdimensional hyperplane is sharply concentrated around f. Below WCprove an analogous fact. However, thanks to the uac of a different distribution, we are able to give a much simpler proof and also improve the constants. Note that the constants are important as they appear in the ezponent of the time bounds of the resulting algorithm described in Proposition 3.
+Eomma 7 Let u be a unit uector in Rd. For any euen poaitiue integer k, let Ul, . . . , Ur: be random vectors chosen independently from the d-dimensional Gaussian distribution4 lV’(O, l), For Xr =uqUi, defineW=W(u)=(Xl,...,Xk) and L = L(u) = IlWll”. Then, for any p > I,
+1, D(L) = k,
+2, Pr[L 2 /3k] < O(k) x exp(-$(P - (1 -i-h/3))),
+3. Pr[L 4 k/p] < O(k) x exp(-$(/3” - (1 -In@)).
+Proof Sketch: By the spherical symmetry of Nd(O, 1) each Xr io distributed as N(O,l) [29, page 771. Define k;- = X’,“r,, -I- Xi,, for i = 1, . . , , k/2. Then, Y; follows the Exponential distribution with parameter X = 4 (see [29, page 471) Thus B(L) = c!:p/t E(K) = (k/2) x 2 = k; also one can aeethat L follows the Gamma distribution with paramcters LY=: $ and v = k/2 (see [29, page 461). Since this distribution is a dual of the Poisson distribution, we obtain that
+Pr[L > pk] = Pr[P,$ 5 v - 11,
+1Each componentis chosenindependently from the standard normal distribution N(O,l).
+
+where Pp is a random variable following the Poisson d&i-
+
+bution with parameter at. Bounding the latter quantity is
+
+a matter of simple calculation.
+
+n
+
+An interesting question is if the Johnson-Lindenstrauss Lemma holds for other lP norms. A partial answer is provided by the following two results.
+
+Theorem 5 For anyp E [l, 21, any n-point set S c l,“, and any c > 0, there ezist a map j : S + 15 with k = O(log n) such that for all u, v E S.
+(1- mJ - 4IP< IIf(4 - fWl12< (1f 4llu - VIIP
+Theorem 6 The Johnson-Lindenstrots Lemma does not hold for 1,. hlore specifically, there is a set S of n points in 33’ for some d such that any embedding of S in S?’ has distortion sZ(3).
+
+Proof Sketch: We give a sketch of the proof of Theorem 6 based on the following two known facts.
+
+Fact 3 (Linial, London, and Rabinovich [48]) EuenJnpoint metric M can be isometrically embedded in I&.
+
+Fact 4 (Link& London, and Rabinovich [48]) There are graphs with n vertices which for any d cannot be embedded in 1: with distortion 0006 n).
+
+Assume for contradiction that the Johnson-Lindenstrauss
+
+Lemma holds for 1, with distortion t = o(log n/m. Then
+
+for any graph G with n vertices: we embed G in l& using
+
+Fact 3; by the assumption, we reduce the dimension to with distortion t; fkmlly, we observe that as the norms 1f,
+
+and l,f differ by at most a factor of &‘, we have an em-
+
+bedding of G in 12 with distortion tfl = ~(logn), which
+
+contradicts Fact 4.
+
+n
+
+Proof Sketch: We give a sketch of the proof of Theorem 5 based on the following two known facts.
+
+Fact 5 (Johnson-Schechtman [42]) For any 1 < p < 2 and c > 0, there ezista a constant p 2 1 such that for all
+d 2 1, the apace1,” has a (1 + e)-embedding in ltd.
+
+Fact 6 (Linial, London, and Rabinovich [48]) For any c > 0 and every n-point metric space M = (X,d) induced
+by a set of n points in It, there exists m such that M has a (l+c)-embedding in II”‘. If 011points have coordinates from the set (1 . . . R), then M con be embedded isometrically in H”‘form=Rd.
+
+The function f is constructed implicitly by a sequenceof
+
+reductions: Find an (1 + al)-isometric embedding of lp into
+
+11 (using Fact 5) and let Sl be the image of S under this
+
+mapping. Find an (1 f ez)-isometric embedding of SI into
+
+H”’ (using Fact 6) and let S2 be the image of Sl under this
+
+mapping. Notice that for any 3,s’ E S2, d&s,s’) = 11s-
+
+s’l12, hence we may assume that SZ resides in lr. Finally,
+
+find an (1 + rs)-isometric embedding of SZ into Ii (using
+
+Lemma 6). It is now possible to choose suitable values for
+
+cl, ~2, and Q to obtain the desired result.
+
+n
+
+613
+

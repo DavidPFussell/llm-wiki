@@ -1,0 +1,1345 @@
+Semantic Web 0 (2016) 1–0
+
+1
+
+IOS Press
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+Editor(s): Philipp Cimiano, Universität Bielefeld, Germany Solicited review(s): Natasha Noy, Google Inc., USA; Philipp Cimiano, Universität Bielefeld, Germany; two anonymous reviewers
+Heiko Paulheim, Data and Web Science Group, University of Mannheim, B6 26, 68159 Mannheim, Germany E-mail: heiko@informatik.uni-mannheim.de
+
+Abstract. In the recent years, different Web knowledge graphs, both free and commercial, have been created. While Google coined the term “Knowledge Graph” in 2012, there are also a few openly available knowledge graphs, with DBpedia, YAGO, and Freebase being among the most prominent ones. Those graphs are often constructed from semi-structured knowledge, such as Wikipedia, or harvested from the web with a combination of statistical and linguistic methods. The result are large-scale knowledge graphs that try to make a good trade-off between completeness and correctness. In order to further increase the utility of such knowledge graphs, various reﬁnement methods have been proposed, which try to infer and add missing knowledge to the graph, or identify erroneous pieces of information. In this article, we provide a survey of such knowledge graph reﬁnement approaches, with a dual look at both the methods being proposed as well as the evaluation methodologies used.
+Keywords: Knowledge Graphs, Reﬁnement, Completion, Correction, Error Detection, Evaluation
+
+1. Introduction
+Knowledge graphs on the Web are a backbone of many information systems that require access to structured knowledge, be it domain-speciﬁc or domainindependent. The idea of feeding intelligent systems and agents with general, formalized knowledge of the world dates back to classic Artiﬁcial Intelligence research in the 1980s [91]. More recently, with the advent of Linked Open Data [5] sources like DBpedia [56], and by Google’s announcement of the Google Knowledge Graph in 20121, representations of general world knowledge as graphs have drawn a lot of attention again.
+There are various ways of building such knowledge graphs. They can be curated like Cyc [57], edited
+1http://googleblog.blogspot.co.uk/2012/05/ introducing-knowledge-graph-things-not.html
+
+by the crowd like Freebase [9] and Wikidata [104], or extracted from large-scale, semi-structured web knowledge bases such as Wikipedia, like DBpedia [56] and YAGO [101]. Furthermore, information extraction methods for unstructured or semi-structured information are proposed, which lead to knowledge graphs like NELL [14], PROSPERA [70], or KnowledgeVault [21].
+Whichever approach is taken for constructing a knowledge graph, the result will never be perfect [10]. As a model of the real world or a part thereof, formalized knowledge cannot reasonably reach full coverage, i.e., contain information about each and every entity in the universe. Furthermore, it is unlikely, in particular when heuristic methods are applied, that the knowledge graph is fully correct – there is usually a trade-off between coverage and correctness, which is addressed differently in each knowledge graph. [111]
+To address those shortcomings, various methods for knowledge graph reﬁnement have been proposed.
+
+1570-0844/16/$27.50 c 2016 – IOS Press and the authors. All rights reserved
+
+2
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+In many cases, those methods are developed by researchers outside the organizations or communities which create the knowledge graphs. They rather take an existing knowledge graph and try to increase its coverage and/or correctness by various means. Since such works are reviewed in this survey, the focus of this survey is not knowledge graph construction, but knowledge graph reﬁnement.
+For this survey, we view knowledge graph construction as a construction from scratch, i.e., using a set of operations on one or more sources to create a knowledge graph. In contrast, knowledge graph reﬁnement assumes that there is already a knowledge graph given which is improved, e.g., by adding missing knowledge or identifying and removing errors. Usually, those methods directly use the information given in a knowledge graph, e.g., as training information for automatic approaches. Thus, the methods for both construction and reﬁnement may be similar, but not the same, since the latter work on a given graph, while the former are not.
+It is important to note that for many knowledge graphs, one or more reﬁnement steps are applied when creating and/or before publishing the graph. For example, logical reasoning is applied on some knowledge graphs for validating the consistency of statements in the graph, and removing the inconsistent statements. Such post processing operations (i.e., operations applied after the initial construction of the graph) would be considered as reﬁnement methods for this survey, and are included in the survey.
+Decoupling knowledge base construction and reﬁnement has different advantages. First, it allows – at least in principle – for developing methods for reﬁning arbitrary knowledge graphs, which can then be applied to improve multiple knowledge graphs.2 Other than ﬁne-tuning the heuristics that create a knowledge graph, the impact of such generic reﬁnement methods can thus be larger. Second, evaluating reﬁnement methods in isolation of the knowledge graph construction step allows for a better understanding and a cleaner separation of effects, i.e., it facilitates more qualiﬁed statements about the effectiveness of a proposed approach.
+The rest of this article is structured as follows. Section 2 gives a brief introduction into knowledge graphs in the Semantic Web. In section 3 and 4, we present a categorization of approaches and evaluation method-
+
+ologies. In section 5 and 6, we present the review of methods for completion (i.e., increasing coverage) and error detection (i.e., increasing correctness) of knowledge graphs. We conclude with a critical reﬂection of the ﬁndings in section 7, and a summary in section 8.
+2. Knowledge Graphs in the Semantic Web
+From the early days, the Semantic Web has promoted a graph-based representation of knowledge, e.g., by pushing the RDF standard3. In such a graphbased knowledge representation, entities, which are the nodes of the graph, are connected by relations, which are the edges of the graph (e.g., Shakespeare has written Hamlet), and entities can have types, denoted by is a relations (e.g., Shakespeare is a writer, Hamlet is a play). In many cases, the sets of possible types and relations are organized in a schema or ontology, which deﬁnes their interrelations and restrictions of their usage.
+With the advent of Linked Data [5], it was proposed to interlink different datasets in the Semantic Web. By means of interlinking, the collection of could be understood as one large, global knowledge graph (although very heterogenous in nature). To date, roughly 1,000 datasets are interlinked in the Linked Open Data cloud, with the majority of links connecting identical entities in two datasets [95].
+The term Knowledge Graph was coined by Google in 2012, referring to their use of semantic knowledge in Web Search (“Things, not strings”), and is recently also used to refer to Semantic Web knowledge bases such as DBpedia or YAGO. From a broader perspective, any graph-based representation of some knowledge could be considered a knowledge graph (this would include any kind of RDF dataset, as well as description logic ontologies). However, there is no common deﬁnition about what a knowledge graph is and what it is not. Instead of attempting a formal deﬁnition of what a knowledge graph is, we restrict ourselves to a minimum set of characteristics of knowledge graphs, which we use to tell knowledge graphs from other collections of knowledge which we would not consider as knowledge graphs. A knowledge graph
+1. mainly describes real world entities and their interrelations, organized in a graph.
+
+2See section 7.2 for a critical discussion.
+
+3http://www.w3.org/RDF/
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+3
+
+2. deﬁnes possible classes and relations of entities in a schema.
+3. allows for potentially interrelating arbitrary entities with each other.
+4. covers various topical domains.
+The ﬁrst two criteria clearly deﬁne the focus of a knowledge graph to be the actual instances (A-box in description logic terminology), with the schema (Tbox) playing only a minor role. Typically, this means that the number of instance-level statements is by several orders of magnitude larger than that of schema level statements (cf. Table 1). In contrast, the schema can remain rather shallow, at a small degree of formalization. In that sense, mere ontologies without any instances (such as DOLCE [27]) would not be considered as knowledge graphs. Likewise, we do not consider WordNet [67] as a knowledge graph, since it is mainly concerned with common nouns and words4 and their relations (although a few proper nouns, i.e., instances are also included).5
+The third criterion introduces the possibility to deﬁne arbitrary relations between instances, which are not restricted in their domain and/or range. This is a property which is hardly found in relational databases, which follow a strict schema.
+Furthermore, knowledge graphs are supposed to cover at least a major portion of the domains that exist in the real world, and are not supposed to be restricted to only one domain (such as geographic entities). In that sense, large, but single-domain datasets, such as GeoNames6, would not be considered a knowledge graph.
+Knowledge graphs on the Semantic Web are typically provided using Linked Data [5] as a standard. They can be built using different methods: they can be curated by an organization or a small, closed group of people, crowd-sourced by a large, open group of individuals, or created with heuristic, automatic or semi-automatic means. In the following, we give an overview of existing knowledge graphs, both open and company-owned.
+4The question of whether words as such are real world entities or not is of philosophical nature and not answered within the scope of this article.
+5Nevertheless, it is occasionally used for evaluating knowledge graph reﬁnement methods, as we will show in the subsequent sections.
+6http://www.geonames.org/
+
+2.1. Cyc and OpenCyc
+The Cyc knowledge graph is one of the oldest knowledge graphs, dating back to the 1980s [57]. Rooted in traditional artiﬁcial intelligence research, it is a curated knowledge graph, developed and maintained by CyCorp Inc.7 OpenCyc is a reduced version of Cyc, which is publicly available. A Semantic Web endpoint to OpenCyc also exists, containing links to DBpedia and other LOD datasets.
+OpenCyc contains roughly 120,000 instances and 2.5 million facts deﬁned for those instances; its schema comprises a type hierarchy of roughly 45,000 types, and 19,000 possible relations.8
+2.2. Freebase
+Curating a universal knowledge graph is an endeavour which is infeasible for most individuals and organizations. To date, more than 900 person years have been invested in the creation of Cyc [92], with gaps still existing. Thus, distributing that effort on as many shoulders as possible through crowdsourcing is a way taken by Freebase, a public, editable knowledge graph with schema templates for most kinds of possible entities (i.e., persons, cities, movies, etc.). After MetaWeb, the company running Freebase, was acquired by Google, Freebase was shut down on March 31st, 2015.
+The last version of Freebase contains roughly 50 million entities and 3 billion facts9. Freebase’s schema comprises roughly 27,000 entity types and 38,000 relation types.10
+2.3. Wikidata
+Like Freebase, Wikidata is a collaboratively edited knowledge graph, operated by the Wikimedia foundation11 that also hosts the various language editions of Wikipedia. After the shutdown of Freebase, the data contained in Freebase is subsequently moved to Wikidata.12 A particularity of Wikidata is that for each ax-
+7http://www.cyc.com/ 8These numbers have been gathered by own inspections of the 2012 of version of OpenCyc, available from http://sw. opencyc.org/ 9http://www.freebase.com 10These numbers have been gathered by queries against Freebase’s query endpoint. 11http://wikimediafoundation.org/ 12http://plus.google.com/ 109936836907132434202/posts/3aYFVNf92A1
+
+4
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+iom, provenance metadata can be included – such as the source and date for the population ﬁgure of a city [104].
+To date, Wikidata contains roughly 16 million instances13 and 66 million statements14. Its schema deﬁnes roughly 23,000 types15 and 1,600 relations16.
+2.4. DBpedia
+DBpedia is a knowledge graph which is extracted from structured data in Wikipedia. The main source for this extraction are the key-value pairs in the Wikipedia infoboxes. In a crowd-sourced process, types of infoboxes are mapped to the DBpedia ontology, and keys used in those infoboxes are mapped to properties in that ontology. Based on those mappings, a knowledge graph can be extracted [56].
+The most recent version of the main DBpedia (i.e., DBpedia 2015-04, extracted from the English Wikipedia based on dumps from February/March 2015) contains 4.8 million entities and 176 million statements about those entities.17 The ontology comprises 735 classes and 2,800 relations.18
+2.5. YAGO
+Like DBpedia, YAGO is also extracted from DBpedia. YAGO builds its classiﬁcation implicitly from the category system in Wikipedia and the lexical resource WordNet [67], with infobox properties manually mapped to a ﬁxed set of attributes. While DBpedia creates different interlinked knowledge graphs for each language edition of Wikipedia [12], YAGO aims at an automatic fusion of knowledge extracted from various Wikipedia language editions, using different heuristics [65].
+The latest release of YAGO, i.e., YAGO3, contains 4.6 million entities and 26 million facts about those types. The schema comprises rouhgly 488,000 types and 77 relations [65].
+13http://www.wikidata.org/wiki/Wikidata: Statistics
+14http://tools.wmflabs.org/wikidatatodo/stats.php
+15http://tools.wmflabs.org/wikidataexports/miga/?classes#_cat=Classes
+16http://www.wikidata.org/wiki/Special: ListProperties
+17http://dbpedia.org/services-resources/ datasets/dataset-2015-04/dataset-2015-04statistics
+18http://dbpedia.org/dbpedia-data-set-201504
+
+2.6. NELL
+While DBpedia and YAGO use semi-structured content as a base, methods for extracting knowledge graphs from unstructured data have been proposed as well. One of the earliest approaches working at web-scale was the Never Ending Language Learning (NELL) project [14]. The project works on a largescale corpus of web sites and exploits a coupled process which learns text patterns corresponding type and relation assertions, as well as applies them to extract new entities and relations. Reasoning is applied for consistency checking and removing inconsistent axioms. The system is still running today, continuously extending its knowledge base. While not published using Semantic Web standards, it has been shown that the data in NELL can be transformed to RDF and provided as Linked Open Data as well [113].
+In its most recent version (i.e., the 945th iteration), NELL contains roughly 2 million entities and 433,000 relations between those. The NELL ontology deﬁnes 285 classes and 425 relations.19
+2.7. Google’s Knowledge Graph
+Google’s Knowledge Graph was introduced to the public in 2012, which was also when the term knowledge graph as such was coined. Google itself is rather secretive about how their Knowledge Graph is constructed; there are only a few external sources that discuss some of the mechanisms of information ﬂow into the Knowledge Graph based on experience20. From those, it can be assumed that major semi-structured web sources, such as Wikipedia, contribute to the knowledge graph, as well as structured markup (like schema.org Microdata [66]) on web pages and contents from Google’s online social network Google+.
+According to [21], Google’s Knowledge Graph contains 18 billion statements about 570 million entities, with a schema of 1,500 entity types and 35,000 relation types.
+19These numbers have been derived from the promotion heatmap at http://rtw.ml.cmu.edu/resources/results/ 08m/NELL.08m.945.heatmap.html.
+20E.g., http://www.techwyse.com/blog/searchengine-optimization/seo-efforts-to-getlisted-in-google-knowledge-graph/
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+5
+
+2.8. Google’s Knowledge Vault
+The Knowledge Vault is another project by Google. It extracts knowledge from different sources, such as text documents, HTML tables, and structured annotations on the Web with Microdata or MicroFormats. Extracted facts are combined using both the extractor’s conﬁdence values, as well as prior probabilities for the statements, which are computed using the Freebase knowledge graph (see above). From those components, a conﬁdence value for each fact is computed, and only the conﬁdent facts are taken into Knowledge Vault [21].
+According to [21], the Knowledge Vault contains roughly 45 million entities and 271 million fact statements, using 1,100 entity types and 4,500 relation types.
+2.9. Yahoo!’s Knowledge Graph
+Like Google, Yahoo! also has their internal knowledge graph, which is used to improve search results. The knowledge graph builds on both public data (e.g., Wikipedia and Freebase), as well as closed commercial sources for various domains. It uses wrappers for different sources and monitors evolving sources, such as Wikipedia, for constant updates.
+Yahoo’s knowledge graph contains roughly 3.5 million entities and 1.4 billion relations. Its schema, which is aligned with schema.org, comprises 250 types of entities and 800 types of relations. [6]
+2.10. Microsoft’s Satori
+Satori is Microsoft’s equivalent to Google’s Knowledge Graph.21 Although almost no public information on the construction, the schema, or the data volume of Satori is available, it has been said to consist of 300 million entities and 800 million relations in 2012, and its data representation format to be RDF.22
+2.11. Facebook’s Entities Graph
+Although the majority of the data in the online social network Facebook23 is perceived as connections
+21http://blogs.bing.com/search/2013/03/21/ understand-your-world-with-bing/
+22http://research.microsoft.com/en-us/ projects/trinity/query.aspx, currently ofﬂine, accessible through the Internet Archive.
+23http://www.facebook.com/
+
+between people, Facebook also works on extracting a knowledge graph which contains a larger variety of entities. The information people provide as personal information (e.g., their home town, the schools they went to), as well as their likes (movies, bands, books, etc.), often represent entities, which can be linked both to people as well as among each other. By parsing textual information and linking to Wikipedia, the graph also contains links among entities, e.g., the writer of a book. Although not many public numbers about Facebook’s Entities Graph exist, it is said to contain more than 100 billion connections between entities.24
+2.12. Summary
+Table 1 summarizes the characteristics of the knowledge graphs discussed above. It can be observed that the graphs differ in the basic measures, such as the number of entities and relations, as well as in the size of the schema they use, i.e., the number of classes and relations. From these differences, it can be concluded that the knowledge graphs must differ in other characteristics as well, such as average node degree, density, or connectivity.
+3. Categorization of Knowledge Graph Reﬁnement Approaches
+Knowledge graph reﬁnement methods can differ along different dimensions. For this survey, we distinguish the overall goal of the method, i.e., completion vs. correction of the knowledge graph, the reﬁnement target (e.g., entity types, relations between entities, or literal values), as well as the data used by the approach (i.e., only the knowledge graph itself, or further external sources). All three dimensions are orthogonal.
+There are a few research ﬁelds which are related to knowledge graph reﬁnement: Ontology learning mainly deals with learning a concept level description of a domain, such as a hierarchy (e.g., Cities are Places) [13,64]. Likewise, description logic learning is mainly concerned with reﬁning such concept level descriptions [55]. As stated above, the focus of knowledge graphs, in contrast, is rather the instance (A-box) level, not so much the concept (T-box) level. Following that notion, we only consider those works as knowl-
+24http://www.facebook.com/notes/facebookengineering/under-the-hood-the-entitiesgraph/10151490531588920
+
+6
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+Table 1
+Overview of popular knowledge graphs. The table depicts the number of instances and facts; as well as the number of different types and relations deﬁned in their schema. Instances denotes the number of instances or A-box concepts deﬁned in the graph, Facts denotes the number of statements about those instances, Entity types denotes the number of different types or classes deﬁned in the schema, and Relation types denotes the number of different relations deﬁned in the schema. Microsoft’s Satori and Facebook’s Entities Graph are not shown, because to the best of our knowledge, no detailed recent numbers on the graph are publicly available.
+
+Name DBpedia (English) YAGO Freebase Wikidata NELL OpenCyc Google’s Knowledge Graph Google’s Knowledge Vault Yahoo! Knowledge Graph
+
+Instances 4,806,150 4,595,906 49,947,845 15,602,060 2,006,896
+118,499 570,000,000 45,000,000
+3,443,743
+
+Facts 176,043,129 25,946,870 3,041,722,635 65,993,797
+432,845 2,413,894 18,000,000,000 271,000,000 1,391,054,990
+
+Types 735
+488,469 26,507 23,157
+285 45,153 1,500 1,100
+250
+
+Relations 2,813 77 37,781 1,673 425 18,526 35,000 4,469 800
+
+edge graph reﬁnement approaches which focus on reﬁning the A-box. Approaches that only focus on the reﬁning T-box are not considered for this survey, however, if the schema or ontology is reﬁned as a means to ultimately improve the A-box, those works are included in the survey.
+
+the T-box), not the data (the A-box). However, as discussed above, approaches focusing purely on the schema without an impact on the instance level are not considered for this survey.
+3.3. Internal vs. External Methods
+
+3.1. Completion vs. Error Detection
+There are two main goals of knowledge graph reﬁnement: (a) adding missing knowledge to the graph, i.e., completion, and (b) identifying wrong information in the graph, i.e., error detection. From a data quality perspective, those goals relate to the data quality dimensions free-of-error and completeness [86].
+
+A third distinguishing property is the data used by an approach. While internal approaches only use the knowledge graph itself as input, external methods use additional data, such as text corpora. In the widest sense, approaches making use of human knowledge, such as crowdsourcing [1] or games with a purpose [105], can also be viewed as external methods, although not fully automatic ones.
+
+3.2. Target of Reﬁnement
+Both completion and error detection approaches can be further distinguished by the targeted kind of information in the knowledge graph. For example, some approaches are targeted towards completing/correcting entity type information, while others are targeted to (either speciﬁc or any) relations between entities, or interlinks between different knowledge graphs, or literal values, such as numbers. While the latter can be of any datatype (strings, numbers, dates, etc.), most research focuses on numerical or date-valued literal values.
+Another strand of research targets the extension of the schema used by the knowledge graph (i.e.,
+
+4. Categorization of Evaluation Methods
+There are different possible ways to evaluate knowledge graph reﬁnement. On a high level, we can distinguish methodologies that use only the knowledge graph at hand, and methodologies that use external knowledge, such as annotations provided by humans.
+4.1. Partial Gold Standard
+One common evaluation strategy is to use a partial gold standard. In this methodology, a subset of graph entities or relations are selected and labeled manu-
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+7
+
+ally. Other evaluations use external knowledge graphs and/or databases as partial gold standards.
+For completion tasks, this means that all axioms that should exist in the knowledge graph are collected, whereas for correction tasks, a set of axioms in the graph is manually labeled as correct or incorrect. The quality of completion approaches is usually measured in recall, precision, and F-measure, whereas for correction methods, accuracy and/or area under the ROC curve (AUC) are often used alternatively or in addition.
+Sourcing partial gold standards from humans can lead to high quality data (given that the knowledge graph and the ontology it uses are not overly complex), but is costly, so that those gold standards are usually small. Exploiting other knowledge graphs based on knowledge graph interlinks (e.g., using Freebase data as a gold standard to evaluate DBpedia) is sometimes proposed to yield larger-scale gold standards, but has two sources of errors: errors in the target knowledge graph, and errors in the linkage between the two. For example, it has been reported that 20% of the interlinks between DBpedia and Freebase are incorrect [110], and that roughly half of the owl:sameAs links between knowledge graphs connect two things which are related, but not exactly the same (such as the company Starbucks and a particular Starbucks coffee shop) [33].
+4.2. Knowledge Graph as Silver Standard
+Another evaluation strategy is to use the given knowledge graph itself as a test dataset. Since the knowledge graph is not perfect (otherwise, reﬁnement would not be necessary), it cannot be considered as a gold standard. However, assuming that the given knowledge graph is already of reasonable quality, we call this method silver standard evaluation, as already proposed in other works [32,45,74].
+The silver standard method is usually applied to measure the performance of knowledge graph completion approaches, where it is analyzed how well relations in a knowledge graph can replicated by a knowledge graph completion method. As for gold standard evaluations, the result quality is usually measured in recall, precision, and F-measure. In contrast to using human annotations, large-scale evaluations are easily possible. The silver standard method is only suitable for evaluating knowledge graph completion, not for error detection, since it assumes the knowledge graph to be correct.
+
+There are two variants of silver standard evaluations: in the more common ones, the entire knowledge graph is taken as input to the approach at hand, and the evaluation is then also carried out on the entire knowledge graph. As this may lead to an overﬁtting effect (in particular for internal methods), some works also foresee the splitting of the graph into a training and a test partition, which, however, is not as straight forward as, e.g., for propositional classiﬁcation tasks [72], which is why most papers use the former method. Furthermore, split and cross validation do not fully solve the overﬁtting effect. For example, if a knowledge graph, by construction, has a bias towards certain kinds of information (e.g., relations are more complete for some classes than for others), approaches overadapting to that bias will be rated better than those which do not (and which may actually perform better in the general case).
+A problem with this approach is that the knowledge graph itself is not perfect (otherwise, it would not need reﬁnement), thus, this evaluation method may sometimes underrate the evaluated approach. More precisely, most knowledge graphs follow the open world assumption, i.e., an axiom not present in the knowledge graph may or may not hold. Thus, if a completion approach correctly predicts the existence of an axiom missing in the knowledge graph, this would count as a false positive and thus lower precision. Approaches overﬁtting to the coverage bias of a knowledge graph at hand may thus be overrated.
+4.3. Retrospective Evaluation
+For retrospective evaluations, the output of a given approach is given to human judges for annotation, who then label suggested completions or identiﬁed errors as correct and incorrect. The quality metric is usually accuracy or precision, along with a statement about the total number of completions or errors found with the approach, and ideally also with a statement about the agreement of the human judges.
+In many cases, automatic reﬁnement methods lead to a very large number of ﬁndings, e.g., lists of tens of thousands of axioms which are potentially erroneous. Thus, retrospective evaluations are often carried out only on samples of the results. For some approaches which produce higher level artifacts – such as error patterns or completion rules – as intermediate results, a feasible alternative is to evaluate those artifacts instead of the actually affected axioms.
+
+8
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+While partial gold standards can be reused for comparing different methods, this is not the case for retrospective evaluations. On the other hand, retrospective evaluations may make sense in cases where the interesting class is rare. For example, when evaluating error detection methods, a sample for a partial gold standard from a high-quality graph is likely not to contain a meaningful number of errors. In those cases, retrospective evaluation methodologies are often preferred over partial gold standards.
+Another advantage of retrospective evaluations is that they allow a very detailed analysis of an approach’s results. In particular, inspecting the errors made by an approach often reveals valuable ﬁndings about the advantages and limitations of a particular approach.
+Table 2 sums up the different evaluation methodologies and contrasts their advantages and disadvantages.
+4.4. Computational Performance
+In addition to the performance w.r.t. correctness and/or completeness of results, computational performance considerations become more important as knowledge graphs become larger. Typical performance measures for this aspect are runtime measurements, as well as memory consumption.
+Besides explicit measurement of computational performance, a “soft” indicator for computational performance is whether an approach has been evaluated (or at least the results have been materialized) on an entire large-scale knowledge graph, or only on a subgraph. The latter is often done when applying evaluations on a partial gold standard, where the respective approach is only executed on entities contained in that partial gold standard.
+5. Approaches for Completion of Knowledge Graphs
+Completion of knowledge graphs aims at increasing the coverage of a knowledge graph. Depending on the target information, methods for knowledge graph completion either predict missing entities, missing types for entities, and/or missing relations that hold between entities.
+In this section, we survey methods for knowledge graph completion. We distinguish internal and external methods, and further group the approaches by the completion target.
+
+5.1. Internal Methods
+Internal methods use only the knowledge contained in the knowledge graph itself to predict missing information.
+5.1.1. Methods for Completing Type Assertions Predicting a type or class for an entity given some
+characteristics of the entity is a very common problem in machine learning, known as classiﬁcation. The classiﬁcation problem is supervised, i.e., it learns a classiﬁcation model based on labeled training data, typically the set of entities in a knowledge graph (or a subset thereof) which have types attached. In machine learning, binary and multi-class prediction problems are distinguished. In the context of knowledge graphs, in particular the latter are interesting, since most knowledge graphs contain entities of more than two different types. Depending on the graph at hand, it might be worthwile distinguishing multi-label classiﬁcation, which allows for assigning more than one class to an instance (e.g., Arnold Schwarzenegger being both an Actor and a Politician), and single-label classiﬁcation, which only assigns one class to an instance [103].
+For internal methods, the features used for classiﬁcation are usually the relations which connect an entity to other entities [81,88], i.e., they are a variant of link-based classiﬁcation problems [31]. For example, an entity which has a director relation is likely to be a Movie.
+In [79,80], we propose a probabilistic method, which is based on conditional probabilities, e.g., the probability of a node being of type Actor is high if there are ingoing edges of type cast. Such probabilities are exploited by the SDType algorithm, which is currently deployed for DBpedia and adds around 3.4 million additional type statements to the knowledge graph.
+In [98], the use of Support Vector Machines (SVMs) has been proposed to type entities in DBpedia and Freebase. The authors also exploit interlinks between the knowledge graphs and classify instances in one knowledge graph based on properties present in the other, in order to increase coverage and precision. Nickel et al. [73] propose the use of matrix factorization to predict entity types in YAGO.
+Since many knowledge graphs come with a class hierarchy, e.g., deﬁned in a formal ontology, the type prediction problem could also be understood as a hierarchical classiﬁcation problem. Despite a larger body of work existing on methods for hierarchical classiﬁ-
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+9
+
+Table 2 Overview on evaluation methods with their advantages and disadvantages
+
+Methodology
+
+Advantages
+
+Disadvantages
+
+Partial Gold Standard Knowledge Graph as Silver Standard Retrospective Evaluation
+
+highly reliable results reusable
+large-scale evaluation feasible subjectiveness is minimized
+applicable to disbalanced problems allows for more detailed analysis of approaches
+
+costly to produce balancing problems
+less reliable results prone to overﬁtting
+not reusable approaches cannot be compared directly
+
+cation [96], there are, to the best of our knowledge, no applications of those methods to knowledge graph completion.
+In data mining, association rule mining [38] is a method that analyzes the co-occurence of items in itemsets and derives association rules from those cooccurences. For predicting missing information in knowledge graphs, those methods can be exploited, e.g., in the presence of redundant information. For example, in DBpedia, different type systems (i.e., the DBpedia ontology and YAGO, among others) are used in parallel, which are populated with different methods (Wikipedia infoboxes and categories, respectively). This ensures both enough overlap to learn suitable association rules, as well as a number of entities that only have a type in one of the systems, to which the rules can be applied. In [77], we exploit such association rules to predict missing types in DBpedia based on such redundancies.
+In [99], the use of topic modeling for type prediction is proposed. Entities in a knowledge graph are represented as documents, on which Latent Dirichlet Allocation (LDA) [7] is applied for ﬁnding topics. By analyzing the co-occurrence of topics and entity types, new types can be assigned to entities based on the topics detected for those entities.
+5.1.2. Methods for Predicting Relations While primarily used for adding missing type asser-
+tions, classiﬁcation methods can also be used to predict the existence of relations. To that end, Socher et al. [100] propose to train a tensor neural network to predict relations based on chains of other relations, e.g., if a person is born in a city in Germany, then the approach can predict (with a high probability) that the nationality of that person is German. The approach is applied to Freebase and WordNet. A similar approach is presented in [50], where the authors show that reﬁning such a problem with schema knowledge – either deﬁned or induced – can signiﬁcantly improve the performance of link prediction. In [49], an approach sim-
+
+ilar to association rule mining is used to ﬁnd meaningful chains of relations for relation prediction. Similarly, in [112], an embedding of pairwise entity relations into a lower dimensional space is learned, which is then used to predict the existence of relations in Freebase.
+Likewise, association rule mining can be used for predicting relations as well. In [46], the mining of association rules which predict relations between entities in DBpedia from Wikipedia categories is proposed.25
+5.2. External Methods
+External methods use sources of knowledge – such as text corpora or other knowledge graphs – which are not part of the knowledge graph itself. Those external sources can be linked from the knowledge graph, such as knowledge graph interlinks or links to web pages, e.g., Wikipedia pages describing an entity, or exist without any relation to the knowledge graph at hand, such as large text corpora.
+5.2.1. Methods for Completing Type Assertions For type prediction, there are also classiﬁcation
+methods that use external data. In contrast to the internal classiﬁcation methods described above, external data is used to create a feature representation of an entity.
+Nuzzolese et al. [75] propose the usage of the Wikipedia link graph to predict types in a knowledge graph using a k-nearest neighbors classiﬁer. Given that a knowledge graph contains links to Wikipedia, interlinks between Wikipedia pages are exploited to create feature vectors, e.g., based on the categories of the related pages. Since links between Wikipedia pages are not constrained, there are typically more interlinks between Wikipedia pages than between the corresponding entities in the knowledge graph.
+25Note that since Wikipedia categories are part of the DBpedia knowledge graph, we consider this approach an internal one.
+
+10
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+Apriosio et al. [3] use types of entities in different DBpedia language editions (each of which can be understood as a knowledge graph connected to the others) as features for predicting missing types. The authors use a k-NN classiﬁer with different distance measures (i.e., kernel functions), such as the overlap of two articles’ categories. In their setting, a combination of different distance measures is reported to provide the best results.
+Another set of approaches uses abstracts in DBpedia to extract deﬁnitionary clauses, e.g., using Hearst patterns [36]. Such approaches have been proposed by Gangemi et al. [28] and Kliegr [47], where the latter uses abstracts in the different languages in order to increase coverage and precision.
+5.2.2. Methods for Predicting Relations Like types, relations to other entities can also be pre-
+dicted from textual sources, such as Wikipedia pages. Lange et al. [52] learn patterns on Wikipedia abstracts using Conditional Random Fields [51]. A similar approach, but on entire Wikipedia articles, is proposed by [109].26
+Another common method for the prediction of a relation between two entities is distant supervision. Typically, such approaches use large text corpora. As a ﬁrst step, entites in the knowledge graph are linked to the text corpus by means of Named Entity Recognition [40,90]. Then, based on the relations in the knowledge graph, those approaches seek for text pattern which correspond to relation types (such as: Y’s book X being a pattern for the relation author holding between X and Y), and apply those patterns to ﬁnd additional relations in the text corpus. Such methods have been proposed by Mintz et al. [68] for Freebase, and by Aprosio et al. [4] for DBpedia. In both cases, Wikipedia is used as a text corpus. In [30], a similar setting with DBpedia and two text corpora – the English Wikipedia and an English-language news corpus – is used, the latter showing less reliable results. A similar approach is followed in the RdfLiveNews prototype, where RSS feeds of news companies are used to address the aspect of timeliness in DBpedia, i.e., extracting new information that is either outdated or missing in DBpedia [29].
+West et al. [107] propose the use of web search engines to ﬁll gaps in knowledge graphs. Like in the works discussed above, they ﬁrst discover lexicaliza-
+26Although both approaches do not explicitly mention DBpedia, but aim at completing missing key-value pairs in infoboxes, this can be directly transferred to extending DBpedia.
+
+tions for relations. Then, they use those lexicalizations to formulate search engine queries for ﬁlling missing relation values. Thus, they use the whole Web as a corpus, and combine information retrieval and extraction for knowledge graph completion.
+While text is unstructured, some approaches have been proposed that use semi-structured data for completing knowledge graphs. In particular, approaches leveraging on structured data in Wikipedia are found in the literature. Those are most often used together with DBpedia, so that there are already links between the entities and the corpus of background knowledge, i.e., no Named Entity Recognition has to be performed, in contrast to the distant supervision approaches discussed above.
+Muñoz et al. [69] propose extraction from tables in Wikipedia. They argue that for two entities cooccurring in a Wikipedia table, it is likely that the corresponding entities should share an edge in the knowledge graph. To ﬁll in those edges, they ﬁrst extract a set of candidates from the tables, using all possible relations that hold between at least one pair of entities in two columns. Then, based on a labeled subset of that extraction, they apply classiﬁcation using various features to identify those relations that should actually hold in the knowledge graph.
+Ritze et al. [89] extend this approach to arbitrary HTML tables. This requires that not only that pairs of table columns have to be matched to properties in the DBpedia ontology, but also that rows in the table need to be matched to entities in DBpedia. The authors propose an iterative approach to solve those two problems. The approach is evaluated on a gold standard mapping for a sample of HTML tables from the WebDataCommons Web Table corpus27. Since such tables can also contain literal values (such as population ﬁgures), the approach is capable of completing both relations between entities, and literal values for entities.
+In [84], we have proposed the use of list pages in Wikipedia for generating both type and relation assertions in knowledge graphs, based on statistical methods. The idea is that entities appear together in list pages for a reason, and it should be possible to identify that common pattern appearing for the majority of the instance in the list page. For example, instances linked from the page List of Jewish-American Writers should all be typed as Writer and include an edge religion to Jewish, as well as an edge nationality to United States
+27http://webdatacommons.org/webtables/
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+11
+
+of America. Once such patterns are found for the majority of the list items, they can be applied to the remaining ones to ﬁll gaps in the knowledge graph.
+Many knowledge graphs contain links to other knowledge graphs. Those are often created automatically [71]. Interlinks between knowledge graphs can be used to ﬁll gaps in one knowledge graph from information deﬁned in another knowledge graph. If a mapping both on the instance and on the schema level is known, it can be exploited for ﬁlling gaps in knowledge graphs on both sides.
+One work in this direction is presented by Bryl and Bizer [12], where different language versions of DBpedia (each of which can be seen as a knowledge graph of its own) are used to ﬁll missing values in the English language DBpedia (the one which is usually meant when referring to DBpedia).
+Dutta et al. [23] propose a probabilistic mapping between knowledge graphs. Based on distributions of types and properties, they create a mapping between knowledge graphs, which can then be used to derive additional, missing facts in the knowledge graphs. To that end, the type systems used by two knowledge graphs are mapped to one another. Then, types holding in one knowledge graph can be used to predict those that should hold in another.
+6. Approaches for Error Detection in Knowledge Graphs
+Like completion methods discussed in the previous section, methods for identifying errors in knowledge graphs can target various types of information, i.e., type assertions, relations between individuals, literal values, and knowledge graph interlinks.
+In this section, we survey methods for detecting errors in knowledge graphs. Like for the previous section, we distinguish internal and external methods, and further group the approaches by the error detection target.
+6.1. Internal Methods
+Internal methods use only the information given in a knowledge graph to ﬁnd out whether an axiom in the knowledge graph is plausible or not.
+6.1.1. Methods for Finding Erroneous Type Assertions
+In contrast to relation assertions, type assertions are most often more correct in knowledge graphs than re-
+
+lation assertions [80]. Hence, methods for ﬁnding erroneous type assertions are rather rare. One such method is proposed by Ma et al. [63], who use inductive logic programming for learning disjointness axioms, and then apply those disjointness axioms for identifying potentially wrong type assertions.
+6.1.2. Methods for Finding Erroneous Relations For building Knowledge Vault, Dong et al. use
+classiﬁcation to tell relations which should hold in a knowledge graph from those which should not [21]. Like the work by Muñoz et al. discussed above, each relation is used as an instance in the classiﬁcation problem, with the existence of the relation in the knowledge graph being used as a binary class. This classiﬁcation is used as a cleansing step after the knowledge extraction process. While the creation of positive training examples from the knowledge graph is quite straight forward, the authors propose the creation of negative training examples by applying a Local Closed World Assumption, assuming that a relation r between two entities e1 and e2 does not hold if it is not present in the knowledge graph, and there is a relation r between e1 and another e3.
+In [80], we have proposed a statistical method for ﬁnding wrong statements within a knowledge graph. For each type of relation, we compute the characteristic distribution of subject and object types for edge, i.e., each instantiation of the relation. Edges in the graph whose subject and object type strongly deviate from the characteristic distributions are then identiﬁed as potential errors.
+Reasoning is a ﬁeld of study in the artiﬁcial intelligence community which deals with automatically deriving proofs for theorems, and for uncovering contradictions in a set of axioms [91]. The techniques developed in this ﬁeld have been widely adopted in the Semantic Web community, leading to the development of a larger number of ontology reasoners [19,20,62].
+For exploiting reasoning for error checking in knowledge graphs, a rich ontology is required, which deﬁnes the possible types of nodes and edges in a knowledge graph, as well as the restrictions that hold on them. For example, if a person is deﬁned to be the capital of a state, this is a contradiction, since capitals are cities, and cities and persons are disjoint, i.e., no entity can be a city and a person at the same time. Reasoning is often used at the building stage of a knowledge graph, i.e., when new axioms are about to be added. For example, NELL and PROSPERA perform reasoning at that point to determine whether the new
+
+12
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+axiom is plausible or not, and discard implausible ones [14,70]. For real-world knowledge graphs, reasoning can be difﬁcult due to the presence of errors and noise in the data [43,87].
+Works using reasoning as a reﬁnement operation for knowledge graphs have also been proposed. However, many knowledge graphs, such as DBpedia, come with ontologies that are not rich enough to perform reasoning for inconsistency detection – for example, they lack class disjointness assertions needed for an inference as in the example above. Therefore, approaches exploiting reasoning are typically used in conjunction with methods for enriching ontologies, such as statistical methods, as proposed in [42] and [102], or association rule mining, as in [53]. In all of those works, the ontology at hand is enriched with further axioms, which can then be used for detecting inconsistencies. For example, if a reasoner concludes that an entity should both be a person and an organization, and from the enrichment steps has a disjointness axiom between the two types added, a reasoner can state that one out of a few axioms in the knowledge graph has to be wrong. Another source of additional disjointness axioms is the use of a top level ontology like DOLCE [27], which provides high-level disjointness axioms [82].
+In [85], a light-weight reasoning approach is proposed to compare actual and deﬁned domains and ranges of relations in a knowledge graph schema. The authors propose a set of heuristics for ﬁxing the schema if the actual and the deﬁned domain or range strongly deviate.
+6.1.3. Methods for Finding Erroneous Literal Values Outlier detection or anomaly detection methods aim
+at identifying those instances in a dataset that deviate from the majority from the data, i.e., that follow different characteristics than the rest of the data [15,39].
+As outlier detection in most cases deals with numeric data, numeric literals are a natural target for those methods. In [108], we have proposed the application of different univariate outlier detection methods (such as interquartile range or kernel density estimation) to DBpedia. Although outlier detection does not necessarily identify errors, but also natural outliers (such as the population of very large cities), it has been shown that the vast majority of outliers identiﬁed are actual errors in DBpedia, mostly resulting from mistakes made when parsing strings using various number formats and units of measurement.
+To lower the inﬂuence of natural outliers, an extension of that approach has been presented in [24],
+
+where the instance set under inspection is ﬁrst split into smaller subsets. For example, population values are inspected for countries, cities, and towns in isolation, thus, the distributions are more homogenous, which leads to a higher precision in error identiﬁcation. Furthermore, the approach foresees cross-checking the outliers that have been found, using other knowledge graphs in order to further reduce the inﬂuence of natural outliers, which makes it a mixed approach with both an internal and an external component.
+6.1.4. Methods for Finding Erroneous Knowledge Graph Interlinks
+In [78], we have shown that outlier detection is not only applicable to numerical values, but also to other targets, such as knowledge graph interlinks. To that end, the interlinks are represented as a multidimensional feature vector, e.g., with each type of the respective entity in both knowledge graphs being a binary feature. In that feature space, standard outlier detection techniques such as Local Outlier Factor [11] or cluster-based outlier detection [35] can be used to assign outlier scores. Based on those scores, implausible links, such as a owl:sameAs assertion between a person and a book, can be identiﬁed based only on the overall distribution of all links, where such a combination is infrequent.
+The work in [58] tries to learn arithmetic relations between attributes, e.g., lessThan or greaterThan, using probabilistic modeling. For example, the birth date of a person must be before her death date, the total area of a country must be larger than the area covered by water, etc. Violations of those relations are then used to identify errors.28
+6.2. External Methods
+Purely automatic external methods for error detection in knowledge graphs have limitations, e.g., in telling apart actual errors from unusual ﬁndings [94]. Semi-automatic approaches, which exploit human knowledge, have also been proposed.
+6.2.1. Methods for Finding Erroneous Relations Most external methods are targeted on ﬁnding erro-
+neous relations in knowledge graphs. One of the few
+28Note that an error here is not a single statement, but a pair of statements that cannot be true at the same time. Thus, the approach does not trivially lead to a fully automatic repairing mechanism (unless both statements are removed, which means that most likely, one correct statement is removed as well).
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+13
+
+works is DeFacto [54]. The system uses a database of lexicalizations for predicates in DBpedia. Based on those lexicalizations, it transforms statements in DBpedia to natural language sentences, and uses a web search engine to ﬁnd web pages containing those sentences. Statements with no or only very few web pages supporting the corresponding sentences are then assigned a low conﬁdence score.
+Apart from fully automatic methods, semi-automatic methods involving users have been proposed for validating knowledge graphs, such as crowdsourcing with microtasks [1]. In order to increase the user involvement and motivation, game-based approaches (i.e., games with a purpose) have been proposed [37,48,97,105]. In a wider sense, those can also be viewed as external methods, with the human in the loop being the external source of information.
+Generally, a crucial issue with human computation is the size of web scale knowledge graphs. In [80], it has been argued that the time needed to validate the entire DBpedia knowledge graph with the crowdsourcing approach proposed in [1] – extrapolating the task completion times reported – would take more than 3,000 years. To overcome such scaling problems, we have recently proposed a clustering of inconsistencies identiﬁed by automatic means, which allows to present only representative examples to the human for inspection [82]. We have shown that most of the clusters have a common root cause in the knowledge graph construction (e.g., a wrong mapping rule or a programming error), so that by inspecting only a few dozen examples (and addressing the respective root causes), millions of statements can be corrected.
+6.2.2. Methods for Finding Erroneous Literal Values While most of the crowdsourcing approaches above
+are focusing on relations in the knowledge graph, the work in [1] uses similar mechanisms for validating knowledge graph interlinks and literal values.
+In [60], an automatic approach using knowledge graph interlinks for detecting wrong numerical values is proposed. The authors exploit links between identical resources and apply different matching functions between properties in the individual sources. Facts in one knowledge graph are assumed to be wrong if multiple other sources have a consensus for a conﬂicting fact (e.g., a radically different population ﬁgure).
+
+7. Findings from the Survey
+From the survey in the last two sections, we can observe that is a large number of approaches proposed for knowledge graph reﬁnement, both for automatic completion and for error detection. Tables 3 to 5 sum up the results from the previous section.
+By taking a closer look at those results, we can derive some interesting ﬁndings, both with respect to the approaches, as well as with respect to evaluation methodologies.
+7.1. Approaches
+A ﬁrst interesting observation is that our distinction into completion and error detection is a strict one. That is, there exist no approaches which do both completion and correction at the same time. The only exception we found is the pairing of the two approaches SDType and SDValidate [80], which are two closely related algorithms which share the majority of the computations and can output both completion axioms and errors.
+For many of the approaches, it is not obvious why they were only used for one purpose. For example, many of the probabilistic and NLP-based completion approaches seek for evidence for missing axioms, e.g., by means of scanning text corpora. Similarly, many completion approaches ultimately compute a conﬁdence score, which is then combined with a suitable threshold for completing a knowledge graph. In principle, they could also be used for error detection by ﬂagging axioms for which no or only little evidence was found, or those with a low conﬁdence score, as wrong.
+Furthermore, in particular in the machine learning area, approaches exist which can be used for simultaneously creating a predictive model and creating weights for pieces of information. For example, random forests can assign weights to attributes [59], whereas boosting assign weights to instances [25], which can also be interpreted as outlier scores [16]. Likewise, there are anomaly detection methods that build on learning predictive models [34,83]. Such approaches could be a starting point for developing methods for simultaneous completion and error detection in knowledge graphs.
+Along the same lines, there are hardly any among the error detection approaches which are also suitable for correcting errors, i.e., suggest ﬁxes for the errors found. Here, a combination between completion and error detection methods could be of great value: once an error is detected, the erroneous axiom(s) could be
+
+Table 3: Overview of knowledge graph completion approaches (part 1). Abbreviations used: Target (T=Types, R=Relations), Type (I=internal, E=external), Evaluation (RE=retrospective evaluation, PG=partial gold standard, either available (a) or unavailable (n/a), KG=evaluation against knowledge graph, SV=split validation, CV=cross validation), Metrics (P/R=precision and recall, A=accuracy, AUC-PR=area under precision-recall-curve, ROC=Area under the ROC curve, T=total new statements). Comp.: evaluation or materialization carried out on whole knowledge graph or not, Performance: computational performance reported or not.
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+Paper
+
+Target Type Methods and Sources
+
+Knowledge Graph(s)
+
+Eval.
+
+Metrics
+
+Whole Comp.
+
+Paulheim [77]
+
+T
+
+I Association Rule Mining
+
+DBpedia
+
+RE
+
+P, T
+
+no
+
+yes
+
+Nickel et al. [73]
+
+T
+
+I Matrix Factorization
+
+YAGO
+
+KG (CV) P/R, AUC-PR yes
+
+yes
+
+Paulheim/Bizer [79,80] T
+
+I Likelihood based
+
+DBpedia, OpenCyc, Nell KG, RE
+
+P/R, T
+
+yes
+
+no
+
+Sleeman et al. [99]
+
+T
+
+I Topic Modeling
+
+DBpedia
+
+KG (SV)
+
+P/R
+
+no
+
+no
+
+Nuzzolese et al. [75]
+
+T
+
+E different machine learning DBpedia
+
+PG (a)
+
+P/R
+
+yes
+
+no
+
+methods, Wikipedia link
+
+graph
+
+Gangemi et al. [28]
+
+T
+
+E NLP on Wikipedia abstracts DBpedia
+
+PG (a)
+
+P/R
+
+no
+
+yes
+
+Kliegr [47]
+
+T
+
+E NLP on Wikipedia abstracts DBpedia
+
+PG (n/a)
+
+P/R
+
+no
+
+no
+
+Aprosio et al. [3]
+
+T
+
+E K-NN classiﬁcation, different DBpedia
+
+PG (n/a)
+
+P/R
+
+yes
+
+no
+
+DBpedia language editions
+
+Dutta et al. [23]
+
+T
+
+E Knowledge graph fusion (sta- NELL, DBpedia
+
+PG (a)
+
+P/R
+
+no
+
+no
+
+tistical)
+
+Sleeman/Finin [98]
+
+T I, E SVM, using other KGs
+
+DBpedia, Freebase, Ar- KG
+
+P/R
+
+no
+
+no
+
+netminer
+
+Socher et al. [100]
+
+R
+
+I Neural Tensor Network
+
+WordNet, Freebase
+
+KG (SV)
+
+A
+
+no
+
+no
+
+Krompaß et al. [50]
+
+R
+
+I Latent variable models
+
+DBpedia, Freebase, KG (SV) AUC-PR, ROC no
+
+no
+
+YAGO
+
+Kolthoff and Dutta [49] R
+
+I Rule mining
+
+DBpedia, YAGO
+
+KG
+
+P/R
+
+no
+
+no
+
+Zhao et al. [112]
+
+R
+
+I Learning Embeddings
+
+WordNet, Freebase
+
+KG
+
+P
+
+no
+
+no
+
+14
+
+Table 4: Overview of knowledge graph completion approaches (part 2). Abbreviations used: Target (T=Types, R=Relations), Type (I=internal, E=external), Evaluation (RE=retrospective evaluation, PG=partial gold standard, either available (a) or unavailable (n/a), KG=evaluation against knowledge graph, SV=split validation, CV=cross validation), Metrics (P/R=precision and recall, A=accuracy, AUC-PR=area under precision-recall-curve, T=total new statements). Comp.: evaluation or materialization carried out on whole knowledge graph or not, Performance: computational performance reported or not.
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+Paper
+
+Target Type Methods and Sources
+
+Knowledge Graph(s)
+
+Galárraga et al. [26]
+
+R
+
+I Association Rule Mining
+
+YAGO, DBpedia
+
+Kim et al. [46]
+
+R
+
+I Association Rule Mining
+
+DBpedia
+
+Bryl/Bizer [12]
+
+R
+
+E Fusion of DBpedia language DBpedia
+
+editions
+
+Apriosio et al. [4]
+
+R
+
+E Distant supervision and NLP DBpedia
+
+techniques on Wikipedia text
+
+corpus
+
+Lange et al. [52]
+
+R
+
+E Pattern learning on Wikipedia (DBpedia)
+
+abstracts
+
+Wu et al. [109]
+
+R
+
+E Pattern learning on Wikipedia (DBpedia)
+
+articles, Web search
+
+Mintz et al. [68]
+
+R
+
+E Distant supervision and NLP Freebase
+
+techniques on Wikipedia text
+
+corpus
+
+Gerber/Ngonga Ngomo [30] R
+
+E Distant supervision and NLP DBpedia
+
+techniques on two corpora
+
+Gerber et al. [29]
+
+R
+
+E NLP and pattern mining on DBpedia
+
+RSS news feeds
+
+West et al. [107]
+
+R
+
+E search engines
+
+Freebase
+
+Mu noz et al. [69]
+
+R
+
+E Statistical measures, machine DBpedia
+
+learning, using Wikipedia ta-
+
+bles
+
+Ritze et al. [89]
+
+R, L E Schema and instance match- DBpedia
+
+ing using HTML tables
+
+Paulheim/Ponzetto [84]
+
+T, R E Statistical
+
+measures, DBpedia
+
+Wikipedia list pages
+
+Eval. KG, RE
+RE PG (a)
+KG
+
+Metrics A,T P,T A
+P/R
+
+Whole yes yes no
+
+Comp. yes no no
+
+no
+
+no
+
+KG (CV) P/R
+
+KG (CV) P/R
+
+KG
+
+P/R
+
+yes
+
+yes
+
+no
+
+no
+
+no
+
+no
+
+KG, RE
+
+P/R
+
+no
+
+no
+
+PG
+
+P/R, A
+
+yes
+
+yes
+
+KG P/R, rank no
+
+no
+
+PG (a)
+
+P/R
+
+yes
+
+no
+
+PG (a)
+
+P/R
+
+yes
+
+no
+
+–
+
+–
+
+no
+
+no
+
+15
+
+Table 5: Overview of error detection approaches. Abbreviations used: Target (T=Types, R=Relations, L=Literals, I=Interlinks, S=Schema), Type (I=internal, E=external), Evaluation (RE=retrospective evaluation, PG=partial gold standard, either available (a) or unavailable (n/a), KG=evaluation against knowledge graph, SV=split validation, CV=cross validation), Metrics (P/R=precision and recall, A=accuracy, AUC-PR=area under precisionrecall-curve, ROC=Area under the ROC curve, T=total new statements, RMSE=Root Mean Squared Error). Comp.: evaluation or materialization carried out on whole knowledge graph or not, Performance: computational performance reported or not.
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+Paper
+
+Target Type Methods and Sources
+
+Knowledge Graph(s) Eval. Metrics Whole Comp.
+
+Ma et al. [63]
+
+T
+
+I Reasoning, Association DBpedia, Zhishi.me
+
+RE P, T
+
+yes
+
+no
+
+Rule Mining
+
+Dong et al. [21]
+
+R
+
+I Classiﬁcation
+
+Knowledge Vault
+
+KG (SV) AUC-PR
+
+yes
+
+no
+
+Li et al. [58]
+
+L
+
+I Probabilistic Modeling
+
+DBpedia
+
+RE P, T
+
+yes
+
+yes
+
+Nakashole et al. [70]
+
+R
+
+I Reasoning
+
+Prospera
+
+RE P, T
+
+yes
+
+yes
+
+Paulheim/Bizer [80]
+
+R
+
+I Probabilistic
+
+DBpedia, NELL
+
+RE P
+
+yes
+
+no
+
+Lehmann et al. [54]
+
+R
+
+E Text pattern induction, Web DBpedia
+
+KG (CV) P/R, ROC, no
+
+yes
+
+search engines
+
+RMSE
+
+Töpper et al. [102]
+
+R,S
+
+I Statistical methods, Reason- DBpedia
+
+RE P, T
+
+yes
+
+no
+
+ing
+
+Jang et al. [42]
+
+R
+
+I Statistical methods
+
+DBpedia
+
+RE P,R
+
+yes
+
+no
+
+Lehmann/Bühmann [53]
+
+R,T
+
+I Reasoning, ILP
+
+DBpedia, Open Cyc, RE A
+
+yes
+
+yes
+
+seven smaller ontolo-
+
+gies
+
+Wienand/Paulheim [108]
+
+L
+
+I Outlier Detection
+
+DBpedia
+
+RE P, T
+
+no
+
+no
+
+Fleischhacker et al. [24]
+
+L I, E Outlier Detection and Data DBpedia, NELL
+
+RE AUC-
+
+no
+
+no
+
+Fusion with other KG
+
+ROC
+
+Liu et al. [60]
+
+L
+
+E Matching to other KGs
+
+DBpedia
+
+RE P, T
+
+no
+
+no
+
+Paulheim [78]
+
+I
+
+I Outlier Detection
+
+DBpedia + two PG (a) P/R, ROC yes
+
+no
+
+linked graphs
+
+Acosta et al. [1]
+
+L,I
+
+E Crowdsourcing
+
+DBpedia
+
+PG (a) P
+
+no
+
+no
+
+Waitelonis et al. [105]
+
+R
+
+E Quiz game
+
+DBpedia
+
+RE P, T
+
+no
+
+yes
+
+Hees et al. [37]
+
+R
+
+E Two-player game
+
+DBpedia
+
+RE T
+
+no
+
+yes
+
+Paulheim and Gangemi [82] R
+
+E Reasoning, clustering, hu- DBpedia
+
+RE P, T
+
+yes
+
+yes
+
+man inspection
+
+16
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+17
+
+removed, and a correction algorithm could try to ﬁnd a new (and, in the best case, more accurate) replacement for the removed axiom(s).
+Another ﬁnding for error detection approaches is that those approaches usually output a list of potentially erroneous statements. Higher level patterns from those errors, which would hint at design level problems in the knowledge graph construction, are rarely derived (apart from the work presented in [82]). Such patterns, however, would be highly valuable for the parties involved in developing and curating knowledge graphs.
+In addition to the strict separation of completion and correction, we also observe that most of the approaches focus on only one target, i.e., types, relations, literals, etc. Approaches that simultaneously try to complete or correct, e.g., type and relation assertions in a knowledge graph, are also quite rare.
+For the approaches that perform completion, all works examined in this survey try to add missing types for or relations between existing entities in the knowledge graph. In contrast, we have not observed any approaches which populate the knowledge graph with new entities. Here, entity set expansion methods, which have been deeply investigated in the NLP ﬁeld [76,93,106], would be an interesting ﬁt to further increase the coverage of knowledge graphs, especially for less well-known long tail entities.
+Another interesting observation is that, although the discussed works address knowledge graphs, only very few of them are, in the end, genuinely graph-based approaches. In many cases, simplistic transformations to a propositional problem formulation are taken. Here, methods from the graph mining literature still seek their application to knowledge graphs. In particular, for many of the methods applied in the works discussed above – such as outlier detection or association rule mining – graph-based variants have been proposed in the literature [2,44]. Likewise, graph kernel functions – which can be used in Support Vector Machines as well as other machine learning algorithms – have been proposed for RDF graphs [18,41,61] and hence could be applied to many web knowledge graphs.
+7.2. Evaluation Methodologies
+
+ROC curves, accuracy, or Root Mean Squared Error – occasionally being used as well.
+With respect to the overall methodology, the results are more mixed. Evaluations using the knowledge graph as a silver standard, retrospective evaluations, and evaluations based on partial gold standards appear roughly at equal frequency, with retrospective validations mostly used for error detection. The latter is not too surprising, since due to the high quality of most knowledge graphs used for the evaluations, partial gold standards based on random samples are likely to contain only few errors. For partial gold standards, it is crucial to point out that the majority of authors make those partial gold standards public29, which allows for replication and comparison.
+DBpedia is the knowledge graph which is most frequently used for evaluation. This, in principle, makes the results comparable to a certain extent, although roughly each year, a new version of DBpedia is published, so that papers from different years are likely to be evaluated on slightly different knowledge graphs.
+That being said, we have observed that roughly two out of three approaches evaluated on DBpedia are only evaluated on DBpedia. Along the same lines, about half of the approaches reviewed in this survey are only evaluated on one knowledge graph. This, in many cases, limits the signiﬁcance of the results. For some works, it is clear that they can only work on a speciﬁc knowledge graph, e.g., DBpedia, by design, e.g., since they exploit the implicit linkage between a DBpedia entity and the corresponding Wikipedia page.
+As discussed in section 2, knowledge graphs differ heavily in their characteristics. Thus, for an approach evaluated on only one graph, it is unclear whether it would perform similarly on another knowledge graph with different characteristics, or whether it exploits some (maybe not even obvious) characteristics of that knowledge graph, and/or overﬁts to particular characteristics of that graph.
+Last, but not least, we have observed that only a minority of approaches have been evaluated on a whole, large-scale knowledge graph. Moreover, statements about computational performance are only rarely included in the corresponding papers30. In the age of
+
+For evaluation methodologies, our ﬁrst observation is that there are various different evaluation metrics being used in the papers examined. There is a clear tendency towards precision and recall (or precision and total number of statements for retrospective evaluations) are the most used metrics, with others – such as
+
+29For this survey, we counted a partial gold standard as public if there was a working download link in the paper, but we did not make any additional efforts to search for the gold standard, such as contacting the authors.
+30Even though we were relaxed on this policy and counted also informal statements about the computational performance as a performance evaluation.
+
+18
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+large-scale knowledge graphs, we think that this is a dimension that should not be neglected.
+In order to make future works on knowledge graph evolution comparable, it would be useful to have a common selection of benchmarks. This has been done in other ﬁelds of the semantic web as well, such as for schema and instance matching [22], reasoning [8], or question answering [17]. Such benchmarks could serve both for comparison in the qualitative as well as the computational performance.
+8. Conclusion
+In this paper, we have presented a survey on knowledge base reﬁnement methods. We distinguish completion from error detection, and internal from external methods. We have shown that a larger body of works exist which apply different methods, ranging from techniques from the machine learning ﬁeld to NLP related techniques.
+The survey has revealed that there are, at the moment, rarely any approaches which simultaneously try to improve completeness and correctness of knowledge graphs, and usually only address one target, such as type or relation assertions, or literal values. Holistic solutions which simultaneously improve the quality of knowledge graphs in many different aspects are currently not observed.
+Looking at the evaluation methods, the picture is quite diverse. Different methods are applied, using either the knowledge graph itself as a silver standard, using a partial gold standard, or performing a retrospective evaluation, are about equally distributed. Furthermore, approaches are often only evaluated on one speciﬁc knowledge graph. This makes it hard to compare approaches and make general statements on their relative performance.
+In addition, scalability issues are only rarely addressed by current research works. In the light of the advent of web-scale knowledge graphs, however, this is an aspect which will be of growing importance.
+To sum up, this survey shows that automatic knowledge graph reﬁnement is a relevant and ﬂowering research area. At the same time, this survey has pointed out some uncharted territories on the research map, which we hope will inspire researchers in the area.
+References
+[1] Maribel Acosta, Amrapali Zaveri, Elena Simperl, Dimitris Kontokostas, Sören Auer, and Jens Lehmann. Crowdsourc-
+
+ing Linked Data quality assessment. In The Semantic Web– ISWC 2013, volume 8219 of LNCS, pages 260–276. Springer, Berlin Heidelberg, 2013. http://dx.doi.org/10. 1007/978-3-642-41338-4_17. [2] Leman Akoglu, Hanghang Tong, and Danai Koutra. Graph based anomaly detection and description: a survey. Data Mining and Knowledge Discovery, 29(3):1–63, 2014. http: //dx.doi.org/10.1007/s10618-014-0365-y. [3] Alessio Palmero Aprosio, Claudio Giuliano, and Alberto Lavelli. Automatic expansion of DBpedia exploiting Wikipedia cross-language information. In The Semantic Web: Semantics and Big Data, volume 7882 of LNCS, pages 397– 411. Springer, Berlin Heidelberg, 2013. http://dx.doi. org/10.1007/978-3-642-38288-8_27. [4] Alessio Palmero Aprosio, Claudio Giuliano, and Alberto Lavelli. Extending the Coverage of DBpedia Properties using Distant Supervision over Wikipedia. In NLP&DBpedia, volume 1064 of CEUR Workshop Proceedings, 2013. http: //ceur-ws.org/Vol-1064/. [5] Christian Bizer, Tom Heath, and Tim Berners-Lee. Linked Data – The Story So Far. International journal on semantic web and information systems, 5(3):1–22, 2009. http:// dx.doi.org/10.4018/jswis.2009081901. [6] Roi Blanco, Berkant Barla Cambazoglu, Peter Mika, and Nicolas Torzec. Entity Recommendations in Web Search. In The Semantic Web–ISWC 2013, volume 8219 of LNCS, pages 33–48. Springer, Berlin Heidelberg, 2013. http://dx. doi.org/10.1007/978-3-642-41338-4_3. [7] David M Blei, Andrew Y Ng, and Michael I Jordan. Latent Dirichlet Allocation. Journal of Machine Learning Research, 3:993–1022, 2003. [8] Jürgen Bock, Peter Haase, Qiu Ji, and Raphael Volz. Benchmarking OWL reasoners. In Workshop on Advancing Reasoning on the Web: Scalability and Commonsense, volume 350 of CEUR Workshop Proceedings, 2008. http://ceurws.org/Vol-350/. [9] Kurt Bollacker, Colin Evans, Praveen Paritosh, Tim Sturge, and Jamie Taylor. Freebase: A Collaboratively Created Graph Database For Structuring Human Knowledge. In Proceedings of the 2008 ACM SIGMOD International Conference on Management of Data, pages 1247–1250, New York, 2008. ACM. http://dx.doi.org/10.1145/ 1376616.1376746. [10] Antoine Bordes and Evgeniy Gabrilovich. Constructing and Mining Web-scale Knowledge Graphs. In Proceedings of the 20th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, pages 1967–1967, New York, 2014. ACM. http://dx.doi.org/10.1145/ 2623330.2630803. [11] Markus M Breunig, Hans-Peter Kriegel, Raymond T Ng, and Jörg Sander. LOF: identifying density-based local outliers. ACM SIGMOD Record, 29(2):93–104, 2000. http://dx. doi.org/10.1145/335191.335388. [12] Volha Bryl and Christian Bizer. Learning conﬂict resolution strategies for cross-language Wikipedia data fusion. In Proceedings of the companion publication of the 23rd international conference on World wide web companion, pages 1129–1134, Geneva, 2014. International World Wide Web Conferences Steering Committee. http://dx.doi.org/ 10.1145/2567948.2578999. [13] Paul Buitelaar, Philipp Cimiano, and Bernardo Magnini. On-
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+19
+
+tology Learning from Text: Methods, Evaluation and Applications, volume 123 of Frontiers in Artiﬁcial Intelligence and Applications. IOS press, Clifton, VA, 2005. [14] Andrew Carlson, Justin Betteridge, Richard C Wang, Estevam R Hruschka Jr, and Tom M Mitchell. Coupled semisupervised learning for information extraction. In Proceedings of the third ACM international conference on Web search and data mining, pages 101–110, New York, 2010. ACM. http://dx.doi.org/10.1145/1718487. 1718501. [15] Varun Chandola, Arindam Banerjee, and Vipin Kumar. Anomaly detection: A survey. ACM Computing Surveys (CSUR), 41(3), 2009. http://dx.doi.org/10.1145/ 1541880.1541882. [16] Nathalie Cheze and Jean-Michel Poggi. Iterated Boosting for Outlier Detection. In Data Science and Classiﬁcation, pages 213–220. Springer, Berlin Heidelberg, 2006. http://dx. doi.org/10.1007/3-540-34416-0_23. [17] Philipp Cimiano, Vanessa Lopez, Christina Unger, Elena Cabrio, Axel-Cyrille Ngonga Ngomo, and Sebastian Walter. Multilingual Question Answering over Linked Data (QALD-3): Lab Overview. In Information Access Evaluation. Multilinguality, Multimodality, and Visualization, volume 8138 of LNCS, pages 321–332. Springer, Berlin Heidelberg, 2013. http://dx.doi.org/10.1007/978-3642-40802-1_30. [18] Gerben KD de Vries. A fast approximation of the WeisfeilerLehman graph kernel for RDF data. In Machine Learning and Knowledge Discovery in Databases, volume 8188 of LNCS, pages 606–621. Springer, Berlin Heidelberg, 2013. http://dx.doi.org/10.1007/978-3-64240988-2_39. [19] Kathrin Dentler, Ronald Cornet, Annette ten Teije, and Nicolette de Keizer. Comparison of reasoners for large ontologies in the OWL 2 EL proﬁle. Semantic Web, 2(2):71–87, 2011. http://dx.doi.org/10.3233/SW-2011-0034. [20] Li Ding, Pranam Kolari, Zhongli Ding, and Sasikanth Avancha. Using ontologies in the semantic web: A survey. In Ontologies, volume 14 of Integrated Series in Information Systems, pages 79–113. Springer, US, 2007. http://dx. doi.org/10.1007/978-0-387-37022-4_4. [21] Xin Luna Dong, K Murphy, E Gabrilovich, G Heitz, W Horn, N Lao, Thomas Strohmann, Shaohua Sun, and Wei Zhang. Knowledge Vault: A Web-scale approach to probabilistic knowledge fusion. In 20th ACM SIGKDD international conference on Knowledge discovery and data mining, pages 601– 610, New York, 2014. ACM. http://dx.doi.org/10. 1145/2623330.2623623. [22] Zlatan Dragisic, Kai Eckert, Jerome Euzenat, Daniel Faria, Alﬁo Ferrara, Roger Granada, Valentina Ivanova, Ernesto Jimenez-Ruiz, Andreas Kempf, Patrick Lambrix, et al. Results of the Ontology Alignment Evaluation Initiative 2014. In International Workshop on Ontology Matching, volume 1317 of CEUR Workshop Proceedings, pages 61–104, 2014. http://ceur-ws.org/Vol-1317/. [23] Arnab Dutta, Christian Meilicke, and Simone Paolo Ponzetto. A Probabilistic Approach for Integrating Heterogeneous Knowledge Sources. In The Semantic Web: Trends and Challenges, volume 8465 of LNCS, pages 286–301. Springer, Switzerland, 2014. http://dx.doi.org/10.1007/ 978-3-319-07443-6_20.
+
+[24] Daniel Fleischhacker, Heiko Paulheim, Volha Bryl, Johanna
+
+Völker, and Christian Bizer. Detecting Errors in Numeri-
+
+cal Linked Data Using Cross-Checked Outlier Detection. In
+
+The Semantic Web–ISWC 2014, volume 8796 of LNCS, pages
+
+357–372. Springer, Switzerland, 2014. http://dx.doi.
+
+org/10.1007/978-3-319-11964-9_23.
+
+[25] Yoav Freund and Robert E Schapire. A Decision-Theoretic
+
+Generalization of On-Line Learning and an Application
+
+to Boosting. Journal of Computer and System Sci-
+
+ences, 55(1):119–139, 1997. http://dx.doi.org/10.
+
+1006/jcss.1997.1504.
+
+[26] Luis Antonio Galárraga, Christina Teﬂioudi, Katja Hose, and
+
+Fabian Suchanek. AMIE: association rule mining under
+
+incomplete evidence in ontological knowledge bases. In
+
+Proceedings of the 22nd international conference on World
+
+Wide Web, pages 413–422, Geneva, 2013. International World
+
+Wide Web Conferences Steering Committee.
+
+[27] Aldo Gangemi, Nicola Guarino, Claudio Masolo, and
+
+Alessandro Oltramari. Sweetening WordNet with DOLCE.
+
+AI Magazine, 24(3):13–24, 2003. http://dx.doi.org/
+
+10.1609/aimag.v24i3.1715.
+
+[28] Aldo Gangemi, Andrea Giovanni Nuzzolese, Valentina Pre-
+
+sutti, Francesco Draicchio, Alberto Musetti, and Paolo Cian-
+
+carini. Automatic typing of DBpedia entities. In The Se-
+
+mantic Web–ISWC 2012, volume 7649 of LNCS, pages 65–
+
+81. Springer, Berlin Heidelberg, 2012. http://dx.doi.
+
+org/10.1007/978-3-642-35176-1_5.
+
+[29] Daniel Gerber, Sebastian Hellmann, Lorenz Bühmann, Tom-
+
+maso Soru, Ricardo Usbeck, and Axel-Cyrille Ngonga
+
+Ngomo. Real-time RDF extraction from unstructured
+
+data streams. In The Semantic Web–ISWC 2013, volume
+
+8218 of LNCS, pages 135–150. Springer, Berlin Heidelberg,
+
+2013. http://dx.doi.org/10.1007/978-3-642-
+
+41335-3_9.
+
+[30] Daniel Gerber and A-C Ngonga Ngomo.
+
+Boot-
+
+strapping the Linked Data web. In Workshop on
+
+Web Scale Knowledge Extraction, 2011.
+
+http:
+
+//iswc2011.semanticweb.org/fileadmin/
+
+iswc/Papers/Workshops/WeKEx/paper_3.pdf.
+
+[31] Lise Getoor and Christopher P Diehl. Link Mining: A
+
+Survey. ACM SIGKDD Explorations Newsletter, 7(2):3–
+
+12, 2005. http://dx.doi.org/10.1145/1117454.
+
+1117456.
+
+[32] T. Groza, A. Oellrich, and N. Collier. Using silver and semi-
+
+gold standard corpora to compare open named entity recog-
+
+nisers. In IEEE International Conference on Bioinformatics
+
+and Biomedicine (BIBM), pages 481–485, Piscataway, New
+
+Jersey, 2013. IEEE. http://dx.doi.org/10.1109/
+
+BIBM.2013.6732541.
+
+[33] Harry Halpin, Patrick J. Hayes, James P. McCusker, Deb-
+
+orah L. McGuinness, and Henry S. Thompson. When
+
+owl:sameAs Isn’t the Same: An Analysis of Identity in
+
+Linked Data. In The Semantic Web – ISWC 2010, volume
+
+6496 of LNCS, pages 305–320. Springer, Berlin Heidelberg,
+
+2010. http://dx.doi.org/10.1007/978-3-642-
+
+17746-0_20.
+
+[34] Simon Hawkins, Hongxing He, Graham Williams, and Ro-
+
+han Baxter. Outlier Detection Using Replicator Neural Net-
+
+works. In Data Warehousing and Knowledge Discovery, vol-
+
+ume 2454 of LNCS, pages 170–180. Springer, Berlin Heidel-
+
+berg, 2002. http://dx.doi.org/10.1007/3-540-
+
+20
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+46145-0_17. [35] Zengyou He, Xiaofei Xu, and Shengchun Deng. Discov-
+ering cluster-based local outliers. Pattern Recognition Letters, 24(9):1641–1650, 2003. http://dx.doi.org/10. 1016/S0167-8655(03)00003-5. [36] Marti A Hearst. Automatic Acquisition of Hyponyms from Large Text Corpora. In Proceedings of the 14th Conference on Computational Linguistics (Volume 2), pages 539–545, Stroudsburg, PA, 1992. Association for Computational Linguistics. http://dx.doi.org/10.3115/992133. 992154. [37] Jörn Hees, Thomas Roth-Berghofer, Ralf Biedert, Benjamin Adrian, and Andreas Dengel. BetterRelations: Using a Game to Rate Linked Data Triples. In KI 2011: Advances in Artiﬁcial Intelligence, volume 7006 of LNCS, pages 134– 138. Springer, Berlin Heidelberg, 2011. http://dx.doi. org/10.1007/978-3-642-24455-1_12. [38] Jochen Hipp, Ulrich Güntzer, and Gholamreza Nakhaeizadeh. Algorithms for Association Rule Mining – a General Survey and Comparison. ACM SIGKDD Explorations Newsletter, 2(1):58–64, 2000. http://dx.doi.org/10.1145/ 360402.360421. [39] Victoria J Hodge and Jim Austin. A Survey of Outlier Detection Methodologies. Artiﬁcial Intelligence Review, 22(2):85– 126, 2004. http://dx.doi.org/10.1007/s10462004-4304-y. [40] Johannes Hoffart, Mohamed Amir Yosef, Ilaria Bordino, Hagen Fürstenau, Manfred Pinkal, Marc Spaniol, Bilyana Taneva, Stefan Thater, and Gerhard Weikum. Robust Disambiguation of Named Entities in Text. In Proceedings of the Conference on Empirical Methods in Natural Language Processing, pages 782–792, Edinburgh, 2011. Association for Computational Linguistics. http://www.aclweb.org/ anthology/D11-1072. [41] Yi Huang, Maximilian Nickel, Volker Tresp, and Hans-Peter Kriegel. A Scalable Kernel Approach to Learning in Semantic Graphs with Applications to Linked Data. Semantic Web, 5(1):5–22, 2010. http://dx.doi.org/10.3233/SW130100. [42] Saemi Jang, Megawati, Jiyeon Choi, and Mun Yong Yi. Semi-Automatic Quality Assessment of Linked Data without Requiring Ontology. In Workshop on NLP and DBpedia, 2015. https://nlpdbpedia2015.files.
+wordpress.com/2015/08/nlpdbpedia_2015_ submission_2.pdf. [43] Qiu Ji, Zhiqiang Gao, and Zhisheng Huang. Reasoning with Noisy Semantic Data. In The Semanic Web: Research and Applications, volume 6644 of LNCS, pages 497–502. Springer, Berlin Heidelberg, 2011. http://dx.doi.org/10. 1007/978-3-642-21064-8_42. [44] Chuntao Jiang, Frans Coenen, and Michele Zito. A survey of Frequent Subgraph Mining Algorithms. The Knowledge Engineering Review, 28(1):75–105, 2013. http://dx.doi. org/10.1017/S0269888912000331. [45] Ning Kang, Erik M van Mulligen, and Jan A Kors. Training text chunkers on a silver standard corpus: can silver replace gold? BMC bioinformatics, 13(1):17, 2012. http://dx. doi.org/10.1186/1471-2105-13-17. [46] Jiseong Kim, Eun-Kyung Kim, Yousung Won, Sangha Nam, and Key-Sun Choi. The Association Rule Mining System for Acquiring Knowledge of DBpedia from Wikipedia
+
+Categories. In Workshop on NLP and DBpedia, 2015. https://nlpdbpedia2015.files.wordpress.
+com/2015/08/nlpdbpedia_2015_submission_ 13.pdf. [47] Tomáš Kliegr. Linked Hypernyms: Enriching DBpedia with Targeted Hypernym Discovery. Web Semantics: Science, Services and Agents on the World Wide Web, 31:59–69, 2015. http://dx.doi.org/10.1016/j.websem. 2014.11.001. [48] Magnus Knuth, Johannes Hercher, and Harald Sack. Collaboratively Patching Linked Data. In Workshop on Usage Analysis and the Web of Data (USEWOD, 2012. http: //arxiv.org/abs/1204.2715. [49] Christian Kolthoff and Arnab Dutta. Semantic Relation Composition in Large Scale Knowledge Bases. In 3rd Workshop on Linked Data for Information Extraction, volume 1467 of CEUR Workshop Proceedings, pages 34–47, 2015. http: //ceur-ws.org/Vol-1467/. [50] Denis Krompaß, Stephan Baier, and Volker Tresp. TypeConstrained Representation Learning in Knowledge Graphs. In International Semantic Web Conference, volume 9366 of LNCS, pages 640–655, Switzerland, 2015. Springer. http://dx.doi.org/10.1007/978-3-31925007-6_37. [51] John Lafferty, Andrew McCallum, and Fernando CN Pereira. Conditional Random Fields: Probabilistic Models for Segmenting and Labeling Sequence Data. In 18th International Conference on Machine Learning, pages 282–289. San Francisco, CA, Morgan Kaufmann, 2001. [52] Dustin Lange, Christoph Böhm, and Felix Naumann. Extracting structured information from Wikipedia articles to populate infoboxes. In Proceedings of the 19th ACM Conference on Information and Knowledge Management (CIKM), pages 1661–1664, New York, 2010. ACM. http://dx.doi. org/10.1145/1871437.1871698. [53] Jens Lehmann and Lorenz Bühmann. ORE – a tool for repairing and enriching knowledge bases. In The Semantic Web–ISWC 2010, volume 6497 of LNCS, pages 177– 193. Springer, Berlin Heidelberg, 2010. http://dx.doi. org/10.1007/978-3-642-17749-1_12. [54] Jens Lehmann, Daniel Gerber, Mohamed Morsey, and AxelCyrille Ngonga Ngomo. DeFacto – Deep Fact Validation. In The Semantic Web–ISWC 2012, volume 7649 of LNCS, pages 312–327. Springer, Berlin Heidelberg, 2012. http://dx. doi.org/10.1007/978-3-642-35176-1_20. [55] Jens Lehmann and Pascal Hitzler. Concept Learning in Description Logics Using Reﬁnement Operators. Machine Learning, 78:203–250, 2010. http://dx.doi.org/10. 1007/s10994-009-5146-2. [56] Jens Lehmann, Robert Isele, Max Jakob, Anja Jentzsch, Dimitris Kontokostas, Pablo N. Mendes, Sebastian Hellmann, Mohamed Morsey, Patrick van Kleef, Sören Auer, and Christian Bizer. DBpedia – A Large-scale, Multilingual Knowledge Base Extracted from Wikipedia. Semantic Web Journal, 6(2), 2013. http://dx.doi.org/10.3233/SW140134. [57] Douglas B Lenat. CYC: A large-scale investment in knowledge infrastructure. Communications of the ACM, 38(11):33– 38, 1995. http://dx.doi.org/10.1145/219717. 219745. [58] Huiying Li, Yuanyuan Li, Feifei Xu, and Xinyu Zhong. Prob-
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+21
+
+abilistic Error Detecting in Numerical Linked Data. In Database and Expert Systems Applications, volume 9261 of LNCS, pages 61–75, International, 2015. Springer. http:// dx.doi.org/10.1007/978-3-319-22849-5_5. [59] Andy Liaw and Matthew Wiener. Classiﬁcation and Regression by randomForest. R news, 2(3):18–22, 2002.
+http://www.bios.unc.edu/~dzeng/BIOS740/ randomforest.pdf. [60] Shuangyan Liu, Mathieu d’Aquin, and Enrico Motta. Towards Linked Data Fact Validation through Measuring Consensus. In Workshop on Linked Data Quality, volume 1376 of CEUR Workshop Proceedings, 2015. http://ceurws.org/Vol-1376/. [61] Uta Lösch, Stephan Bloehdorn, and Achim Rettinger. Graph Kernels for RDF Data. In The Semantic Web: Research and Applications, volume 7295 of LNCS, pages 134–148. Springer, Berlin Heidelberg, 2012. http://dx.doi. org/10.1007/978-3-642-30284-8_16. [62] Marko Luther, Thorsten Liebig, Sebastian Böhm, and Olaf Noppens. Who the Heck is the Father of Bob? In The Semantic Web: Research and Applications, volume 5554 of LNCS, pages 66–80. Springer, Berlin Heidelberg, 2009. http:// dx.doi.org/10.1007/978-3-642-02121-3_9. [63] Yanfang Ma, Huan Gao, Tianxing Wu, and Guilin Qi. Learning Disjointness Axioms With Association Rule Mining and Its Application to Inconsistency Detection of Linked Data. In Dongyan Zhao, Jianfeng Du, Haofen Wang, Peng Wang, Donghong Ji, and Jeff Z. Pan, editors, The Semantic Web and Web Science, volume 480 of Communications in Computer and Information Science, pages 29–41. Springer, Berlin Heidelberg, 2014. http://dx.doi.org/10.1007/9783-662-45495-4_3. [64] Alexander Maedche. Ontology Learning for the Semantic Web. Springer Science & Business Media, Luxembourg, 2002. [65] Farzaneh Mahdisoltani, Joanna Biega, and Fabian M. Suchanek. YAGO3: A Knowledge Base from Multilingual Wikipedias. In Conference on Innovative Data Systems Research, 2015. http://www.cidrdb.org/cidr2015/ Papers/CIDR15_Paper1.pdf. [66] Robert Meusel, Petar Petrovski, and Christian Bizer. The WebDataCommons Microdata, RDFa and Microformat Dataset Series. In The Semantic Web–ISWC 2014, volume 8796 of LNCS, pages 277–292. Springer, International, 2014. http://dx.doi.org/10.1007/978-3-31911964-9_18. [67] George A Miller. WordNet: a lexical database for English. Communications of the ACM, 38(11):39–41, 1995. http: //dx.doi.org/10.1145/219717.219748. [68] Mike Mintz, Steven Bills, Rion Snow, and Dan Jurafsky. Distant supervision for relation extraction without labeled data. In Proceedings of the Joint Conference of the 47th Annual Meeting of the ACL and the 4th International Joint Conference on Natural Language Processing of the AFNLP, pages 1003–1011, Stroudsburg, PA, 2009. Association for Computational Linguistics. [69] Emir Muñoz, Aidan Hogan, and Alessandra Mileo. Triplifying Wikipedia’s Tables. In Linked Data for Information Extraction, volume 1057 of CEUR Workshop Proceedings, 2013. http://ceur-ws.org/Vol-1057/. [70] Ndapandula Nakashole, Martin Theobald, and Gerhard
+
+Weikum. Scalable knowledge harvesting with high precision
+
+and high recall. In Proceedings of the fourth ACM interna-
+
+tional conference on Web search and data mining, pages 227–
+
+236, New York, 2011. ACM. http://dx.doi.org/10.
+
+1145/1935826.1935869.
+
+[71] Markus Nentwig, Michael Hartung, Axel-Cyrille Ngonga
+
+Ngomo, and Erhard Rahm. A Survey of Current Link Discov-
+
+ery Frameworks. Semantic Web, (to appear), 2015. http:
+
+//dx.doi.org/10.3233/SW-150210.
+
+[72] Jennifer Neville and David Jensen. Iterative classiﬁcation
+
+in relational data. In Proc. AAAI-2000 Workshop on Learn-
+
+ing Statistical Models from Relational Data, pages 13–20,
+
+Palo Alto, CA, 2000. AAAI. http://www.aaai.org/
+
+Library/Workshops/2000/ws00-06-007.php.
+
+[73] Maximilian Nickel, Volker Tresp, and Hans-Peter Kriegel.
+
+Factorizing YAGO: Scalable Machine Learning for Linked
+
+Data. In Proceedings of the 21st International Confer-
+
+ence on World Wide Web, pages 271–280, New York, 2012.
+
+ACM. http://dx.doi.org/10.1145/2187836.
+
+2187874.
+
+[74] Joel Nothman, Nicky Ringland, Will Radford, Tara Mur-
+
+phy, and James R Curran. Learning multilingual named
+
+entity recognition from Wikipedia. Artiﬁcial Intelligence,
+
+194:151–175, 2013. http://dx.doi.org/10.1016/
+
+j.artint.2012.03.006.
+
+[75] Andrea Giovanni Nuzzolese, Aldo Gangemi, Valentina Pre-
+
+sutti, and Paolo Ciancarini. Type inference through the anal-
+
+ysis of Wikipedia links. In Linked Data on the Web, vol-
+
+ume 937 of CEUR Workshop Proceedings, 2012. http:
+
+//ceur-ws.org/Vol-937/.
+
+[76] Patrick Pantel, Eric Crestan, Arkady Borkovsky, Ana-Maria
+
+Popescu, and Vishnu Vyas. Web-scale Distributional Simi-
+
+larity and Entity Set Expansion. In Proceedings of the 2009
+
+Conference on Empirical Methods in Natural Language Pro-
+
+cessing: Volume 2, pages 938–947, Stroudsburg, PA, 2009.
+
+Association for Computational Linguistics. http://www.
+
+aclweb.org/anthology/D09-1098.
+
+[77] Heiko Paulheim. Browsing Linked Open Data with
+
+Auto Complete.
+
+Semantic Web Challenge, 2012.
+
+https://km.aifb.kit.edu/sites/swc/2012/
+
+submissions/swc2012_submission_15.pdf.
+
+[78] Heiko Paulheim. Identifying Wrong Links between Datasets
+
+by Multi-dimensional Outlier Detection. In International
+
+Workshop on Debugging Ontologies and Ontology Mappings,
+
+volume 1162 of CEUR Workshop Proceedings, pages 27–38,
+
+2014. http://ceur-ws.org/Vol-1162/.
+
+[79] Heiko Paulheim and Christian Bizer. Type Inference on
+
+Noisy RDF Data. In The Semantic Web–ISWC 2013, volume
+
+8218 of LNCS, pages 510–525. Springer, Berlin Heidelberg,
+
+2013. http://dx.doi.org/10.1007/978-3-642-
+
+41335-3_32.
+
+[80] Heiko Paulheim and Christian Bizer. Improving the Quality
+
+of Linked Data Using Statistical Distributions. International
+
+Journal on Semantic Web and Information Systems (IJSWIS),
+
+10(2):63–86, 2014. http://dx.doi.org/10.4018/
+
+ijswis.2014040104.
+
+[81] Heiko Paulheim and Johannes Fürnkranz. Unsupervised Gen-
+
+eration of Data Mining Features from Linked Open Data.
+
+In 2nd international conference on web intelligence, mining
+
+and semantics, page 31, New York, 2012. ACM. http:
+
+//dx.doi.org/10.1145/2254129.2254168.
+
+22
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+[82] Heiko Paulheim and Aldo Gangemi. Serving DBpedia with DOLCE–More than Just Adding a Cherry on Top. In International Semantic Web Conference, volume 9366 of LNCS, International, 2015. Springer. http://dx.doi.org/10. 1007/978-3-319-25007-6_11.
+[83] Heiko Paulheim and Robert Meusel. A Decomposition of the Outlier Detection Problem into a Set of Supervised Learning Problems. Machine Learning, 100(2-3):509– 531, 2015. http://dx.doi.org/10.1007/s10994015-5507-y.
+[84] Heiko Paulheim and Simone Paolo Ponzetto. Extending DBpedia with Wikipedia List Pages. In 1st International Workshop on NLP and DBpedia, volume 1064 of CEUR Workshop Proceedings, 2013. http://ceur-ws.org/Vol1064/.
+[85] Youen Péron, Frédéric Raimbault, Gildas Ménier, and PierreFrançois Marteau. On the detection of inconsistencies in RDF data sets and their correction at ontological level. Technical Report 00635854, HAL, 2011. https://hal. archives-ouvertes.fr/hal-00635854/en/.
+[86] Leo L Pipino, Yang W Lee, and Richard Y Wang. Data quality assessment. Communications of the ACM, 45(4):211– 218, 2002. http://dx.doi.org/10.1145/505248. 506010.
+[87] Axel Polleres, Aidan Hogan, Andreas Harth, and Stefan Decker. Can we ever catch up with the Web? Semantic Web, 1(1):45–52, 2010. http://dx.doi.org/10. 3233/SW-2010-0016.
+[88] Petar Ristoski and Heiko Paulheim. A Comparison of Propositionalization Strategies for Creating Features from Linked Open Data. In Linked Data for Knowledge Discovery, volume 1232 of CEUR Workshop Proceedigns, 2014. http: //ceur-ws.org/Vol-1232/.
+[89] Dominique Ritze, Oliver Lehmberg, and Christian Bizer. Matching HTML Tables to DBpedia. In Proceedings of the 5th International Conference on Web Intelligence, Mining and Semantics, page 10, New York, 2015. ACM. http: //dx.doi.org/10.1145/2797115.2797118.
+[90] Giuseppe Rizzo and Raphaël Troncy. NERD: Evaluating Named Entity Recognition Tools in the Web of Data. In Workshop on Web Scale Knowledge Extraction (WEKEX’11), 2011. http://nerd.eurecom.fr/ui/ paper/Rizzo_Troncy-wekex2011.pdf.
+[91] Stuart Russell and Peter Norvig. Artiﬁcial Intelligence: a Modern Approach. Pearson, London, 1995.
+[92] Samuel Sarjant, Catherine Legg, Michael Robinson, and Olena Medelyan. “All you can eat” ontology-building: Feeding Wikipedia to Cyc. In Proceedings of the 2009 IEEE/WIC/ACM International Joint Conference on Web Intelligence and Intelligent Agent Technology-Volume 01, pages 341–348, Piscataway, NJ, 2009. IEEE Computer Society. http://dx.doi.org/10.1109/WI-IAT.2009.60.
+[93] Luis Sarmento, Valentin Jijkuon, Maarten de Rijke, and Eugenio Oliveira. “More Like These”: Growing Entity Classes from Seeds. In Proceedings of the sixteenth ACM conference on Conference on information and knowledge management, pages 959–962, New York, 2007. ACM. http://dx.doi. org/10.1145/1321440.1321585.
+[94] Benjamin Schäfer, Petar Ristoski, and Heiko Paulheim. What is Special about Bethlehem, Pennsylvania? – Identifying Unexpected Facts about DBpedia Entities. In ISWC 2015 -
+
+[95] [96] [97] [98]
+[99] [100]
+[101] [102] [103] [104] [105]
+[106]
+
+Posters and Demonstrations, volume 1486 of CEUR Workshop Proceedigns, 2015. http://ceur-ws.org/Vol1486/. Max Schmachtenberg, Christian Bizer, and Heiko Paulheim. Adoption of the Linked Data Best Practices in Different Topical Domains. In International Semantic Web Conference, volume 8796 of LNCS, International, 2014. Springer. http:// dx.doi.org/10.1007/978-3-319-11964-9_16. Carlos N Silla Jr and Alex A Freitas. A survey of hierarchical classiﬁcation across different application domains. Data Mining and Knowledge Discovery, 22(1-2):31–72, 2011. http: //dx.doi.org/10.1007/s10618-010-0175-9. Katharina Siorpaes and Martin Hepp. Games with a Purpose for the Semantic Web. IEEE Intelligent Systems, (3):50–60, 2008. http://dx.doi.org/10.1109/MIS.2008. 45. Jennifer Sleeman and Tim Finin. Type Prediction for Efﬁcient Coreference Resolution in Heterogeneous Semantic Graphs. In Semantic Computing (ICSC), 2013 IEEE Seventh International Conference on, pages 78–85, Piscataway, NJ, 2013. IEEE. http://dx.doi.org/10.1109/ICSC.2013. 22. Jennifer Sleeman, Tim Finin, and Anupam Joshi. Topic Modeling for RDF Graphs. In 3rd Workshop on Linked Data for Information Extraction, volume 1467 of CEUR Workshop Proceedings, 2015. http://ceur-ws.org/Vol1467/. Richard Socher, Danqi Chen, Christopher D Manning, and Andrew Ng. Reasoning With Neural Tensor Networks for Knowledge Base Completion. In Advances in Neural Information Processing Systems 26 (NIPS 2013), pages 926–934. Curran Associates, Inc., Newry, 2013. http://papers. nips.cc/paper/5028-reasonin. Fabian M. Suchanek, Gjergji Kasneci, and Gerhard Weikum. YAGO: A Core of Semantic Knowledge Unifying WordNet and Wikipedia. In 16th international conference on World Wide Web, pages 697–706, New York, 2007. ACM. http: //dx.doi.org/10.1145/1242572.1242667. Gerald Töpper, Magnus Knuth, and Harald Sack. DBpedia Ontology Enrichment for Inconsistency Detection. In Proceedings of the 8th International Conference on Semantic Systems, pages 33–40, New York, 2012. ACM. http: //dx.doi.org/10.1145/2362499.2362505. G Tsoumakas et al. Multi Label Classiﬁcation: An Overview. International Journal of Data Warehousing and Mining, 3(3):1–13, 2007. http://dx.doi.org/10.4018/ jdwm.2007070101. Denny Vrandecˇic´ and Markus Krötzsch. Wikidata: a Free Collaborative Knowledge Base. Communications of the ACM, 57(10):78–85, 2014. http://dx.doi.org/10. 1145/2629489. Jörg Waitelonis, Nadine Ludwig, Magnus Knuth, and Harald Sack. WhoKnows? – Evaluating Linked Data Heuristics with a Quiz that Cleans Up DBpedia. International Journal of Interactive Technology and Smart Education, 8(4):236–248, 2011. http://dx.doi.org/10.1108/ 17415651111189478. Richard C Wang and William W Cohen. Iterative Set Expansion of Named Entities using the Web. In Eighth IEEE International Conference on Data Mining, pages 1091–1096, Piscataway, NJ, 2008. IEEE.
+
+Knowledge Graph Reﬁnement: A Survey of Approaches and Evaluation Methods
+
+23
+
+[107] [108] [109] [110]
+
+http://dx.doi.org/10.1109/ICDM.2008.145. Robert West, Evgeniy Gabrilovich, Kevin Murphy, Shaohua Sun, Rahul Gupta, and Dekang Lin. Knowledge Base Completion via Search-Based Question Answering. In Proceedings of the 23rd International Conference on World Wide Web, pages 515–526, New York, 2014. ACM. http://dx.doi. org/10.1145/2566486.2568032. Dominik Wienand and Heiko Paulheim. Detecting Incorrect Numerical Data in DBpedia. In The Semantic Web: Trends and Challenges, volume 8465 of LNCS, pages 504– 518. Springer, International, 2014. http://dx.doi. org/10.1007/978-3-319-07443-6_34. Fei Wu, Raphael Hoffmann, and Daniel S Weld. Information extraction from Wikipedia: Moving down the long tail. In Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining, pages 731– 739, New York, 2008. ACM. http://dx.doi.org/10. 1145/1401890.1401978. Amrapali Zaveri, Dimitris Kontokostas, Mohamed A Sherif, Lorenz Bühmann, Mohamed Morsey, Sören Auer, and Jens Lehmann. User-driven Quality Evaluation of DBpe-
+
+dia. In 9th International Conference on Semantic Systems (I-SEMANTICS ’13), pages 97–104, New York, 2013. ACM. http://dx.doi.org/10.1145/2506182. 2506195. [111] Amrapali Zaveri, Anisa Rula, Andrea Maurino, Ricardo Pietrobon, Jens Lehmann, Sören Auer, and Pascal Hitzler. Quality Assessment Methodologies for Linked Open Data. Semantic Web Journal, 7(1):63–93, 2015. http://dx. doi.org/10.3233/SW-150175. [112] Yu Zhao, Sheng Gao, Patrick Gallinari, and Jun Guo. Knowledge base completion by learning pairwise-interaction differentiated embeddings. Data Mining and Knowledge Discovery, 29(5):1486–1504, 2015. http://dx.doi.org/10. 1007/s10618-015-0430-1. [113] Antoine Zimmermann, Christophe Gravier, Julien Subercaze, and Quentin Cruzille. Nell2RDF: Read the Web, and Turn it into RDF. In Knowledge Discovery and Data Mining meets Linked Open Data, volume 992 of CEUR Workshop Proceedings, pages 2–8, 2013. http://ceur-ws.org/Vol992/.
+

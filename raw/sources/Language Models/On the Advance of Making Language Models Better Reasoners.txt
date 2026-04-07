@@ -1,0 +1,575 @@
+On the Advance of Making Language Models Better Reasoners
+
+Yifei Li †∗ Zeqi Lin† Shizhuo Zhang† Qiang Fu† Jian-Guang Lou† Weizhu Chen†
+
+Bei Chen†
+
+Peking University †Microsoft Corporation
+{yifeili, zeqi.lin, shizzhang, qifu, bei.chen, jlou, wzchen}@microsoft.com liyifei@stu.pku.edu.cn
+
+arXiv:2206.02336v2 [cs.CL] 7 Jun 2022
+
+Abstract
+Large language models such as GPT-3 and PaLM have shown remarkable performance in few-shot learning. However, they still struggle with reasoning tasks such as the arithmetic benchmark GSM8K. Recent advances deliberately guide the language model to generate a chain of reasoning steps before producing the ﬁnal answer, successfully boosting the GSM8K benchmark from 17.9% to 58.1% in terms of problem solving rate. In this paper, we propose a new approach, DIVERSE (Diverse Veriﬁer on Reasoning Step), to further advance their reasoning capability. DIVERSE ﬁrst explores different prompts to enhance the diversity in reasoning paths. Second, DIVERSE introduces a veriﬁer to distinguish good answers from bad answers for a better weighted voting. Finally, DIVERSE veriﬁes the correctness of each single step rather than all the steps in a whole. We conduct extensive experiments using the latest language model code-davinci-002 and demonstrate that DIVERSE can achieve new state-of-the-art performance on six out of eight reasoning benchmarks (e.g., GSM8K 74.4% → 83.2%), outperforming the PaLM model with 540B parameters.
+1 Introduction
+Large-scale pretrained language models have recently exhibit exceptional performance in either few-shot learning with prompt (Radford et al., 2019; Le Scao and Rush, 2021; Jin et al., 2022) or ﬁne-tuning (Houlsby et al., 2019; Hu et al., 2021; He et al., 2022). Gigantic models such as the GPT3 with 175B parameters (Brown et al., 2020) and the PaLM with 540B parameters (Chowdhery et al., 2022) continue to demonstrate their remarkable
+∗ Work was done during an internship at Microsoft Research Asia. Experiments were conducted by the second author.
+
+performance on a variety of tasks using the fewshot paradigm. However, as illustrated by Cobbe et al. (2021), all these models are still struggling to produce reasonable performance in various reasoning tasks, often requiring multiple steps to produce correct answers.
+Recent progresses (Wei et al., 2022; Zhou et al., 2022; Kojima et al., 2022; Lampinen et al., 2022) point out that large pretrained language models have already built in reasoning capabilities although they need design speciﬁc prompts to unleash their power. For example, Wei et al. (2022) proposes the insertion of multi-step reasoning paths before generating the ﬁnal answers, calling their approach chain-of-thought reasoning. Using the GSM8K (Cobbe et al., 2021) arithmetic benchmark as an example, their prompting technique improves the accuracy from 17.9% to 58.1%. As a follow-up, Wang et al. (2022c) continues to introduce a voting mechanism to produce a more accurate answer and boost the performance of GSM8K to 74.4% with the help of the PaLM model containing 540 billion parameters (Chowdhery et al., 2022). Built on top of all these successes, this paper is a continuation of this line of research, with the focus on advancing the reasoning capabilities using gigantic language models in following three areas.
+First, motivated by “people think differently, while different thoughts often lead to the same correct answer”, Wang et al. (2022c) proposed self-consistency, i.e., sampling different reasoning paths from the language model, then returning the most consistent ﬁnal answer by majority voting. We continue to advocate the ideas of diversity and "All Roads Lead to Rome". However, besides using sampling with a single prompt to produce multiple reasoning paths, we propose to introduce the diversity in the prompt as a complementary solution to produce a higher degree of diversity.
+Second, when generating a reasoning path, causal language models have no mechanism to cor-
+
+Prompt & Samples
+Q: If there are 3 cars in the parking lot and 2 more cars arrive, how many cars are in the parking lot? A: There are 3 cars in the parking lot already. 2 more arrive. Now there are 3 + 2 = 5 cars. The answer is 5. ... Q: Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes mufﬁns for her friends every day with four. She sells the remainder for $2 per egg. How much does she make every day? A:
+[Sample 1] She has 16 - 3 - 4 = 9 eggs left. So she makes 2 ∗ 9 =18 per day. The answer is 18. ( )
+[Sample 2] This means she uses 3 + 4 = 7 eggs every day. So in total she sells 7 * 2 =14 per day. The answer is 14. ( )
+[Sample 3] She eats 3 for breakfast, so she has 16 - 3 = 13 left. Then she bakes mufﬁns, so 13 - 4 = 9 eggs left. She makes 9 * $2 = $18. The answer is 18. ( )
+Figure 1: Prompting large language models to generate different reasoning paths, then selecting the ﬁnal answer via majority voting (Wang et al., 2022c).
+rect previous errors in earlier steps which quickly leads to disorientated results. Cobbe et al. (2021) proposes using a veriﬁer to judge the correctness of each reasoning path, thereby improving the GSM8K accuracy from 33% to 57%. Inspired by their success, we introduce the veriﬁer mechanism to guide the voting mechanism in Wang et al. (2022c). In other words, we believe "not all reasoning paths are equal or good" and use the veriﬁer to score the votes.
+Third, as an answer is generated based on the reasoning of multiple steps, when a correct answer is generated, we conjecture all the steps are contributing to the ﬁnal correctness. However, when a wrong answer is generated, it does not mean all the steps are wrong or contribute to the wrongness. In other words, some steps could still be correct but some follow-up off-course steps result in a ﬁnal wrong answer. With this motivation, we design a mechanism to assign a ﬁne-grained label to each step and propose a step-aware veriﬁer and attribute the correctness to each single step.
+Based on the three key insights, we name this novel method as DIVERSE (diverse veriﬁer on reasoning step). We conduct extensive experiments with analysis using three OpenAI lan-
+
+[STRATEGYQA] Yes or no: Could a llama birth twice during War in Vietnam (1945-46)? The War in Vietnam was 6 months. The gestation period for a llama is 11 months. So a llama could not give birth twice during the War in Vietnam. The answer is no. [CLUTRR] Roy was eating lunch with his son John and his wife Mary. What kind of relative is John to Mary? John is the son of Roy. Roy is the husband of Mary. Thus, John is the son of Mary. The answer is son.
+Table 1: Besides arithmetic reasoning, we also investigate commonsense and inductive reasoning.
+guage models (davinci, text-davinci-002, and codedavinci-002) on eight tasks requiring different reasoning skills (arithmetic reasoning, commonsense reasoning, and inductive reasoning). Experimental results clearly demonstrate that DIVERSE can bring signiﬁcant and consistent improvements on these datasets, comparing to recent state-of-the-art (SOTA) works. Furthermore, DIVERSE also empowers code-davinci-002 to achieve new state-of-the-art results on 6 of the 8 benchmarks1: GSM8K (74.4% → 83.2%), AsDiv (81.9% → 88.7%), MultiArith (99.3% → 99.8%), SVAMP(86.6% → 87.0%), SingleEq (79.5% → 94.9%), and CLUTRR (67.0% → 95.9%). We will make our data publicly available at https: //github.com/microsoft/DiVeRSe.
+2 Preliminaries
+Prompting. Prompting means prepending a few exemplars to the task input x and generating the output y from the pretrained language model:
+|y|
+p(y|C, x) = pLM(yt|C, x, y<t), (1)
+t=1
+where C is the concatenation of K exemplars:
+C = (x1, y1); (x2, y2); ...; (xK , yK ). (2)
+We denote prompt as the concatenation of the exemplars C and the input x.
+Reasoning Paths. For reasoning tasks that aim to generate an answer y for a question x, Wei et al. (2022) proposed the insertion of a reasoning path z before generating the answer y:
+C = (x1, z1, y1); ...; (xK , zK , yK ), (3)
+1Most of the previous SOTA results were achieved by selfconsistency on PaLM-540B(Chowdhery et al., 2022).
+
+Figure 2: Our proposed method, DIVERSE (Diverse Veriﬁer on Reasoning Step).
+
+where zi is a text reasoning path of how the answer yi is reasoned step-by-step for question xi.
+Then, during inference, a reasoning path z will be generated before the answer y:
+p(y|C , x) = p(z|C , x) · p(y|C , x, z). (4)
+Figure 1 demonstrates this idea in arithmetic reasoning (GSM8K), and Table 1 demonstrates this idea in commonsense reasoning (StrategyQA) and inductive reasoning (CLUTRR).
+3 Diverse Veriﬁer on Reasoning Step
+Figure 2 shows the overview of DIVERSE. The key insights are three-fold: (1) leveraging diverse prompts to induce more diverse reasoning paths from the language models (Section 3.1); (2) training a voting veriﬁer to better derive the ﬁnal answers from multiple reasoning paths (Section 3.2); (3) leveraging step correctness to further boost the voting veriﬁer (Section 3.3).
+3.1 Diverse Prompts
+Reasoning can be boosted by exploiting diverse reasoning paths, just as “All Roads lead to Rome”.
+Wang et al. (2022c) proposed to generate different reasoning paths from language models by sampling decoding. However, it uses a ﬁxed collection of exemplars for all prompts. These ﬁxed exemplars may bias the generation, thus limiting the diversity of the generated reasoning paths.
+To mitigate this, we propose to provide M1 different prompts for each question, then sample M2 reasoning paths for each prompt. Therefore, we get M = M1 × M2 diverse reasoning paths for each question. Our main experiments use M1 = 5 and M2 = 20.
+A critical issue is how to provide diverse prompts2. Supposing that there is an exemplar
+2Wang et al. (2022c) tried an ensemble-based approach,
+
+base E, we can sample K exemplars from it to construct a prompt, and repeat this M1 times independently to construct M1 prompts with diverse exemplars.
+For scenarios that do not have sufﬁcient exemplars (i.e., |E| < K ∗ M1), we propose to bootstrap the diversity of prompts by “selfteaching”, i.e., generating pseudo reasoning paths from a few exemplars and some question, answer pairs without reasoning paths3. Suppose that D is a dataset without reasoning paths, consisting of (x, y∗) pairs. Given the small exemplar base E, for each (x, y∗) ∈ D, we can use prompting to generate a reasoning path z and the predicted answer y. We deﬁne the pseudo exemplar base E as:
+E = {(x, z, y)|(x, y∗) ∈ D, y = y∗}, (5)
+
+then E ∪ E can be regarded as the new exemplar base for generating diverse prompts.
+3.2 Voting Veriﬁer Wang et al. (2022c) uses majority voting to conclude the agreement yˆ of different reasoning paths:
+
+M
+
+yˆ = arg max 1yi=y,
+
+(6)
+
+y i=1
+
+where yi represents the answer of the i-th reasoning
+path, and 1yi=y is an indicator function that returns
+1 (or 0) if yi = y (or not). This vanilla method has its limitations when rea-
+sonable minority solutions are overwhelmed by
+disorientated majority solutions.
+
+Veriﬁer. Sample-then-rank is a widely-used strategy in sequence-to-sequence generation (Shen et al., 2021; Cobbe et al., 2021), i.e., generating
+
+i.e., to permutate exemplars in the original prompt. However, this strategy does not increase the diversity in terms of exemplars.
+3This is motivated by Zelikman et al. (2022).
+
+multiple candidate output sequences, leveraging a veriﬁer to rank them, then taking the top-ranked sequence as the ﬁnal result. This strategy can be easily applied in our scenario. Concretely, we can deﬁne the ﬁnal answer yˆ as:
+
+yˆ = arg maxf (xi, zi, yi),
+
+(7)
+
+yi
+
+where f (·) is the veriﬁer. Without loss of generality, we implement the veriﬁer as a binary classiﬁer based on deberta-v3-large (He et al., 2021): f (xi, zi, yi) is the predicted probability of the positive label, given the concatenation of xi, zi, and yi as the text input.
+The veriﬁer is trained through steps as follows:
+1. Initialize the train set Dˆ as ∅.
+
+2. For each (x, z, y) in the exemplar base E (or E∪E ), we prompt the language model to generate diverse results (z1, y1), ..., (zM , yM ). We add (x, zi, yi), 1 to Dˆ if yi = y, otherwise we add (x, zi, yi), 0 to Dˆ .
+3. Train the veriﬁer f (·) with the loss function:
+
+|Dˆ |
+L0 = BCE(labeli, f (inputi)), (8)
+i=1
+
+where BCE means binary cross-entropy loss, inputi, labeli represents the i-th item in Dˆ .
+
+Voting Veriﬁer. We propose voting veriﬁer, which combines the advantages of voting and veriﬁer. Concretely, we combine Equation 6 and Equation 7 to a new version:
+
+M
+yˆ = arg max 1yi=y · f (xi, zi, yi). (9)
+y i=1
+
+3.3 Step-aware Voting Veriﬁer
+Each reasoning path consists of several steps. When a reasoning path gives an incorrect answer, we conjecture not all the steps are contributing to the ﬁnal wrongness. With this motivation, we propose to extend the voting veriﬁer to a step-aware voting veriﬁer by introducing an extended loss function:
+
+L = L0 + α · L1,
+
+|Dˆ | |Si|
+
+(10)
+
+L1 =
+
+BCE(labeli,j, f (inputi, j)),
+
+i=1 j=1
+
+[Sample 1] She uses 3 + 4 = 7 eggs every day. So she has 16 - 7 = 9 eggs left. So she makes $2 * 9 = $18 per day. The answer is 18. [Sample 2] This means 3 + 4 = 7 eggs are used every day. So in total she sells 7 * $2 = $14 per day. The answer is $14.
+Figure 3: How we get the step-level labels. Sample 2 is incorrect, but its ﬁrst step is correct. The reason is: the intermediate result (7) matches with the ﬁrst step of Sample 1, a correct reasoning path.
+where α is a hyperparameter to combine L0 and the step-level auxiliary loss L1; Si,1, Si,2, ..., Si,|Si| are mutiple steps in zi; labeli,j represents whether Si,j is correct or not; f (inputi, j) represents the probability of the positive label for Si,j 4.
+A critical issue is how to get the step-level labels (i.e., labeli,j) for negative training data with wrong answers. We propose to address this issue through a “cross-validation” method. Figure 3 demonstrates an example of this idea. Concretely: labeli,j = 1 if and only if ∃1 ≤ k ≤ |Dˆ |(k = i) and c ≥ j, s.t. labelk = 1 and Sk,1, ..., Sk,c “supports” Si,1, ..., Si,c. In different tasks, “supports” can be deﬁned differently: for arithmetic tasks, it means the set of intermediate results of Sk,1, ..., Sk,c is the same as that of Si,1, ..., Si,c; for other tasks, it means: ∀1 ≤ r ≤ c, Sk,r and Si,r are semantically equivalent 5.
+4 Experimental Setup
+4.1 Reasoning Tasks
+Arithmetic Reasoning. Following Wang et al. (2022c), we use AsDiv (Miao et al., 2020), SingleEq (Koncel-Kedziorski et al., 2015), MultiArith (Roy and Roth, 2015), SVAMP (Patel et al., 2021), and GSM8K (Cobbe et al., 2021).
+Commonsense Reasoning. Following Wang et al. (2022c), we use CommonsenseQA (Talmor et al., 2019) and StrategyQA (Geva et al., 2021).
+Inductive Reasoning. The deﬁnition of the term "inductive learning" could be stated as: given a
+4Concretely, f (inputi, j) is predicted from the hidden state of the last token of Si,j in DEBERTA-V3-LARGE, just like token classiﬁcation tasks.
+5We do the judgements via an off-the-shelf natural language inference model, roberta-Large-mnli(Liu et al., 2019): Sk,r is semantically equivalent to Si,r, if and only if robertaLarge-mnli predicts that Sk,r entails Si,r, and Si,r entails Sk,r .
+
+Method
+Previous SOTA (Fine-tuning) 9–12 year olds (Cobbe et al., 2021) LaMDA 137B: Greedy Decode Self-Consistency PaLM 540B: Greedy Decode Self-Consistency
+GPT-3 davinci (175B): Greedy Decode Self-Consistency DIVERSE text-davinci-002: Greedy Decode Self-Consistency DIVERSE code-davinci-002: Greedy Decode Self-Consistency DIVERSE
+
+GSM8K 57a 60
+17.1 27.7
+56.5 74.4
+8.7 18.9 30.9 (+12.0)
+37.1 58.2 70.2 (+12.0)
+55.3 76.7 82.3 (+5.6)
+
+AsDiv 75.3b
+-
+49.0 58.2
+74.0 81.9
+31.4 52.8 57.6 (+4.8)
+60.8 76.9 83.5 (+6.6)
+75.5 86.2 88.7 (+1.5)
+
+MultiArith 60.5c -
+51.8 75.7
+94.7 99.3
+31.4 68.6 87.6 (+19.0)
+70.7 88.4 96.4 (+8.0)
+88.8 98.6 99.8 (+1.2)
+
+SVAMP 57.4d
+-
+38.9 53.3
+79.0 86.6
+21.2 44.6 46.9 (+2.3)
+60.0 78.2 82.7 (+4.5)
+70.5 85.8 87.0 (+1.2)
+
+SingleEq 32.5e -
+56.6 -
+79.5 -
+38.2 59.6 65.1 (+5.5)
+73.3 87.2 86.5 (-0.7)
+87.5 93.7 94.9 (+1.2)
+
+CommonsenseQA 91.2f -
+57.9 63.1
+79.0 80.7
+48.2 57.4 75.0 (+17.6)
+65.5 72.9 79.2 (+6.3)
+73.4 77.3 79.9 (+2.6)
+
+StrategyQA 73.9g -
+65.4 67.8
+75.3 81.6
+59.3 65.9 67.9 (+2.0)
+60.3 70.7 73.1 (+2.4)
+73.8 78.3 77.7 (-0.6)
+
+CLUTRR 67.0 h -
+-
+-
+33.6 42.5 92.5 (+50.0)
+18.4 15.8 68.5 (+52.7)
+32.9 35.6 95.9 (+60.1)
+
+Table 2: The comparison of DIVERSE, Greedy Decode and Self-Consistency. The previous SOTA results (ﬁne-tuned on non-gigantic pretrained transformers) are: a: Cobbe et al. (2021), b: Miao et al. (2020), c: Roy and Roth (2015), d: Pi et al. (2022), e: Hu et al. (2019a), f : Xu et al. (2021), g: Chowdhery et al. (2022), h: Sinha et al. (2019). The parameter number of either text-davinci-002 or code-davinci-002 is hidden to us.
+
+training set of objects whose classes are known, ﬁnd a rule for predicting the class of an unseen object as a function of its attribute values (Quinlan, 1990). We use CLUTRR (Sinha et al., 2019), a diagnostic benchmark for inductive reasoning from text, requiring natural language understanding (NLU) systems to infer kinship relations between characters in short stories.
+4.2 Details
+Language Models. We use three OpenAI language models: davinci, text-davinci-002 and codedavinci-002. We use the default parameters except a temperature of 0.5 for sampling decoding.
+Exemplars. For arithmetic/commonsense/inductive reasoning, each prompt contains 5/7/7 exemplars. For DIVERSE, each question has 5 different prompts, and 20 reasoning paths are sampled from the language model for each prompt. For arithmetic reasoning, the exemplars are randomly sampled from the training dataset of GSM8K; for CLUTRR, the exemplars are sampled from its training dataset, with reasoning paths synthesized by handcraft rules; for StrategyQA and CommonsenseQA, we construct 1, 000 pseudo exemplars by “self-teaching” (Section 3.1) from the 7 “seed” exemplars provided by Wei et al. (2022).
+Datasets without Reasoning Paths. For each task, we sample 1, 000 question, answer pairs from the training dataset to train the veriﬁer.
+Veriﬁer. We ﬁne-tune deberta-v3-large (He et al., 2021) with learning rate 1 × 10−5 and batch size
+
+128. For the step-aware veriﬁer, we select the best α among 0.0/0.1/0.2/0.3.
+5 Main Results
+Table 2 shows the overall experimental results. We mainly compare DIVERSE with two baselines: (1) greedily decoding a single reasoning path (Wei et al., 2022), referred to as Greedy Decode; (2) sampling decoding 100 reasoning paths, then select the ﬁnal answer via majority voting (Wang et al., 2022c), referred to as Self-Consistency.
+5.1 Effectiveness
+Experimental results clearly demonstrate that DIVERSE can bring signiﬁcant and consistent improvements over recent strong baselines. The improvements are across different models (davinci, text-davinci-002 and code-davinci-002) as well as different reasoning skills (eight tasks for three reasoning skills). Taking GSM8K as an example, compared to Greedy Decoding and Self-Consistency, DIVERSE brings improvements of 22.2%/12.0% on davinci, 33.1%/12.0% on text-davinci-002, and 27.0%/5.6% on code-davinci-002. Compared to Self-Consistency, DIVERSE achieves average improvements of 5.6%/5.1%/54.3% on the three reasoning skills, respectively.
+5.2 Comparing to Previous SOTAs
+In Table 2, we also compare DIVERSE with: (1) previous SOTA results based on ﬁne-tuning; (2) recent SOTA results (Wei et al., 2022) based on PaLM (Chowdhery et al., 2022), a gigantic lan-
+
+guage model with 540 billion parameters 6. On all the ﬁve arithmetic reasoning tasks, DI-
+VERSE (with code-davinci-002) achieves new SOTA results, with an average improvement of 6.2%. On the two commonsense reasoning tasks, the performance of DIVERSE is slightly lower (−2.2%) than that of PaLM-based self-consistency. We speculate that the reason might be: these two commonsense reasoning tasks are multiple choice tasks rather than open-ended generation tasks, resulting in more false-positive exemplars in the pseudo exemplar base (Section 3.1). Details will be discussed in Section 5.3. Regarding inductive reasoning, DIVERSE achieves a surprisingly good performance of 95.9% on the CLUTRR task, outperforming (+28.9%) the previous SOTA result with ﬁne-tuning (Sinha et al., 2019) 7.
+5.3 Noises in Multiple Choice Tasks
+In our experimental setup, StrategyQA and CommonsenseQA are a bit more challenging than other tasks, as they use pseudo exemplars generated through “self-teaching” (Section 3.1).
+“Self-teaching” may lead to bad exemplars, whose reasoning paths are invalid but happen to yield answers coinciding with the ground truth. Questions in StrategyQA and CommonsenseQA are two-choice and four-choice questions, respectively. Therefore, such noise would be more serious in StrategyQA than in CommonsenseQA. This somehow explains why DIVERSE can achieve comparable performance (−0.8%) as the PaLMbased SOTA on CommonsenseQA, while it sees a 3.9% performance decline to PaLM on StrategyQA.
+6 Ablations
+We also conduct ablation experiments and analysis to investigate the keys to the success of DIVERSE.
+6.1 Diverse Prompts vs. Sampling Decoding
+To evaluate the effectiveness of diverse prompts, we compare M1 = 5, M2 = 20 with M1 = 1, M2 = 100 (i.e., sampling decoding used by selfconsistency), both of which use majority voting.
+6DIVERSE can also be applied to PaLM. However, we cannot conduct the experiments, as PaLM is not publicly available.
+7Sinha et al. (2019) also introduced a method with 100% accuracy. We do not take it into the comparison, as this method requires a domain-speciﬁc system with complicated rules to extract a knowledge graph for each input text.
+
+Method
+
+GSM8K CQA CLUTRR
+
+davinci:
+
+M1 = 1, M2 = 100 18.9 57.4
+
+42.5
+
+M1 = 5, M2 = 20
+
+21.3 57.5
+
+45.9
+
+text-davinci-002:
+
+M1 = 1, M2 = 100 58.2 72.9
+
+15.8
+
+M1 = 5, M2 = 20
+
+61.3 77.3
+
+21.2
+
+code-davinci-002:
+
+M1 = 1, M2 = 100 76.7 77.3
+
+35.6
+
+M1 = 5, M2 = 20
+
+80.0 78.8
+
+43.8
+
+Table 3: The effectiveness of diverse prompts ( 5, 20 ) compared to pure sampling decoding (Wang et al., 2022c), under majority voting.
+
+M1, M2
+M1 = 1, M2 = 100 M1 = 5, M2 = 20 M1 = 10, M2 = 10 M1 = 100, M2 = 1
+
+GSM8K
+76.7 80.0 79.8 73.0
+
+Table 4: GSM8K majority voting results for different M1, M2 settings on code-davinci-002.
+
+Table 3 shows that, the performance is signiﬁcantly and consistently boosted, by introducing diverse prompts as a complementary solution to produce higher degree of diversity.
+We also conduct more experiments with different M1, M2 (M1 × M2 = 100) settings on GSM8K to further investigate the impact of diverse prompts. Table 4 shows the results. We show neither pure diverse prompts nor pure sampling decoding is the best setup. In other words, we need to combine diverse prompts with sampling decoding as a complementary solution.
+6.2 The Power of Voting Veriﬁer
+We compare three algorithms to conclude the agreement from diverse reasoning paths: majority voting, veriﬁer, and voting veriﬁer. Table 5 shows the results. Comparing to majority voting, our voting veriﬁer can signiﬁcantly and consistently boost the reasoning performance across different tasks and different language models. Veriﬁer without voting often outperforms majority voting, but extending it to voting veriﬁer can further boost the performance.
+
+Method
+
+GSM8K CQA CLUTRR
+
+davinci:
+
+Voting
+
+21.3 57.4 45.9
+
+Veriﬁer
+
+27.0 74.1 93.2
+
+Voting Veriﬁer 30.6 75.0 92.5
+
+text-davinci-002:
+
+Voting
+
+61.3 77.3 35.6
+
+Veriﬁer
+
+62.7 77.9 93.8
+
+Voting Veriﬁer 68.9 79.2 93.8
+
+code-davinci-002:
+
+Voting
+
+80.0 75.4 43.8
+
+Veriﬁer
+
+65.9 78.8 95.9
+
+Voting Veriﬁer 82.3 78.8 95.9
+
+Table 5: The effectiveness of voting veriﬁer. All exepriments in this table use M1, M2 = 5, 20 .
+
+GSM8K CommonsenseQA
+
+davinci:
+
+DIVERSE (without step) 30.6
+
+75.0
+
+DIVERSE (with step)
+
+30.9
+
+76.0
+
+text-davinci-002:
+
+DIVERSE (without step) 68.9
+
+79.2
+
+DIVERSE (with step)
+
+70.2
+
+79.8
+
+code-davinci-002:
+
+DIVERSE (without step) 82.3
+
+78.8
+
+DIVERSE (with step)
+
+81.5
+
+79.9
+
+Table 6: The effectiveness of step-aware voting veriﬁer, with M1, M2 = 5, 20 .
+
+6.3 The Impact of Step-aware Voting Veriﬁer
+Table 6 compares the performance of DIVERSE with / without step-level information in its voting veriﬁer. We observe that, extending the voting veriﬁer to a step-aware version can bring performance gains in most of the experiments. For code-davinci002 on GSM8K, the step-aware version leads to slightly performance drop. We conjecture codedavinci-002 is more powerful and can generate higher quality reasoning paths for GSM8K, thus reducing the necessity of step-level information.
+6.4 How Many Diverse Outputs Do We Need?
+Figure 4 compares the accuracy at different M . For each question, we generate 100 reasoning paths, then sample M reasoning paths from them to generate the ﬁnal answer. We observe that: (1) more
+
+Solve Rate (%)
+
+GSM8K
+
+davinci
+30
+
+text-davinci-002 82.5 code-davinci-002
+
+65
+
+80.0
+
+25
+
+77.5
+
+60
+
+75.0
+
+20 55 72.5
+
+15 50 67.5 70.0
+
+50
+
+100
+
+50
+
+100
+
+50
+
+100
+
+#Reasoning Paths #Reasoning Paths #Reasoning Paths
+
+DiVRS
+
+Self-Consistency
+
+Figure 4: GSM8K accuracy at different M values (how many reasoning paths are used for each question).
+reasoning paths lead to better performance, but marginal effects start to appear at M ≥ 50; (2) DIVERSE performs signiﬁcantly and consistently better than self-consistency at different M values.
+6.5 How Many Training Data Do We Need?
+DIVERSE requires a dataset without reasoning paths for training the veriﬁer. Figure 5 shows how the size of this dataset affects the performance. We observe that: the performance is only reduced by about 2%, even if the size of training data is cut by 75% (from 1, 000 to 250). With the same reasoning paths, voting veriﬁer performs better than majority voting, while veriﬁer without voting causes signiﬁcant performance drops.
+6.6 The Impact of the Number of Exemplars
+We conduct experiments for k = 3/5/8 (k means how many exemplars are used in each prompt) on GSM8K. Figure 6 shows the results. We observe that: using 8 exemplars in each prompt can further boost the accuracy of GSM8K to 83.2%.
+7 Related Work
+Reasoning Skills. Researchers in the literature have proposed many benchmarks requiring various reasoning skills, including commonsense reasoning (Zellers et al., 2018; Talmor et al., 2019; Bhagavatula et al., 2019; Geva et al., 2021) numerical reasoning (Dua et al., 2019), multi-hop reasoning (Yang et al., 2018), arithmetic reasoning (KoncelKedziorski et al., 2015; Roy and Roth, 2015; Miao et al., 2020; Patel et al., 2021; Cobbe et al., 2021), logical reasoning (Liu et al., 2020; Yu et al., 2020), inductive reasoning (Sinha et al., 2019) and tabular reasoning (Chen et al., 2020; Zhu et al., 2021).
+
+Solve Rate (%) Solve Rate (%)
+
+GSM8K
+
+80
+
+75
+
+70
+
+65
+
+60
+
+55
+
+50 0 250 500 1000
+
+Voting
+
+Verifier
+
+Voting Verifier
+
+Sampled (or Generated) Training Data Size
+
+GSM8K
+
+85 82 82.3
+
+80
+
+79.5
+
+80
+
+83.2 79.6
+
+75
+
+70
+
+65
+
+60
+
+55 55 56
+
+51.8
+
+50 3 5 8
+
+Greedy Decode
+
+DivPrompts+Voting
+
+DiVRS
+
+Number of Exemplars in One Prompt
+
+Figure 5: DIVERSE performance (code-davinci-002) on GSM8K with different sizes of the training dataset (without labeled reasoning paths).
+
+Figure 6: DIVERSE performance (code-davinci-002) on GSM8K when each prompt contains 3/5/8 exemplars.
+
+Reasoning with Symbolic Systems. Much research in the literature enhances the reasoning capabilities of machine learning systems by exploiting symbolic systems, including knowledge graphs (Mihaylov and Frank, 2018; Bauer et al., 2018; Kundu et al., 2019; Wang et al., 2019; Lin et al., 2019; Ding et al., 2019; Feng et al., 2020; Wang et al., 2022b), or question taxonomies (Dua et al., 2019; Andor et al., 2019; Hu et al., 2019b; Wang et al., 2022a). Although these methods work well on speciﬁc benchmarks, they usually require domain-speciﬁc designs and human efforts, thus limiting the generalizability.
+Reasoning via Language Models. This line of work aims to address reasoning tasks in a general sequence-to-sequence manner, empowered by reasoning-aware pre-training or ﬁne-tuning of language models. For example, Deng et al. (2021) proposed to train the language model with crawled data from the internet; Asai and Hajishirzi (2020) proposed a logic-guided data augmentation method to pre-train the language model; Shen et al. (2021); Cobbe et al. (2021) proposed to train a veriﬁer to rank solutions sampled from ﬁne-tuned language models; Geva et al. (2020); Yoran et al. (2022); Campagna et al. (2020); Wang et al. (2022a) proposed to equip language models with reasoning abilities by generating training examples with human-designed templates; Pi et al. (2022) proposed to inject reasoning capabilities into language models by continual pre-training on program execution data.
+
+Reasoning via Prompting Gigantic Language Models. Gigantic language models like GPT-3 (Brown et al., 2020) have demonstrated impressive few-shot learning capabilities in many tasks and have attracted many research interests on making gigantic language models better few-shot learners (Zhao et al., 2021; Holtzman et al., 2021; Min et al., 2021; Liu et al., 2022; Lu et al., 2021; Rubin et al., 2021; Min et al., 2022). However, these methods struggle to address tasks requiring reasoning skills. To mitigate this, recently there is a line of research that focuses on unleashing the reasoning capabilities of gigantic language models via better prompting strategies. Wei et al. (2022) proposed chainof-thought reasoning, of which the key insight is the insertion of multi-step reasoning paths before generating the ﬁnal answers; Wang et al. (2022c) proposed to improve chain-of-thought reasoning via self-consistency, of which the key insight is to conclude the most consistent answer from different reasoning paths sampled from the language model; Zhou et al. (2022); Creswell et al. (2022) proposed to leverage gigantic language models to decompose questions into sub-questions, thereby addressing them in an iterative manner; Kojima et al. (2022) proposed that gigantic language models can even be good zero-shot reasoners, by designing prompts that can induce language models to do reasoning step-by-step; Lampinen et al. (2022) proposed building a prompt by selecting examples and explanations together, thus substantially improving performance over selecting examples alone. Despite their great successes, these works come with
+
+their limitations. This paper is a continuation of this line of research, focusing on diverse veriﬁer on reasoning steps.
+8 Conclusion and Future Work
+We introduce DIVERSE, an effective and general method to make large language models better reasoners. As a continuation of the line of research that prompting language models using multi-step reasoning paths, the key insights of DIVERSE are three-fold: diverse prompts, voting veriﬁer, and step-level correctness. Experimental results clearly show that DIVERSE can bring signiﬁcant and consistent improvements. For example, with codedavinci-002, DIVERSE achieves new state-of-theart results in most of the reasoning tasks, outperforming the 540B PaLM model combined with previous prompting approaches.
+There are many directions for our future works. (1) As discussed in Section 5.3, we will continue to investigate how to reduce or recognize false positive pseudo exemplars. (2) We plan to investigate mechanisms to produce better diverse prompts than simple sampling. (3) We will extend DIVERSE to other tasks and continue to design better prompting techniques to elicit the power of gigantic language models.
+References
+Daniel Andor, Luheng He, Kenton Lee, and Emily Pitler. 2019. Giving BERT a calculator: Finding operations and arguments with reading comprehension. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLPIJCNLP), pages 5947–5952, Hong Kong, China. Association for Computational Linguistics.
+Akari Asai and Hannaneh Hajishirzi. 2020. Logicguided data augmentation and regularization for consistent question answering. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics, pages 5642–5650, Online. Association for Computational Linguistics.
+Lisa Bauer, Yicheng Wang, and Mohit Bansal. 2018. Commonsense for generative multi-hop question answering tasks. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing, pages 4220–4230,
+
+Brussels, Belgium. Association for Computational Linguistics.
+Chandra Bhagavatula, Ronan Le Bras, Chaitanya Malaviya, Keisuke Sakaguchi, Ari Holtzman, Hannah Rashkin, Doug Downey, Scott Wen-tau Yih, and Yejin Choi. 2019. Abductive commonsense reasoning.
+Tom Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared D Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, et al. 2020. Language models are few-shot learners. Advances in neural information processing systems, 33:1877–1901.
+Giovanni Campagna, Agata Foryciarz, Mehrad Moradshahi, and Monica Lam. 2020. Zero-shot transfer learning with synthesized data for multidomain dialogue state tracking. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics, pages 122–132, Online. Association for Computational Linguistics.
+Wenhu Chen, Hanwen Zha, Zhiyu Chen, Wenhan Xiong, Hong Wang, and William Yang Wang. 2020. HybridQA: A dataset of multi-hop question answering over tabular and textual data. In Findings of the Association for Computational Linguistics: EMNLP 2020, pages 1026–1036, Online. Association for Computational Linguistics.
+Aakanksha Chowdhery, Sharan Narang, Jacob Devlin, Maarten Bosma, Gaurav Mishra, Adam Roberts, Paul Barham, Hyung Won Chung, Charles Sutton, Sebastian Gehrmann, et al. 2022. Palm: Scaling language modeling with pathways. arXiv preprint arXiv:2204.02311.
+Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Jacob Hilton, Reiichiro Nakano, Christopher Hesse, and John Schulman. 2021. Training veriﬁers to solve math word problems. arXiv preprint arXiv:2110.14168.
+Antonia Creswell, Murray Shanahan, and Irina Higgins. 2022. Selection-inference: Exploiting large language models for interpretable logical reasoning.
+Xiang Deng, Yu Su, Alyssa Lees, You Wu, Cong Yu, and Huan Sun. 2021. ReasonBERT: Pre-
+
+trained to reason with distant supervision. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing, pages 6112–6127, Online and Punta Cana, Dominican Republic. Association for Computational Linguistics.
+Ming Ding, Chang Zhou, Qibin Chen, Hongxia Yang, and Jie Tang. 2019. Cognitive graph for multi-hop reading comprehension at scale. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics, pages 2694–2703, Florence, Italy. Association for Computational Linguistics.
+Dheeru Dua, Yizhong Wang, Pradeep Dasigi, Gabriel Stanovsky, Sameer Singh, and Matt Gardner. 2019. DROP: A reading comprehension benchmark requiring discrete reasoning over paragraphs. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers), pages 2368–2378, Minneapolis, Minnesota. Association for Computational Linguistics.
+Yanlin Feng, Xinyue Chen, Bill Yuchen Lin, Peifeng Wang, Jun Yan, and Xiang Ren. 2020. Scalable multi-hop relational reasoning for knowledge-aware question answering.
+Mor Geva, Ankit Gupta, and Jonathan Berant. 2020. Injecting numerical reasoning skills into language models. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics, pages 946–958, Online. Association for Computational Linguistics.
+Mor Geva, Daniel Khashabi, Elad Segal, Tushar Khot, Dan Roth, and Jonathan Berant. 2021. Did aristotle use a laptop? a question answering benchmark with implicit reasoning strategies. Transactions of the Association for Computational Linguistics, 9:346–361.
+Junxian He, Chunting Zhou, Xuezhe Ma, Taylor Berg-Kirkpatrick, and Graham Neubig. 2022. Towards a uniﬁed view of parameter-efﬁcient transfer learning. In International Conference on Learning Representations.
+Pengcheng He, Xiaodong Liu, Jianfeng Gao, and Weizhu Chen. 2021. Deberta: Decodingenhanced bert with disentangled attention. In
+
+International Conference on Learning Representations.
+Ari Holtzman, Peter West, Vered Shwartz, Yejin Choi, and Luke Zettlemoyer. 2021. Surface form competition: Why the highest probability answer isn’t always right.
+Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski, Bruna Morrone, Quentin De Laroussilhe, Andrea Gesmundo, Mona Attariyan, and Sylvain Gelly. 2019. Parameter-efﬁcient transfer learning for nlp. In International Conference on Machine Learning, pages 2790–2799. PMLR.
+Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2021. Lora: Low-rank adaptation of large language models. arXiv preprint arXiv:2106.09685.
+Minghao Hu, Yuxing Peng, Zhen Huang, and Dongsheng Li. 2019a. A multi-type multi-span network for reading comprehension that requires discrete reasoning. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP), pages 1596–1606.
+Minghao Hu, Yuxing Peng, Zhen Huang, and Dongsheng Li. 2019b. A multi-type multi-span network for reading comprehension that requires discrete reasoning. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP), pages 1596–1606, Hong Kong, China. Association for Computational Linguistics.
+Woojeong Jin, Yu Cheng, Yelong Shen, Weizhu Chen, and Xiang Ren. 2022. A good prompt is worth millions of parameters: Low-resource prompt-based learning for vision-language models. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 2763–2775, Dublin, Ireland. Association for Computational Linguistics.
+Takeshi Kojima, Shixiang Shane Gu, Machel Reid, Yutaka Matsuo, and Yusuke Iwasawa. 2022. Large language models are zero-shot reasoners.
+
+Rik Koncel-Kedziorski, Hannaneh Hajishirzi, Ashish Sabharwal, Oren Etzioni, and Siena Dumas Ang. 2015. Parsing algebraic word problems into equations. Transactions of the Association for Computational Linguistics, 3:585–597.
+Souvik Kundu, Tushar Khot, Ashish Sabharwal, and Peter Clark. 2019. Exploiting explicit paths for multi-hop reading comprehension. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics, pages 2737–2747, Florence, Italy. Association for Computational Linguistics.
+Andrew K Lampinen, Ishita Dasgupta, Stephanie CY Chan, Kory Matthewson, Michael Henry Tessler, Antonia Creswell, James L McClelland, Jane X Wang, and Felix Hill. 2022. Can language models learn from explanations in context? arXiv preprint arXiv:2204.02329.
+Teven Le Scao and Alexander M Rush. 2021. How many data points is a prompt worth? In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, pages 2627–2636.
+Bill Yuchen Lin, Xinyue Chen, Jamin Chen, and Xiang Ren. 2019. KagNet: Knowledge-aware graph networks for commonsense reasoning. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLPIJCNLP), pages 2829–2839, Hong Kong, China. Association for Computational Linguistics.
+Jiachang Liu, Dinghan Shen, Yizhe Zhang, Bill Dolan, Lawrence Carin, and Weizhu Chen. 2022. What makes good in-context examples for GPT3? In Proceedings of Deep Learning Inside Out (DeeLIO 2022): The 3rd Workshop on Knowledge Extraction and Integration for Deep Learning Architectures, pages 100–114, Dublin, Ireland and Online. Association for Computational Linguistics.
+Jian Liu, Leyang Cui, Hanmeng Liu, Dandan Huang, Yile Wang, and Yue Zhang. 2020. Logiqa: A challenge dataset for machine reading comprehension with logical reasoning.
+
+Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov. 2019. Roberta: A robustly optimized bert pretraining approach. arXiv preprint arXiv:1907.11692.
+Yao Lu, Max Bartolo, Alastair Moore, Sebastian Riedel, and Pontus Stenetorp. 2021. Fantastically ordered prompts and where to ﬁnd them: Overcoming few-shot prompt order sensitivity.
+Shen-Yun Miao, Chao-Chun Liang, and Keh-Yih Su. 2020. A diverse corpus for evaluating and developing english math word problem solvers. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics, pages 975–984.
+Todor Mihaylov and Anette Frank. 2018. Knowledgeable reader: Enhancing cloze-style reading comprehension with external commonsense knowledge. In Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 821– 832, Melbourne, Australia. Association for Computational Linguistics.
+Sewon Min, Mike Lewis, Luke Zettlemoyer, and Hannaneh Hajishirzi. 2021. Metaicl: Learning to learn in context.
+Sewon Min, Xinxi Lyu, Ari Holtzman, Mikel Artetxe, Mike Lewis, Hannaneh Hajishirzi, and Luke Zettlemoyer. 2022. Rethinking the role of demonstrations: What makes in-context learning work?
+Arkil Patel, Satwik Bhattamishra, and Navin Goyal. 2021. Are nlp models really able to solve simple math word problems? In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, pages 2080–2094.
+Xinyu Pi, Qian Liu, Bei Chen, Morteza Ziyadi, Zeqi Lin, Yan Gao, Qiang Fu, Jian-Guang Lou, and Weizhu Chen. 2022. Reasoning like program executors. arXiv preprint arXiv:2201.11473.
+J. Ross Quinlan. 1990. Learning logical deﬁnitions from relations. Machine learning, 5(3):239–266.
+
+Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya Sutskever, et al. 2019. Language models are unsupervised multitask learners. OpenAI blog, 1(8):9.
+Subhro Roy and Dan Roth. 2015. Solving general arithmetic word problems. In Proceedings of the 2015 Conference on Empirical Methods in Natural Language Processing, pages 1743–1752.
+Ohad Rubin, Jonathan Herzig, and Jonathan Berant. 2021. Learning to retrieve prompts for in-context learning.
+Jianhao Shen, Yichun Yin, Lin Li, Lifeng Shang, Xin Jiang, Ming Zhang, and Qun Liu. 2021. Generate & rank: A multi-task framework for math word problems. In Findings of the Association for Computational Linguistics: EMNLP 2021, pages 2269–2279.
+Koustuv Sinha, Shagun Sodhani, Jin Dong, Joelle Pineau, and William L Hamilton. 2019. Clutrr: A diagnostic benchmark for inductive reasoning from text. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP), pages 4506–4515.
+Alon Talmor, Jonathan Herzig, Nicholas Lourie, and Jonathan Berant. 2019. Commonsenseqa: A question answering challenge targeting commonsense knowledge. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers), pages 4149–4158.
+Siyuan Wang, Wanjun Zhong, Duyu Tang, Zhongyu Wei, Zhihao Fan, Daxin Jiang, Ming Zhou, and Nan Duan. 2022a. Logic-driven context extension and data augmentation for logical reasoning of text. In Findings of the Association for Computational Linguistics: ACL 2022, pages 1619–1629, Dublin, Ireland. Association for Computational Linguistics.
+Xiaoyan Wang, edu Kapanipathi, Ryan Musa, Mo Yu, Kartik Talamadupula, Ibrahim Abdelaziz, Maria Chang, Achille Fokoue, Bassem Makni, Nicholas Mattei, and Michael Witbrock. 2019. Improving natural language inference
+
+using external knowledge in the science questions domain. In Proceedings of the Thirty-Third AAAI Conference on Artiﬁcial Intelligence and Thirty-First Innovative Applications of Artiﬁcial Intelligence Conference and Ninth AAAI Symposium on Educational Advances in Artiﬁcial Intelligence, AAAI’19/IAAI’19/EAAI’19. AAAI Press.
+Xiting Wang, Kunpeng Liu, Dongjie Wang, Le Wu, Yanjie Fu, and Xing Xie. 2022b. Multi-level recommendation reasoning over knowledge graphs with reinforcement learning. In The Web Conference 2022.
+Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. 2022c. Self-consistency improves chain of thought reasoning in language models.
+Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Ed Chi, Quoc Le, and Denny Zhou. 2022. Chain of thought prompting elicits reasoning in large language models. arXiv preprint arXiv:2201.11903.
+Yichong Xu, Chenguang Zhu, Shuohang Wang, Siqi Sun, Hao Cheng, Xiaodong Liu, Jianfeng Gao, Pengcheng He, Michael Zeng, and Xuedong Huang. 2021. Human parity on commonsenseqa: Augmenting self-attention with external attention. arXiv preprint arXiv:2112.03254.
+Zhilin Yang, Peng Qi, Saizheng Zhang, Yoshua Bengio, William Cohen, Ruslan Salakhutdinov, and Christopher D. Manning. 2018. HotpotQA: A dataset for diverse, explainable multi-hop question answering. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing, pages 2369–2380, Brussels, Belgium. Association for Computational Linguistics.
+Ori Yoran, Alon Talmor, and Jonathan Berant. 2022. Turning tables: Generating examples from semistructured tables for endowing language models with reasoning skills. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 6016–6031, Dublin, Ireland. Association for Computational Linguistics.
+
+Weihao Yu, Zihang Jiang, Yanfei Dong, and Jiashi Feng. 2020. Reclor: A reading comprehension dataset requiring logical reasoning.
+Eric Zelikman, Yuhuai Wu, and Noah D Goodman. 2022. Star: Bootstrapping reasoning with reasoning. arXiv preprint arXiv:2203.14465.
+Rowan Zellers, Yonatan Bisk, Roy Schwartz, and Yejin Choi. 2018. SWAG: A large-scale adversarial dataset for grounded commonsense inference. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing, pages 93–104, Brussels, Belgium. Association for Computational Linguistics.
+Tony Z. Zhao, Eric Wallace, Shi Feng, Dan Klein, and Sameer Singh. 2021. Calibrate before use: Improving few-shot performance of language models.
+Denny Zhou, Nathanael Schärli, Le Hou, Jason Wei, Nathan Scales, Xuezhi Wang, Dale Schuurmans, Olivier Bousquet, Quoc Le, and Ed Chi. 2022. Least-to-most prompting enables complex reasoning in large language models.
+Fengbin Zhu, Wenqiang Lei, Youcheng Huang, Chao Wang, Shuo Zhang, Jiancheng Lv, Fuli Feng, and Tat-Seng Chua. 2021. Tat-qa: A question answering benchmark on a hybrid of tabular and textual content in ﬁnance.
+

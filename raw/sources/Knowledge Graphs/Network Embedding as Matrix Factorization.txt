@@ -1,0 +1,2299 @@
+Network Embedding as Matrix Factorization: Unifying DeepWalk, LINE, PTE, and node2vec
+
+arXiv:1710.02971v4 [cs.SI] 8 Feb 2018
+
+Jiezhong Qiu†∗, Yuxiao Dong‡, Hao Ma‡, Jian Li♯, Kuansan Wang‡, and Jie Tang†
+
+†Department of Computer Science and Technology, Tsinghua University ‡Microsoft Research, Redmond
+♯Institute for Interdisciplinary Information Sciences, Tsinghua University
+qiujz16@mails.tsinghua.edu.cn,{yuxdong,haoma,kuansanw}@microsoft.com,{lijian83,jietang}@tsinghua.edu.cn
+
+ABSTRACT
+Since the invention of word2vec [28, 29], the skip-gram model has significantly advanced the research of network embedding, such as the recent emergence of the DeepWalk, LINE, PTE, and node2vec approaches. In this work, we show that all of the aforementioned models with negative sampling can be unified into the matrix factorization framework with closed forms. Our analysis and proofs reveal that: (1) DeepWalk [31] empirically produces a low-rank transformation of a network’s normalized Laplacian matrix; (2) LINE [37], in theory, is a special case of DeepWalk when the size of vertices’ context is set to one; (3) As an extension of LINE, PTE [36] can be viewed as the joint factorization of multiple networks’ Laplacians; (4) node2vec [16] is factorizing a matrix related to the stationary distribution and transition probability tensor of a 2nd-order random walk. We further provide the theoretical connections between skip-gram based network embedding algorithms and the theory of graph Laplacian. Finally, we present the NetMF method1 as well as its approximation algorithm for computing network embedding. Our method offers significant improvements over DeepWalk and LINE for conventional network mining tasks. This work lays the theoretical foundation for skip-gram based network embedding methods, leading to a better understanding of latent network representation learning.
+ACM Reference Format: Jiezhong Qiu, Yuxiao Dong, Hao Ma, Jian Li, Kuansan Wang, and Jie Tang. 2018. Network Embedding as Matrix Factorization: Unifying DeepWalk, LINE, PTE, and node2vec . In Proceedings of WSDM’18. ACM, New York, NY, USA, 9 pages. https://doi.org/10.1145/3159652.3159706
+1 INTRODUCTION
+The conventional paradigm of mining and learning with networks usually starts from the explicit exploration of their structural properties [13, 32]. But many of such properties, such as betweenness
+∗This work was partially done when Jiezhong was an intern at Microsoft Research. 1Code available at github.com/xptree/NetMF.
+Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than ACM must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org. WSDM’18, , February 5–9, 2018, Marina Del Rey, CA, USA © 2018 Association for Computing Machinery. ACM ISBN 978-1-4503-5581-0/18/02. . . $15.00 https://doi.org/10.1145/3159652.3159706
+
+Table 1: The matrices that are implicitly approximated and factorized by DeepWalk, LINE, PTE, and node2vec.
+
+Algorithm DeepWalk
+LINE
+PTE
+node2vec
+
+Matrix
+
+log
+
+vol(G )
+
+1 T
+
+T (D −1A)r
+r =1
+
+D −1
+
+− log b
+
+log vol(G)D −1AD −1 − log b
+
+α vol(Gww)(Drwoww)−1Aww(D ww)−1
+
+
+
+col 
+
+log
+
+ 
+
+β
+
+vol(Gdw)(Drdoww)−1Adw(D dw)−1
+
+ 
+
+− log b
+
+col
+
+ 
+
+γ vol(Glw)(Drlwow)−1Alw(D lw )−1
+
+ 
+
+col
+
+log 21T Tr =1 u Xw,u P cr,w,u + u Xc,u P wr ,c,u − log b
+
+( u Xw,u )( u Xc,u )
+
+Notations in DeepWalk and LINE are introduced below. See detailed notations for PTE and node2vec in Section 2. A: A ∈ R|+V |×|V | is G’s adjacency matrix with Ai, j as the edge weight between vertices i and j; Dcol: Dcol = diag(A⊤e ) is the diagonal matrix with column sum of A; Drow: Drow = diag(Ae ) is the diagonal matrix with row sum of A; D : For undirected graphs (A⊤ = A), Dcol = Drow. For brevity, D represents both Dcol & Drow.
+D = diag(d1, · · · , d|V | ), where di represents generalized degree of vertex i; vol(G): vol(G) = i j Ai, j = i di is the volume of a weighted graph G;
+T & b: The context window size and the number of negative sampling in skip-gram, respectively.
+
+centrality, triangle count, and modularity, require extensive domain knowledge and expensive computation to handcraft. In light of these issues, as well as the opportunities offered by the recent emergence of representation learning [2], learning latent representations for networks, a.k.a., network embedding, has been extensively studied in order to automatically discover and map a network’s structural properties into a latent space.
+Formally, the problem of network embedding is often formalized as follows: Given an undirected and weighted graph G = (V , E, A) with V as the node set, E as the edge set and A as the adjacency matrix, the goal is to learn a function V → Rd that maps each vertex to a d-dimensional (d ≪ |V |) vector that captures its structural properties. The output representations can be used as the input of mining and learning algorithms for a variety of network science tasks, such as label classification and community detection.
+The attempt to address this problem can date back to spectral graph theory [11] and social dimension learning [38]. Its very recent advances have been largely influenced by the skip-gram model originally proposed for word embedding [28, 29], whose input is a text corpus composed of sentences in natural language and output is the latent vector representation for each word in the corpus. Notably, inspired by this setting, DeepWalk [31] pioneers network embedding by considering the vertex paths traversed by random walks over networks as the sentences and leveraging skipgram for learning latent vertex representations. With the advent of
+
+DeepWalk, many network embedding models have been developed, such as LINE [37], PTE [36], and node2vec [16].
+The above models have thus far been demonstrated quite effective empirically. However, the theoretical mechanism behind them is much less well-understood. We note that the skip-gram model with negative sampling for word embedding has been shown to be an implicit factorization of a certain word-context matrix [24], and there is recent effort to theoretically explaining the word embedding models from geometric perspectives [1, 18]. But it is unclear what is the relation between the word-context matrix and the network structure. Moreover, there was an early attempt to theoretically analyze DeepWalk’s behavior [47]. However, their main theoretical results are not fully consistent with the setting of the original DeepWalk paper. In addition, despite the superficial similarity among DeepWalk, LINE, PTE, and node2vec, there is a lack of deeper understanding of their underlying connections. Contributions In this work, we provide theoretical results concerning several skip-gram powered network embedding methods. More concretely, we first show that the models we mentioned— DeepWalk, LINE, PTE, and node2vec—are in theory performing implicit matrix factorizations. We derive the closed form of the matrix for each model (see Table 1 for a summary). For example, DeepWalk (random walks on a graph + skip-gram) is in essence factorizing a random matrix that converges in probability to our closed-form matrix as the length of random walks goes to infinity.
+Second, observed from their matrices’ closed forms, we find that, interestingly, LINE can be seen as a special case of DeepWalk, when the window size T of contexts is set to 1 in skip-gram. Furthermore, we demonstrate that PTE, as an extension of LINE, is actually an implicit factorization of the joint matrix of multiple networks.
+Third, we discover a theoretical connection between DeepWalk’s implicit matrix and graph Laplacians. Based on the connection, we propose a new algorithm NetMF to approximate the closed form of DeepWalk’s implicit matrix. By explicitly factorizing this matrix using SVD, our extensive experiments in four networks (used in the DeepWalk and node2vec approaches) demonstrate NetMF’s outstanding performance (relative improvements by up to 50%) over DeepWalk and LINE.
+
+2 THEORETICAL ANALYSIS AND PROOFS
+In this section, we present the detailed theoretical analysis and proofs for four popular network embedding approaches: LINE, PTE, DeepWalk, and node2vec.
+
+2.1 LINE and PTE
+
+LINE [37] Given an undirected and weighted network G = (V , E, A), LINE with the second order proximity (aka LINE (2nd)) aims to learn two representation matrices X , Y ∈ R|V |×d , whose rows are denoted by xi and yi , i = 1, · · · , |V |, respectively. The objective of LINE (2nd) is to maximize
+
+|V | |V |
+
+ℓ=
+
+Ai, j log д xi⊤yj + bEj′∼PN log д −xi⊤yj′ ,
+
+i =1 j=1
+
+where д is the sigmoid function; b is the parameter for negative sampling; PN is known as the noise distribution that generates
+3/4
+negative samples. In LINE, the authors empirically set PN (j) ∝ dj ,
+
+|V |
+
+where dj = k=1 Aj,k is the generalized degree of vertex j. In our
+
+analysis, we assume PN (j) ∝ dj because the normalization factor
+
+has a closed form solution in graph theory, i.e., PN (j) = dj /vol(G),
+
+|V | |V |
+
+2
+
+where vol(G) = i=1 j=1 Ai, j . Then we rewrite the objective as
+
+|V | |V |
+
+|V |
+
+ℓ=
+
+Ai, j log д xi⊤yj + b di Ej′∼PN log д −xi⊤yj′ , (1)
+
+i =1 j=1
+
+i =1
+
+and express the expectation term Ej′∼PN log д −xi⊤yj′ as
+
+dj
+
+⊤
+
+dj′
+
+⊤
+
+log д −xi yj +
+
+log д −xi yj′ .
+
+(2)
+
+vol(G )
+
+j′ j vol(G)
+
+By combining Eq. 1 and Eq. 2, and considering the local objective function for a specific pair of vertices (i, j), we have
+
+⊤
+
+di dj
+
+⊤
+
+ℓ(i, j) = Ai, j log д xi yj + b
+
+log д −xi yj .
+
+vol(G )
+
+Let us define zi, j = xi⊤yj . Following Levy and Goldberg [24], where the authors suggested that for a sufficient large embedding dimension, each individual zi, j can assume a value independence, we can take the derivative w.r.t. zi, j and get:
+
+∂ℓ ∂zi = ∂ℓ(i, j) = , j ∂zi, j Ai, j д(−zi, j ) − b di dj vol(G) д(zi, j ).
+
+Setting the derivative to be zero reveals
+
+e 2zi, j − vol(G )Ai, j bdi dj − 1 e zi, j − vol(G )Ai, j bdi dj = 0. The above quadratic equation has two solutions (1) ezi,j = −1, which is invalid; and (2) ezi, j = bdi d vol(G)Ai, j j , i.e.,
+
+⊤
+
+vol(G)Ai, j
+
+xi yj = zi, j = log
+
+.
+
+(3)
+
+bdi dj
+
+Writing Eq. 3 in matrix form, LINE (2nd) is factoring the matrix
+
+log vol(G)D −1AD −1 − log b = X Y ⊤,
+
+(4)
+
+where log(·) denotes the element-wise matrix logarithm, and D = diag(d1, · · · , d |V |).
+
+PTE [36] PTE is an extension of LINE (2nd) in heterogeneous text networks. To examine it, we first adapt our analysis of LINE (2nd) to bipartite networks. Consider a bipartite network G = (V1 ∪V2, E, A) where V1, V2 are two disjoint sets of vertices, E ⊆ V1 ×V2 is the edge set, and A ∈ R|+V1 |×|V2 | is the bipartite adjacency matrix. The volume
+|V1 | |V2 |
+of G is defined to be vol(G) = i=1 j=1 Ai, j . The goal is to learn a representation xi for each vertex vi ∈ V1 and a representation yj for each vertex vj ∈ V2. The objective function is
+
+|V1 | |V2 |
+
+ℓ=
+
+Ai, j log д xi⊤yj + bEj′∼PN log д −xi⊤yj′ .
+
+i =1 j =1
+
+Applying the same analysis procedure of LINE, we can see that maximizing ℓ is actually factorizing
+
+log vol(G)Dr−o1wADc−o1l − log b = X Y ⊤
+where we denote Drow = diag(Ae) and Dcol = diag(A⊤e). Given the above discussion, let us consider the heterogeneous
+text network used in PTE, which is composed of three sub-networks
+
+2A
+
+similar
+
+result
+
+could
+
+be
+
+achieved
+
+if
+
+we
+
+use
+
+PN
+
+(j)
+
+∝
+
+3/4
+dj .
+
+— the word-word network Gww, the document-word network Gdw,
+
+and the label-word network Glw, where Gdw and Glw are bipar-
+
+tite. Take the document-word network Gdw as an example, we use
+
+Adw
+
+∈
+
+R#doc×#word
+
+to
+
+denote
+
+its
+
+adjacency
+
+matrix,
+
+and
+
+use
+
+Ddw
+row
+
+and
+
+Ddw
+col
+
+to
+
+denote
+
+its
+
+diagonal
+
+matrices
+
+with
+
+row
+
+and
+
+column
+
+sum, respectively. By leveraging the analysis of LINE and the above
+
+notations, we find that PTE is factorizing
+
+α vol(Gww)(Drwoww)−1Aww(D ww)−1
+
+
+
+col 
+
+log
+
+ 
+
+β
+
+vol(Gdw)(Drdoww)−1Adw(D dw)−1
+col
+
+ 
+
+− log b,
+
+(5)
+
+ 
+
+γ vol(Glw)(Drlwow)−1Alw(D lw )−1
+
+ 
+
+col
+
+where the factorized matrix is of shape (#word + #doc + #label) × #word, b is the parameter for negative sampling, and {α, β, γ } are
+non-negative hyper-parameters to balance the weights of the three sub-networks. In PTE, {α, β, γ } satisfy α vol(Gww) = β vol(Gdw) = γ vol(Glw). This is because the authors perform edge sampling during training wherein edges are sampled from each of three
+sub-networks alternatively (see Section 4.2 in [36]).
+
+2.2 DeepWalk
+In this section, we analyze DeepWalk [31] and illustrate the essence of DeepWalk is actually performing an implicit matrix factorization (See the matrix form solution in Thm. 2.3).
+DeepWalk first generates a “corpus” D by random walks on graphs [26]. To be formal, the corpus D is a multiset that counts the multiplicity of vertex-context pairs. DeepWalk then trains a skip-gram model on the multiset D. In this work, we focus on skipgram with negative sampling (SGNS). For clarity, we summarize the DeepWalk method in Algorithm 1. The outer loop (Line 1-7) specifies the total number of times, N , for which we should run random walks. For each random walk of length L, the first vertex is sampled from a prior distribution P(w). The inner loop (Line 4-7) specifies the construction of the multiset D. Once we have D, we run an SGNS to attain the network embedding (Line 8). Next, we introduce some necessary background about the SGNS technique, followed by our analysis of the DeepWalk method.
+Preliminary on Skip-gram with Negative Sampling (SGNS) The skip-gram model assumes a corpus of words w and their context c. More concretely, the words come from a textual corpus of words w1, · · · wL and the contexts for word wi are words surrounding it in a T -sized window wi−T , · · · , wi−1, wi+1, · · · , wi+T . Following the work by Levy and Goldberg [24], SGNS is implicitly factorizing
+log #(w, c) | D | #(w ) · #(c) − log b, (6)
+where #(w, c), #(w) and #(c) denote the number of times wordcontext pair (w, c), word w and context c appear in the corpus, respectively; b is the number of negative samples.
+Proofs and Analysis Our analysis of DeepWalk is based on the following key assumptions. Firstly, assume the used graph is undirected, connected, and non-bipartite, making P(w) = dw /vol(G) a unique stationary distribution of the random walks. Secondly, suppose the first vertex of a random walk is sampled from the stationary distribution P(w) = dw /vol(G).
+To characterize DeepWalk, we want to reinterpret Eq. 6 by using graph theory terminologies. Our general idea is to partition the multiset D into several sub-multisets according to the way in which
+
+Algorithm 1: DeepWalk
+
+1 for n = 1, 2, . . . , N do
+
+2
+
+Pick
+
+wn
+1
+
+according
+
+to
+
+a
+
+probability
+
+distribution
+
+P (w1 );
+
+3
+
+Generate
+
+a
+
+vertex
+
+sequence
+
+(w1n ,
+
+·
+
+·
+
+·
+
+,wn)
+L
+
+of
+
+length
+
+L
+
+by
+
+a
+
+random walk on network G;
+
+4 for j = 1, 2, . . . , L − T do
+
+5
+
+for r = 1, . . . ,T do
+
+6
+
+Add
+
+vertex-context
+
+pair
+
+(w n
+j
+
+,
+
+wn
+j +r
+
+)
+
+to
+
+multiset
+
+D;
+
+7
+
+Add
+
+vertex-context
+
+pair
+
+(w n
+j +r
+
+,
+
+wn
+j
+
+)
+
+to
+
+multiset
+
+D;
+
+8 Run SGNS on D with b negative samples.
+
+vertex and its context appear in a random walk sequence. More formally, for r = 1, · · · ,T , we define
+
+D→−r =
+
+(w,
+
+c)
+
+:
+
+(w,
+
+c)
+
+∈
+
+D,
+
+w
+
+=
+
+w jn ,
+
+c
+
+=
+
+n
+w j +r
+
+,
+
+D←r− =
+
+(w,
+
+c)
+
+:
+
+(w,
+
+c)
+
+∈
+
+D,
+
+w
+
+=
+
+wn ,
+j +r
+
+c
+
+=
+
+wn
+j
+
+.
+
+That is, D→−r /D←r− is the sub-multiset of D such that the context c is r steps after/before the vertex w in random walks. Moreover, we use #(w, c)→−r and #(w, c)←r− to denote the number of times vertex-context pair (w, c) appears in D→−r and D←r−, respectively. The following three theorems characterize DeepWalk step by step.
+
+Theorem 2.1. Denote P = D−1A, when L → ∞, we have
+
+#(w, c )→−r p dw r
+
+#(w, c )←r− p dc
+
+r
+
+→
+
+(P )w,c and
+
+→
+
+(P )c,w .
+
+D→−r
+
+vol(G )
+
+D←r−
+
+vol(G )
+
+Proof. See Appendix.
+
+□
+
+Remark 1. What if we start random walks with other distribu-
+
+tions (e.g., the uniform distribution in the original DeepWalk work [31])?
+
+It turns out that, for a connected, undirected, and non-bipartite graph,
+
+P (w j
+
+= w, wj+r
+
+= c)
+
+→
+
+dw (Pr )
+vol(G) w,c
+
+as j
+
+→
+
+∞. So when the
+
+length of random walks L → ∞, Thm. 2.1 still holds.
+
+Theorem 2.2. When L → ∞, we have
+
+#(w, c) p 1 T →
+
+dw (P r )w,c + dc (P r )c,w .
+
+|D|
+
+2T r =1 vol(G)
+
+vol(G )
+
+| D→−r | | D←r− | 1 Proof. Note the fact that | D | = | D | = 2T . By using Thm. 2.1 and the continuous mapping theorem, we get
+
+#(w, c) = |D|
+
+T r =1
+
+#(w, c )→−r + #(w, c )←r−
+
+T r =1
+
+D→−r + D←r−
+
+1T = 2T r =1
+
+#(w, c )→−r + #(w, c )←r−
+
+D→−r
+
+D←r−
+
+p 1T →
+
+dw (P r )w,c + dc (P r )c,w .
+
+2T r =1 vol(G)
+
+vol(G )
+
+Further, marginalizing w and c respectively reveals the fact that
+
+#(w ) p dw
+
+#(c) p dc
+
+| D | → vol(G) and | D | → vol(G) , as L → ∞.
+
+□
+
+Theorem 2.3. For DeepWalk, when L → ∞,
+
+#(w, c) | D | p vol(G) →
+
+1 T (P r )w 1 ,c +
+
+T
+(P r )c,w .
+
+#(w ) · #(c)
+
+2T dc r =1
+
+dw r =1
+
+In matrix form, DeepWalk is equivalent to factorize log vol(G) T P r D −1 − log(b). (7) T r =1
+
+Proof. Using the results in Thm. 2.2 and the continuous mapping theorem, we get
+
+#(w, c) | D |
+
+#(w,c ) |D|
+
+1 p 2T
+
+#(w ) · #(c ) = #(w) · #(c) →
+
+|D| |D|
+
+T dw (P r ) + dc (P r )
+
+r =1 vol(G )
+
+w,c vol(G)
+
+c,w
+
+dw
+
+dc
+
+vol(G) · vol(G)
+
+= vol(G)
+
+1 T (P r )w 1 ,c +
+
+T
+(P r )c,w .
+
+2T dc r =1
+
+dw r =1
+
+Write it in matrix form:
+
+vol(G ) 2T
+
+T
+
+T
+
+P r D −1 + D −1 (P r )⊤
+
+r =1
+
+r =1
+
+= vol(G) 2T
+
+T
+
+T
+
+D −1A × · · · × D −1A D −1 + D −1 AD −1 × · · · × AD −1
+
+r =1 r terms
+
+r =1 r terms
+
+= vol(G) T D −1A × · · · × D −1A D −1 = vol(G) T r =1
+r terms
+
+1 T Pr T r =1
+
+D −1 .
+
+□
+
+Corollary 2.4. Comparing Eq. 4 and Eq. 7, we can easily observe that LINE (2nd) is a special case of DeepWalk when T = 1.
+
+2.3 node2vec
+node2vec [16] is a recently proposed network embedding method, which is briefly summarized in Algorithm 2. First, it defines an unnormalized transition probability tensor T with parameters p and q, and then normalizes it to be the transition probability of a 2nd-order random walk (Line 1). Formally,
+
+T u,v,w P u,v,w
+
+ 1  p 1 =1  q 0  = Prob
+
+(u, v) ∈ E, (v, w ) ∈ E, u = w ; (u, v) ∈ E, (v, w ) ∈ E, u w, (w, u) ∈ E; (u, v) ∈ E, (v, w ) ∈ E, u w, (w, u) E;
+
+otherwise.
+
+wj+1 = u |wj = v, wj−1 = w =
+
+T u,v,w . u T u,v,w
+
+Second, node2vec performs the 2nd-order random walks to generate
+
+a multiset D (Line 2-8) and then trains an SGNS model (Line 9) on
+
+it. To facilitate the analysis, we instead record triplets to form the
+
+multiset D for node2vec rather than vertex-context pairs. Take a
+
+vertex w
+
+=
+
+wn
+j
+
+and
+
+its
+
+context c
+
+=
+
+wn
+j +r
+
+as
+
+an
+
+example,
+
+we
+
+denote
+
+u
+
+=
+
+wn
+j −1
+
+and
+
+add
+
+a
+
+triplet
+
+(w, c, u)
+
+into
+
+D
+
+(Line
+
+7).
+
+Similar
+
+to
+
+our
+
+analysis of DeepWalk, we partition the multiset D according to the
+
+way in which the vertex and its context appear in a random walk
+
+sequence. More formally, for r = 1, · · · ,T , we define
+
+D→−r =
+
+(w, c, u)
+
+:
+
+(w, c, u)
+
+∈
+
+D,
+
+w
+
+n j
+
+=
+
+w,
+
+w
+
+n j +r
+
+=
+
+c,
+
+n
+w j −1
+
+=u
+
+,
+
+D←r− =
+
+(w, c, u)
+
+:
+
+(w, c, u)
+
+∈
+
+D,
+
+w
+
+n j +r
+
+=
+
+w,
+
+w
+
+n j
+
+=
+
+c,
+
+n
+w j −1
+
+=u
+
+.
+
+In addition, for a triplet (w, c, u), we use #(w, c, u)→−r and #(w, c, u)←r− to denote the number of times it appears in D→−r and D←r−, respectively.
+
+Algorithm 2: node2vec
+
+1 Construct transition probability tensor P;
+
+2 for n = 1, 2, . . . , N do
+
+3
+
+Pick
+
+wn,wn
+12
+
+according
+
+to
+
+a
+
+distribution
+
+P(w1, w2);
+
+4
+
+Generate
+
+a
+
+vertex
+
+sequence
+
+(w1n ,
+
+·
+
+·
+
+·
+
+,wn)
+L
+
+of
+
+length
+
+L
+
+by
+
+the 2nd-order random walk on network G;
+
+5 for j = 2, 3, . . . , L − T do
+
+6
+
+for r = 1, . . . ,T do
+
+7
+
+Add
+
+triplet
+
+(w n
+j
+
+,
+
+wn
+j +r
+
+,
+
+wn )
+j −1
+
+to
+
+multiset
+
+D;
+
+8
+
+Add
+
+triplet
+
+(w n
+j +r
+
+,
+
+wn
+j
+
+,
+
+wn )
+j −1
+
+to
+
+multiset
+
+D;
+
+9 Run SGNS on multiset D′ = {(w, c) : (w, c, u) ∈ D};
+
+In this analysis, we assume the first two vertices of node2vec’s 2nd-order random walk are sampled from its stationary distribution X . The stationary distribution X of the 2nd-order random walk satisfies w Pu,v,w Xv,w = Xu,v , and the existence of such X is guaranteed by the Perron-Frobenius theorem [4]. Additionally, the higher-order transition probability tensor is defined to be (Pr )u,v,w = Prob wj+r = u |wj = v, wj−1 = w .
+
+Main Results Limited by space, we list the main results of node2vec
+
+without proofs. The idea is similar to the analysis of DeepWalk.
+
+#(w,c,u)→−r p
+
+r
+
+#(w,c,u)←r− p
+
+r
+
+• | D→− | → Xw,u (P )c,w,u and | D←− | → Xc,u (P )w,c,u .
+
+r
+
+r
+
+#(w,c )→−r
+
+u #(w,c,u)→−r p
+
+r
+
+• | D→− | = | D→− | → u Xw,u (P )c,w,u .
+
+r
+
+r
+
+#(w,c )←r−
+
+u #(w,c,u)←r− p
+
+r
+
+• | D←− | = | D←− | → u Xc,u (P )w,c,u .
+
+r
+
+r
+
+#(w,c) p 1 T
+
+r
+
+r
+
+• | D | → 2T r =1 u Xw,u (P )c,w,u + u Xc,u (P )w,c,u .
+
+#(w ) p
+
+#(c) p
+
+• | D | → u Xw,u and | D | → u Xc,u .
+
+Combining all together, we conclude that, for node2vec, Eq. 6 has the form
+
+1T
+#(w, c ) | D | p 2T r =1 #(w ) · #(c) →
+
+u
+
+X
+
+w
+
+,
+
+u
+
+P
+
+r c
+
+,
+
+w
+
+,
+
+u
+
++
+
+u
+
+Xc,u
+
+P
+
+r w,c,u
+
+. (8)
+
+u Xw,u u Xc,u
+
+Though the closed form for node2vec has been achieved, we leave the formulation of its matrix form for future research.
+Note that both the computation and storage of the transition probability tensor Pr and its corresponding stationary distribution X are very expensive, making the modeling of the full 2nd-order dynamics difficult. However, we have noticed some recent progresses [3, 4, 15] that try to understand or approximate the 2ndorder random walk by assuming a rank-one factorization Xu,v = xuxv for its stationary distribution X . Due to the page limitation, in the rest of this paper, we mainly focus on the matrix factorization framework depending on the 1st-order random walk (DeepWalk).
+
+3 NetMF: NETWORK EMBEDDING AS MATRIX FACTORIZATION
+Based on the analysis in Section 2, we unify LINE, PTE, DeepWalk, and node2vec in the framework of matrix factorization, where the factorized matrices have closed forms as showed in Eq. 4, Eq. 5, Eq. 7, and Eq. 8, respectively. In this section, we study the DeepWalk
+
+matrix (Eq. 7) because it is more general than the LINE matrix and computationally more efficient than the node2vec matrix. We first discuss the connection between the DeepWalk matrix and graph Laplacian in Section 3.1. Then in Section 3.2, we present a matrix factorization based framework—NetMF—for network embedding.
+
+3.1 Connection between DeepWalk Matrix and Normalized Graph Laplacian
+In this section, we show that the DeepWalk matrix has a close relationship with the normalized graph Laplacian. To facilitate our analysis, we introduce the following four theorems.
+
+Theorem 3.1. ([11]) For normalized graph Laplacian L = I − D−1/2AD−1/2 ∈ Rn×n , all its eigenvalues are real numbers and lie in [0, 2], with λmin(L) = 0. For a connected graph with n > 1, λmax(L) ≥ n/(n − 1).
+
+Theorem 3.2. ([41]) Singular values of a real symmetric matrix are the absolute values of its eigenvalues.
+
+Theorem 3.3. ([19]) Let B, C be two n × n symmetric matrices. Then for the decreasingly ordered singular values σ of B, C and BC, σi+j−1(BC) ≤ σi (B)×σj (C) holds for any 1 ≤ i, j ≤ n and i+j ≤ n+1.
+
+Theorem 3.4. ([41]) For a real symmetric matrix A, its Rayleigh Quotient R(A, x) = (x⊤Ax)/(x⊤x) satisfies λmin(A) = minx 0 R(A, x) and λmax(A) = maxx 0 R(A, x).
+
+By ignoring the element-wise matrix logarithm and the constant
+
+term in Eq. 7, we focus on studying the matrix
+
+1 T
+
+T Pr D−1. By
+r =1
+
+Thm. 3.1, D−1/2AD−1/2 = I − L has eigen-decomposition U ΛU ⊤
+
+such that U orthonormal and Λ = diag(λ1, · · · , λn ), where 1 =
+
+λ1 ≥ λ2 ≥ · · · ≥ λn ≥ −1 and λn < 0. Based on this eigen-
+
+decomposition,
+
+1 T
+
+T Pr
+r =1
+
+D−1 can be decomposed to be the
+
+product of there symmetric matrices:
+
+1 T P r D −1 = D −1/2 U 1 T Λr U ⊤ D −1/2 . (9)
+
+T r =1
+
+T r =1
+
+The goal here is to characterize the spectrum of
+
+1 T
+
+T Pr D−1.
+r =1
+
+To achieve this, we first analyze the second matrix at RHS of Eq. 9,
+
+and then extend our analysis to the targeted matrix at LHS.
+
+Spectrum of U
+
+1 T
+
+T Λr
+r =1
+
+U ⊤ The matrix U
+
+1 T
+
+T Λr U ⊤
+r =1
+
+has
+
+eigenvalues
+
+1 T
+
+T r =1
+
+λr
+i
+
+,i
+
+=
+
+1,
+
+·
+
+·
+
+·
+
+, n,
+
+which
+
+can
+
+be
+
+treated
+
+as
+
+the
+
+output of a transformation applied on D−1/2AD−1/2’s eigenvalue
+
+λi , i.e., a kind of filter! The effect of this transformation (filter)
+
+f
+
+(x )
+
+=
+
+1 T
+
+T xr
+r =1
+
+is
+
+plotted
+
+in
+
+Figure
+
+1(a),
+
+from
+
+which
+
+we
+
+observe
+
+the following two properties of this filter. Firstly, it prefers positive
+
+large eigenvalues; Secondly, the preference becomes stronger as
+
+the window size T increases. In other words, as T grows, this filter
+
+tries to approximate a low-rank positive semi-definite matrix by
+
+keeping large positive eigenvalues.
+
+Spectrum of
+
+1 T
+
+T Pr
+r =1
+
+D−1 Guided by Thm. 3.2, the decreas-
+
+ingly ordered singular values of the matrix U
+
+1 T
+
+T Λr U ⊤ can
+r =1
+
+be constructed by sorting the absolute value of its eigenvalues in
+
+Eigenvalues After Filtering Eigenvalue
+
+1.0
+T =1 T =2 0.5 T = 5 T = 10
+0.0
+
+1.0
+D−1/2AD−1/2 U 1 ∑T Λr U ⊤
+T r=1
+0.5 1 ∑T Pr D−1
+T r=1
+0.0
+
+−0.5
+
+−0.5
+
+−1.0
+
+−1.0
+
+−0.5
+
+0.0
+
+0.5
+
+1.0
+
+Eigenvalues Before Filtering
+
+−1.0 0
+
+500
+
+1000
+
+1500
+
+2000
+
+2500
+
+Index
+
+(a)
+
+(b)
+
+Figure 1: DeepWalk Matrix as Filtering: (a) Function f (x ) =
+
+1 T
+
+T xr
+r =1
+
+with
+
+dom f
+
+= [−1, 1], where T
+
+∈
+
+{1, 2, 5, 10}; (b) Eigen-
+
+values of D −1/2AD −1/2, U 1 T Λr U ⊤, and 1 T P r D −1 for
+
+T r =1
+
+T r =1
+
+Cora network (T = 10).
+
+the non-increasing order such that
+
+1T r
+
+1T r
+
+1T r
+
+λp1 ≥
+
+λp2 ≥ · · · ≥
+
+λpn ,
+
+T r =1
+
+T r =1
+
+T r =1
+
+where {p1, p2, · · · , pn } is a permutation of {1, 2, · · · , n}. Similarly, since every di is positive, the decreasingly ordered singular values of the matrix D−1/2 can be constructed by sorting 1/√di in the non-increasing order such that 1/ dq1 ≥ 1/ dq2 ≥ · · · ≥ 1/ dqn where {q1, q2, · · · , qn } is a permutation of {1, 2, · · · , n}. In particular, dq1 = dmin is the smallest vertex degree. By applying Thm. 3.3 twice, we can see that the s-th singular value satisfies
+
+σs 1 T P r D −1 ≤ σ1 D − 21 σs U 1 T Λr U ⊤ σ1 D − 12
+
+T r =1
+
+T r =1
+
+=1
+
+1T r λps
+
+dq1 T r =1
+
+1 =1
+
+1T r λps ,
+
+dq1 dmin T r =1
+
+(10)
+
+which reveals that the magnitude of
+
+1 T
+
+T Pr
+r =1
+
+D−1’s eigenval-
+
+ues is always bounded by the magnitude of U
+
+1 T
+
+T Λr U ⊤’s
+r =1
+
+eigenvalues. In addition to the magnitude of eigenvalues, we also
+
+want to bound its smallest eigenvalue. Observe that the Rayleigh
+
+Quotient of
+
+1 T
+
+T Pr
+r =1
+
+D−1 has a lower bound as follows
+
+R 1 P T r D −1, x = R U 1 Λ T r U ⊤, D−1/2x R D−1, x
+
+T r =1
+
+T r =1
+
+≥λmin U
+
+1 T Λr U ⊤ λmax D−1 = 1 λmin U
+
+T r =1
+
+dmin
+
+1 T Λr U ⊤ . T r =1
+
+By applying Thm. 3.4, we can bound the smallest eigenvalue of
+
+1 T
+
+T Pr
+r =1
+
+D−1 by the smallest eigenvalue of U
+
+1 T
+
+T Λr U ⊤:
+r =1
+
+λmin
+
+1 T P r D −1 T r =1
+
+≥ 1 dmin λmin U
+
+1 T Λr U ⊤ . T r =1
+
+Illustrative Example: Cora In order to illustrate the filtering ef-
+
+fect we discuss above, we analyze a small citation network Cora [27].
+
+we make the citation links undirected and choose its largest con-
+
+nected component. In Figure 1(b), we plot the decreasingly or-
+
+dered eigenvalues of matrices D−1/2AD−1/2, U
+
+1 T
+
+T Λr U ⊤,
+r =1
+
+Algorithm 3: NetMF for a Small Window Size T
+
+1 Compute P1, · · · , PT ;
+
+2 Compute M = vol(G) T Pr D−1;
+
+bT
+
+r =1
+
+3 Compute M ′ = max(M, 1);
+
+4
+
+Rank-d
+
+approximation by SVD: log M ′
+
+=
+
+Ud
+
+Σd
+
+V⊤
+d
+
+;
+
+5 return Ud Σd as network embedding.
+
+Algorithm 4: NetMF for a Large Window Size T
+
+1 Eigen-decomposition D−1/2AD−1/2 ≈ Uh ΛhU ⊤;
+h
+2 Approximate M with
+
+Mˆ = vol(G) D−1/2U 1 T Λr U ⊤D−1/2;
+
+b
+
+h T r =1 h h
+
+3 Compute Mˆ ′ = max(Mˆ , 1);
+
+4
+
+Rank-d
+
+approximation by SVD: log Mˆ ′
+
+=
+
+Ud
+
+Σd
+
+V⊤
+d
+
+;
+
+5 return Ud Σd as network embedding.
+
+and
+
+1 T
+
+T Pr
+r =1
+
+D−1, respectively, with T = 10. For D−1/2AD−1/2,
+
+the largest eigenvalue λ1 = 1, and the smallest eigenvalue λn =
+
+−0.971. For U
+
+1 T
+
+T Λr
+r =1
+
+U ⊤, we observe that all its negative
+
+eigenvalues and small positive eigenvalues are “filtered out” in
+
+spectrum. Finally, for the matrix
+
+1 T
+
+T Pr
+r =1
+
+D−1, we observe that
+
+both the magnitude of its eigenvalues and its smallest eigenvalue
+
+are bounded by those of U
+
+1 T
+
+T Λr U ⊤.
+r =1
+
+3.2 NetMF
+
+Built upon the theoretical analysis above, we propose a matrix
+
+factorization framework NetMF for empirical understanding of
+
+and improving on DeepWalk and LINE. For simplicity, we denote
+
+vol(G )
+M = bT
+
+T Pr
+r =1
+
+D−1, and refer to log M as the DeepWalk
+
+matrix.
+
+NetMF for a Small Window Size T NetMF for a small T is quite
+
+intuitive. The basic idea is to directly compute and factorize the
+
+DeepWalk matrix. The detail is listed in Algorithm 3. In the first step (Line 1-2), we compute the matrix power from P1 to PT and
+
+then get M. However, the factorization of log M presents computa-
+
+tional challenges due to the element-wise matrix logarithm. The
+
+matrix is not only ill-defined (since log 0 = −∞), but also dense.
+
+Inspired by the Shifted PPMI approach [24], we define M ′ such
+
+that
+
+M′
+i,
+
+j
+
+=
+
+max(Mi, j , 1) (Line 3). In this way, log M ′
+
+is a sparse
+
+and consistent version of log M. Finally, we factorize log M ′ by
+
+using Singular Value Decomposition (SVD) and construct network
+
+embedding by using its top-d singular values/vectors (Line 4-5).
+
+NetMF for a Large Window SizeT The direct computation of the matrix M presents computing challenges for a large window size T , mainly due to its high time complexity. Hereby we propose an approximation algorithm as listed in Algorithm 4. The general idea comes from our analysis in section 3.1, wherein we reveal M’s close relationship with the normalized graph Laplacian and show its lowrank nature theoretically. In our algorithm, we first approximate
+
+Dataset |V | |E |
+#Labels
+
+Table 2: Statistics of Datasets.
+
+BlogCatalog 10,312 333,983 39
+
+PPI 3,890 76,584
+50
+
+Wikipedia 4,777 184,812 40
+
+Flickr 80,513 5,899,882
+195
+
+D−1/2AD−1/2 with its top-h eigenpairs Uh ΛhU ⊤ (Line 1). Since
+h
+only the top-h eigenpairs are required and the involved matrix
+
+is sparse, we can use Arnoldi method [22] to achieve significant
+
+time reduction. In step two (Line 2), we approximate M with Mˆ =
+
+vol(G) D−1/2Uh 1 T Λr U ⊤D−1/2. The final step is the same
+
+b
+
+T r =1 h h
+
+as that in Algorithm 3, in which we form Mˆ ′ = max(Mˆ , 1) (Line 3)
+
+and then perform SVD on log Mˆ ′ to get network embedding (Line
+
+4-5).
+
+For NetMF with large window sizes, we develop the following
+
+error bound theorem for the approximation of M and the approximation of log M ′.
+
+Theorem 3.5. Let ∥·∥F be the matrix Frobenius norm. Then
+
+ˆ
+
+vol(G )
+
+M −M ≤
+
+F bdmin
+
+n 1 T r2 λj ;
+j=k +1 T r =1
+
+log M ′ − log Mˆ ′ ≤ M ′ − Mˆ ′ ≤ M − Mˆ .
+
+F
+
+F
+
+F
+
+Proof. See Appendix.
+
+□
+
+Thm. 3.5 reveals that the error for approximating log M ′ is bounded by the error bound for the approximation of M. Nevertheless, the major drawback of NetMF lies in this element-wise matrix logarithm. Since good tools are currently not available to analyze this operator, we have to compute it explicitly even after we have already achieved a good low-rank approximation of M.
+
+4 EXPERIMENTS
+In this section, we evaluate the proposed NetMF method on the multi-label vertex classification task, which has also been used in the works of DeepWalk, LINE, and node2vec.
+Datasets We employ four widely-used datasets for this task. The statistics of these datasets are listed in Table 2.
+BlogCatalog [38] is a network of social relationships of online bloggers. The vertex labels represent interests of the bloggers.
+Protein-Protein Interactions (PPI) [35] is a subgraph of the PPI network for Homo Sapiens. The labels are obtained from the hallmark gene sets and represent biological states.
+Wikipedia3 is a co-occurrence network of words appearing in the first million bytes of the Wikipedia dump. The labels are the Part-of-Speech (POS) tags inferred by Stanford POS-Tagger [40].
+Flickr [38] is the user contact network in Flickr. The labels represent the interest groups of the users.
+Baseline Methods We compare our methods NetMF (T = 1) and NetMF (T = 10) with LINE (2nd) [37] and DeepWalk [31], which we have introduced in previous sections. For NetMF (T = 10), we choose h = 16384 for Flickr, and h = 256 for BlogCatelog, PPI, and
+3 http://mattmahoney.net/dc/text.html
+
+Micro-F1 (%)
+
+50 BlogCatalog 30 PPI
+
+45
+
+25
+
+40 20 35 30 15
+
+25
+
+10
+
+20
+
+5
+
+35
+
+25
+
+30 20
+25 15
+20
+15 10
+
+10 20 40 60 80
+
+5 20 40 60 80
+
+NetMF (T=1)
+
+LINE
+
+70 Wikipedia
+60
+50
+40
+30 20.0 17.5 15.0 12.5 10.0
+7.5 5.0 20 40 60
+NetMF (T=10)
+
+40 35 30 25 20 25 20 15 10 80 5 2
+DeepWalk
+
+Flickr
+
+4
+
+6
+
+8 10
+
+Macro-F1 (%)
+
+Figure 2: Predictive performance on varying the ratio of training data. The x-axis represents the ratio of labeled data (%), and the y-axis in the top and bottom rows denote the Micro-F1 and Macro-F1 scores respectively.
+
+Wikipedia. For DeepWalk, we present its results with the authors’ preferred parameters—window size 10, walk length 40, and the number of walks starting from each vertex to be 80. Finally, we set embedding dimension to be 128 for all methods.
+Prediction Setting Following the same experimental procedure in DeepWalk [31], we randomly sample a portion of labeled vertices for training and use the rest for testing. For BlogCatalog, PPI, and Wikipedia datasets, the training ratio is varied from 10% to 90%. For Flickr, the training ratio is varied from 1% to 10%. We use the onevs-rest logistic regression model implemented by LIBLINEAR [14] for the multi-label classification task. In the test phase, the onevs-rest model yields a ranking of labels rather than an exact label assignment. To avoid the thresholding effect [39], we assume that the number of labels for test data is given [31, 39]. We repeat the prediction procedure 10 times and evaluate the performance in terms of average Micro-F1 and average Macro-F1 [42].
+Experimental Results Figure 2 summarizes the prediction performance of all methods on the four datasets and Table 3 lists the quantitative and relative gaps between our methods and baselines. In specific, we show NetMF (T = 1)’s relative performance gain over LINE (2nd) and NetMF (T = 10)’s relative improvements over DeepWalk, respectively, as each pair of them share the same window size T . We have the following key observations and insights:
+(1) In BlogCatalog, PPI, and Flickr, the proposed NetMF method (T = 10) achieves significantly better predictive performance over baseline approaches as measured by both Micro-F1 and Macro-F1, demonstrating the effectiveness of the theoretical foundation we lay out for network embedding.
+(2) In Wikipedia, NetMF (T = 1) shows better performance than other methods in terms of Micro-F1, while LINE outperforms other methods regarding Macro-F1. This observation implies that shortterm dependence is enough to model Wikipedia’s network structure.
+
+This is because the used Wikipedia network is a dense word cooccurrence network with the average degree = 77.11, in which an edge between a pair of words are connected if they co-occur in a two-length window in the Wikipedia corpus.
+(3) As shown in Table 3, the proposed NetMF method (T = 10 and T = 1) outperforms DeepWalk and LINE by large margins in most cases when sparsely labeled vertices are provided. Take the PPI dataset with 10% training data as an example, NetMF (T = 1) achieves relatively 46.34% and 33.85% gains over LINE (2nd) regarding Micro-F1 and Macro-F1 scores, respectively; More impressively, NetMF (T = 10) outperforms DeepWalk by 50.71% and 39.16% relatively as measured by two metrics.
+(4) DeepWalk tries to approximate the exact vertex-context joint distribution with an empirical distribution through random walk sampling. Although the convergence is guaranteed by the law of large numbers, there still exist gaps between the exact and estimated distributions due to the large size of real-world networks and the relatively limited scale of random walks in practice (e.g., #walks and the walk length), negatively affecting DeepWalk’s performance.
+5 RELATED WORK
+The story of network embedding stems from Spectral Clustering [5, 45], a data clustering technique which selects eigenvalues/eigenvectors of a data affinity matrix to obtain representations that can be clustered or embedded in a low-dimensional space. Spectral Clustering has been widely used in fields such as community detection [23] and image segmentation [33]. In recent years, there is an increasing interest in network embedding. Following a few pioneer works such as SocDim [38] and DeepWalk [31], a growing number of literature has tried to address the problem from various of perspectives, such as heterogeneous network embedding [8, 12, 20, 36], semi-supervised network embedding [17, 21, 44, 48], network embedding with rich vertex attributes [43, 47, 49], network embedding
+
+Table 3: Micro/Macro-F1 Score(%) for Multilabel Classification on BlogCatalog, PPI, Wikipedia, and Flickr datasets. In Flickr, 1% of vertices are labeled for training [31], and in the other three datasets, 10% of vertices are labeled for training.
+
+Algorithm
+LINE (2nd) NetMF (T = 1) Relative Gain of NetMF (T = 1) DeepWalk NetMF (T = 10) Relative Gain of NetMF (T = 10)
+
+BlogCatalog (10%)
+
+Micro-F1 Macro-F1
+
+23.64
+
+13.91
+
+33.04
+
+14.86
+
+39.76
+
+6.83%
+
+29.32
+
+18.38
+
+38.36
+
+22.90
+
+30.83% 24.59%
+
+PPI (10%)
+
+Micro-F1 Macro-F1
+
+10.94
+
+9.04
+
+16.01
+
+12.10
+
+46.34% 33.85%
+
+12.05
+
+10.29
+
+18.16
+
+14.32
+
+50.71% 39.16%
+
+Wikipeida (10%)
+
+Micro-F1 Macro-F1
+
+41.77
+
+9.72
+
+49.90
+
+9.25
+
+19.46%
+
+-4.84%
+
+36.08
+
+8.38
+
+46.21
+
+8.38
+
+28.08%
+
+0.00%
+
+Flickr (1%)
+
+Micro-F1 Macro-F1
+
+25.18
+
+9.32
+
+23.87
+
+6.44
+
+-5.20% -30.90%
+
+26.21
+
+12.43
+
+29.95
+
+13.50
+
+14.27%
+
+8.93%
+
+with high order structure [6, 16], signed network embedding [10], direct network embedding [30], network embedding via deep neural network [7, 25, 46], etc.
+Among the above research, a commonly used technique is to define the “context” for each vertex, and then to train a predictive model to perform context prediction. For example, DeepWalk [31], node2vec [16], and metapath2vec [12] define vertices’ context by the 1st-, 2nd-order, and meta-path based random walks, respectively; The idea of leveraging the context information are largely motivated by the skip-gram model with negative sampling (SGNS) [29]. Recently, there has been effort in understanding this model. For example, Levy and Goldberg [24] prove that SGNS is actually conducting an implicit matrix factorization, which provides us with a tool to analyze the above network embedding models; Arora et al. [1] propose a generative model RAND-WALK to explain word embedding models; and Hashimoto et al. [18] frame word embedding as a metric learning problem. Built upon the work in [24], we theoretically analyze popular skip-gram based network embedding models and connect them with spectral graph theory.
+6 CONCLUSION
+In this work, we provide a theoretical analysis of four impactful network embedding methods—DeepWalk, LINE, PTE, and node2vec— that were recently proposed between the years 2014 and 2016. We show that all of the four methods are essentially performing implicit matrix factorizations and the closed forms of their matrices offer not only the relationships between those methods but also their intrinsic connections with graph Laplacian. We further propose NetMF—a general framework to explicitly factorize the closed-form matrices that DeepWalk and LINE aim to implicitly approximate and factorize. Our extensive experiments suggest that NetMF’s direct factorization achieves consistent performance improvements over the implicit approximation models—DeepWalk and LINE.
+In the future, we would like to further explore promising directions to deepen our understanding of network embedding. It would be necessary to investigate whether and how the development in random-walk polynomials [9] can support fast approximations of the closed-form matrices. The computation and approximation of the 2nd-order random walks employed by node2vec is another interesting topic to follow. Finally, it is exciting to study the nature of skip-gram based dynamic and heterogeneous network embedding.
+Acknowledgements. We thank Hou Pong Chan for his comments. Jiezhong Qiu and Jie Tang are supported by NSFC 61561130160. Jian Li is supported in part by the National Basic Research Program of China Grant 2015CB358700, and NSFC 61772297 & 61632016.
+
+APPENDIX:
+Theorem 2.1. Denote P = D−1A, when L → ∞, we have
+
+#(w, c )→−r p dw r
+
+#(w, c )←r− p dc
+
+r
+
+→
+
+(P )w,c and
+
+→
+
+(P )c,w .
+
+D→−r
+
+vol(G )
+
+D←r−
+
+vol(G )
+
+Lemma 6.1. (S.N. Bernstein Law of Large Numbers [34]) Let Y1, Y2 · · · be a sequence of random variables with finite expectation E[Yj ] and variance Var(Yj ) < K, j ≥ 1, and covariances are s.t. Cov(Yi , Yj ) → 0 as |i − j | → ∞. Then the law of large numbers (LLN) holds.
+
+Proof. First consider the special case when N = 1, thus we only
+have one vertex sequence w1, · · · , wL generated by random walk as described in Algorithm 1. Consider one certain vertex-context pair
+(w, c), let Yj (j = 1, · · · , L − T ) be the indicator function for event that wj = w and wj+r = c. We have the following two observations:
+
+• The quantity #(w, c)→−r / D→−r is the sample average of Yj ’s, i.e.,
+
+#(w, c )→−r = 1 L−T Yj .
+
+D→−r
+
+L − T j=1
+
+• Based on our assumptions about the graph and the random
+
+walk,
+
+E[Yj ]
+
+=
+
+dw vol(G )
+
+(Pr )w,c ,
+
+and
+
+when
+
+j
+
+>
+
+i
+
++ r,
+
+E(Yi Yj ) = Prob(wi = w, wi+r = c, wj = w, wj+r = c ) = dw vol(G ) (P r )w,c P j−i+r c,w (P r )w,c .
+
+In this way, we can evaluate the covariance Cov(Yi , Yj ) when j > i + r and calculate its limit when j − i → ∞ by using the fact that our random walk converges to its stationary distribution:
+
+Cov(Yi, Yj ) = E(Yi Yj ) − E(Yi )E(Yj ) = dw vol(G ) (P r )w,c P j−i+r
+
+c,w − dw vol(G)
+
+(P r )w,c → 0.
+
+goes to 0 as j −i →∞
+
+Then we can apply Lemma 6.1 and conclude that the sample average converges in probability towards the expected value, i.e.,
+
+#(w, c )→−r
+
+1 L−T p 1 L−T
+
+dw
+
+=
+
+Yj →
+
+E(Yj ) =
+
+(P r )w,c .
+
+D→−r
+
+L − T j=1
+
+L − T j=1
+
+vol(G )
+
+#(w,c )←r− p dc
+
+r
+
+Similarly, we also have | D←− | → vol(G) (P )c,w .
+
+rn
+
+For the general case when N > 1, we define Yj (n = 1, · · · , N ,
+
+j
+
+=
+
+1, ·
+
+·
+
+·
+
+,L
+
+−T)
+
+to
+
+be
+
+the
+
+indicator
+
+function
+
+for
+
+event
+
+wn
+j
+
+=
+
+w
+
+and
+
+wn
+j +r
+
+=
+
+c
+
+,
+
+and
+
+organize
+
+Yn
+j
+
+’s
+
+as
+
+Y1
+1
+
+,
+
+Y2
+1
+
+,
+
+·
+
+·
+
+·
+
+,
+
+YN
+1
+
+,
+
+Y1
+2
+
+,
+
+Y2
+2
+
+,
+
+·
+
+·
+
+·
+
+,
+
+YN
+2
+
+,
+
+·
+
+·
+
+·
+
+.
+
+This r.v. sequence still satisfies the condition of S.N. Bernstein LLN,
+
+so the above conclusion still holds.
+
+□
+
+Theorem 3.5. Let ∥·∥F be the matrix Frobenius norm. Then
+
+ˆ
+
+vol(G )
+
+M −M ≤
+
+F bdmin
+
+n 1 T r2 λj ;
+j=k +1 T r =1
+
+log M ′ − log Mˆ ′ ≤ M ′ − Mˆ ′ ≤ M − Mˆ .
+
+F
+
+F
+
+F
+
+Proof. The first inequality can be seen by applying the defini-
+
+tion of Frobenius norm and Eq. 10.
+
+For the second inequality, first to show log M ′ − log Mˆ ′ ≤
+
+F
+
+M ′ − Mˆ ′ . According to the definition of Frobenius norm, suf-
+
+F
+
+ficient to show
+
+log Mi′, j
+
+−
+
+log Mˆ ′
+i, j
+
+≤
+
+Mˆ ′ − M ′
+
+i, j
+
+i, j
+
+for any i, j.
+
+Without
+
+loss
+
+of
+
+generality,
+
+assume
+
+M′
+i,
+
+j
+
+≤
+
+Mˆ ′ .
+i, j
+
+Mˆ ′
+
+′
+
+ˆ′
+
+i, j
+
+Mˆ ′ − M ′
+
+i, j
+
+i, j
+
+log Mi, j − log Mi, j = log ′ = log 1 +
+
+′
+
+Mi, j
+
+Mi, j
+
+Mˆ ′ − M ′
+
+i, j
+
+i, j
+
+ˆ′
+
+′
+
+ˆ′
+
+′
+
+≤
+
+′
+
+≤ Mi,j − Mi,j = Mi,j − Mi,j ,
+
+Mi, j
+
+where the first inequality is because log(1+x) ≤ x for x ≥ 0, and the
+
+the
+
+second
+
+inequality
+
+is
+
+because
+
+M′
+i, j
+
+=
+
+max
+
+Mi,j , 1
+
+≥ 1. Next to
+
+show M ′ − Mˆ ′ F ≤ M − Mˆ F . Sufficient to show Mi′, j − Mˆ i′, j ≤ Mi, j − Mˆ i, j for any i, j. Recall the definition of M ′ and Mˆ ′, we get
+
+M ′ − Mˆ ′
+
+i, j
+
+i, j
+
+=
+
+max(Mi, j , 1) − max(Mˆ i, j , 1)
+
+≤
+
+Mi, j − Mˆ i, j
+
+.
+
+□
+
+REFERENCES
+[1] Sanjeev Arora, Yuanzhi Li, Yingyu Liang, Tengyu Ma, and Andrej Risteski. 2016. A latent variable model approach to pmi-based word embeddings. TACL 4 (2016), 385–399.
+[2] Yoshua Bengio, Aaron Courville, and Pierre Vincent. 2013. Representation learning: A review and new perspectives. IEEE TPAMI 35, 8 (2013), 1798–1828.
+[3] Austin R Benson, David F Gleich, and Jure Leskovec. 2015. Tensor spectral clustering for partitioning higher-order network structures. In SDM. SIAM, 118– 126.
+[4] Austin R Benson, David F Gleich, and Lek-Heng Lim. 2017. The Spacey Random Walk: A stochastic Process for Higher-Order Data. SIAM Rev. 59, 2 (2017), 321– 345.
+[5] Matthew Brand and Kun Huang. 2003. A unifying theorem for spectral embedding and clustering.. In AISTATS.
+[6] Shaosheng Cao, Wei Lu, and Qiongkai Xu. 2015. GraRep: Learning graph representations with global structural information. In CIKM. ACM, 891–900.
+[7] Shaosheng Cao, Wei Lu, and Qiongkai Xu. 2016. Deep Neural Networks for Learning Graph Representations.. In AAAI. 1145–1152.
+[8] Shiyu Chang, Wei Han, Jiliang Tang, Guo-Jun Qi, Charu C Aggarwal, and
+Thomas S Huang. 2015. Heterogeneous network embedding via deep architectures. In KDD. ACM, 119–128. [9] Dehua Cheng, Yu Cheng, Yan Liu, Richard Peng, and Shang-Hua Teng. 2015.
+Efficient sampling for Gaussian graphical models via spectral sparsification. In COLT. 364–390. [10] Kewei Cheng, Jundong Li, and Huan Liu. 2017. Unsupervised Feature Selection in Signed Social Networks. In KDD. ACM. [11] Fan RK Chung. 1997. Spectral graph theory. Number 92. American Mathematical Soc.
+[12] Yuxiao Dong, Nitesh V Chawla, and Ananthram Swami. 2017. metapath2vec: Scalable Representation Learning for Heterogeneous Networks. In KDD.
+[13] David Easley and Jon Kleinberg. 2010. Networks, Crowds, and Markets: Reasoning about a Highly Connected World. Cambridge University Press.
+[14] Rong-En Fan, Kai-Wei Chang, Cho-Jui Hsieh, Xiang-Rui Wang, and Chih-Jen Lin. 2008. LIBLINEAR: A library for large linear classification. JMLR 9, Aug (2008), 1871–1874.
+[15] David F Gleich, Lek-Heng Lim, and Yongyang Yu. 2015. Multilinear pagerank. SIAM J. Matrix Anal. Appl. 36, 4 (2015), 1507–1541.
+[16] Aditya Grover and Jure Leskovec. 2016. node2vec: Scalable feature learning for networks. In KDD. ACM, 855–864.
+
+[17] William L. Hamilton, Rex Ying, and Jure Leskovec. 2017. Inductive Representation Learning on Large Graphs. In NIPS.
+[18] Tatsunori B Hashimoto, David Alvarez-Melis, and Tommi S Jaakkola. 2016. Word embeddings as metric recovery in semantic spaces. TACL 4 (2016), 273–286.
+[19] Roger A. Horn and Charles R. Johnson. 1991. Topics in Matrix Analysis. Cambridge University Press. https://doi.org/10.1017/CBO9780511840371
+[20] Yann Jacob, Ludovic Denoyer, and Patrick Gallinari. 2014. Learning latent representations of nodes for classifying in heterogeneous social networks. In WSDM. ACM, 373–382.
+[21] Thomas N Kipf and Max Welling. 2016. Semi-Supervised Classification with Graph Convolutional Networks. arXiv preprint arXiv:1609.02907 (2016).
+[22] Richard B Lehoucq, Danny C Sorensen, and Chao Yang. 1998. ARPACK users’ guide: solution of large-scale eigenvalue problems with implicitly restarted Arnoldi methods. SIAM.
+[23] Jure Leskovec, Kevin J Lang, and Michael Mahoney. 2010. Empirical comparison of algorithms for network community detection. In WWW. ACM, 631–640.
+[24] Omer Levy and Yoav Goldberg. 2014. Neural Word Embedding as Implicit Matrix Factorization. In NIPS. 2177–2185.
+[25] Hang Li, Haozheng Wang, Zhenglu Yang, and Masato Odagaki. 2017. Variation Autoencoder Based Network Representation Learning for Classification. In ACL. 56.
+[26] László Lovász. 1993. Random walks on graphs. Combinatorics, Paul erdos is eighty 2 (1993), 1–46.
+[27] Qing Lu and Lise Getoor. 2003. Link-based Classification. In ICML. [28] Tomas Mikolov, Kai Chen, Greg Corrado, and Jeffrey Dean. 2013. Efficient
+estimation of word representations in vector space. arXiv preprint arXiv:1301.3781 (2013).
+[29] Tomas Mikolov, Ilya Sutskever, Kai Chen, Greg S Corrado, and Jeff Dean. 2013.
+Distributed Representations of Words and Phrases and their Compositionality. In NIPS. 3111–3119. [30] Mingdong Ou, Peng Cui, Jian Pei, Ziwei Zhang, and Wenwu Zhu. 2016. Asymmetric Transitivity Preserving Graph Embedding.. In KDD. 1105–1114. [31] Bryan Perozzi, Rami Al-Rfou, and Steven Skiena. 2014. DeepWalk: Online learning of social representations. In KDD. ACM, 701–710. [32] S Yu Philip, Jiawei Han, and Christos Faloutsos. 2010. Link mining: Models, algorithms, and applications. Springer. [33] Jianbo Shi and Jitendra Malik. 2000. Normalized cuts and image segmentation. IEEE PAMI 22, 8 (2000), 888–905. [34] A.N. Shiryaev and A. Lyasoff. 2012. Problems in Probability. Springer New York. [35] Chris Stark, Bobby-Joe Breitkreutz, Andrew Chatr-Aryamontri, Lorrie Boucher,
+Rose Oughtred, Michael S Livstone, Julie Nixon, Kimberly Van Auken, Xiaodong
+Wang, Xiaoqi Shi, et al. 2010. The BioGRID interaction database: 2011 update. Nucleic acids research 39, suppl_1 (2010), D698–D704. [36] Jian Tang, Meng Qu, and Qiaozhu Mei. 2015. PTE: Predictive text embedding through large-scale heterogeneous text networks. In KDD. ACM, 1165–1174. [37] Jian Tang, Meng Qu, Mingzhe Wang, Ming Zhang, Jun Yan, and Qiaozhu Mei. 2015. LINE: Large-scale information network embedding. In WWW. 1067–1077. [38] Lei Tang and Huan Liu. 2009. Relational learning via latent social dimensions. In KDD. ACM, 817–826. [39] Lei Tang, Suju Rajan, and Vijay K Narayanan. 2009. Large scale multi-label classification via metalabeler. In WWW. ACM, 211–220. [40] Kristina Toutanova, Dan Klein, Christopher D Manning, and Yoram Singer. 2003. Feature-rich part-of-speech tagging with a cyclic dependency network. In NAACL. Association for Computational Linguistics, 173–180. [41] Lloyd N Trefethen and David Bau III. 1997. Numerical linear algebra. Vol. 50. Siam.
+[42] Grigorios Tsoumakas, Ioannis Katakis, and Ioannis Vlahavas. 2009. Mining multi-label data. In Data mining and knowledge discovery handbook. Springer, 667–685.
+[43] Cunchao Tu, Han Liu, Zhiyuan Liu, and Maosong Sun. 2017. CANE: Contextaware network embedding for relation modeling. In ACL.
+[44] Cunchao Tu, Weicheng Zhang, Zhiyuan Liu, and Maosong Sun. 2016. Max-Margin DeepWalk: Discriminative Learning of Network Representation.. In IJCAI. 3889– 3895.
+[45] Ulrike Von Luxburg. 2007. A tutorial on spectral clustering. Statistics and computing 17, 4 (2007), 395–416.
+[46] Daixin Wang, Peng Cui, and Wenwu Zhu. 2016. Structural deep network embedding. In KDD. ACM, 1225–1234.
+[47] Cheng Yang, Zhiyuan Liu, Deli Zhao, Maosong Sun, and Edward Y Chang. 2015. Network Representation Learning with Rich Text Information. In IJCAI. 2111– 2117.
+[48] Zhilin Yang, William W. Cohen, and Ruslan Salakhutdinov. 2016. Revisiting Semi-Supervised Learning with Graph Embeddings. In ICML. 40–48.
+[49] Zhilin Yang, Jie Tang, and William W Cohen. 2016. Multi-Modal Bayesian Embeddings for Learning Social Knowledge Graphs.. In IJCAI. 2287–2293.
+

@@ -1,0 +1,445 @@
+Every Document Owns Its Structure: Inductive Text Classiﬁcation via Graph Neural Networks
+Yufeng Zhang1∗, Xueli Yu1∗, Zeyu Cui1, Shu Wu1, Zhongzhen Wen2 and Liang Wang1 1Institute of Automation, Chinese Academy of Sciences 2Xi’an Jiaotong University {yufeng.zhang,xueli.yu}@cripac.ia.ac.cn {zeyu.cui,shu.wu}@nlpr.ia.ac.cn
+burning21@stu.xjtu.edu.cn, wangliang@nlpr.ia.ac.cn
+
+arXiv:2004.13826v2 [cs.CL] 12 May 2020
+
+Abstract
+Text classiﬁcation is fundamental in natural language processing (NLP), and Graph Neural Networks (GNN) are recently applied in this task. However, the existing graph-based works can neither capture the contextual word relationships within each document nor fulﬁl the inductive learning of new words. In this work, to overcome such problems, we propose TextING1 for inductive text classiﬁcation via GNN. We ﬁrst build individual graphs for each document and then use GNN to learn the ﬁnegrained word representations based on their local structures, which can also effectively produce embeddings for unseen words in the new document. Finally, the word nodes are incorporated as the document embedding. Extensive experiments on four benchmark datasets show that our method outperforms state-of-theart text classiﬁcation methods.
+1 Introduction
+Text classiﬁcation is one of the primary tasks in the NLP ﬁeld, as it provides fundamental methodologies for other NLP tasks, such as spam ﬁltering, sentiment analysis, intent detection, and so forth. Traditional methods for text classiﬁcation include Naive Bayes (Androutsopoulos et al., 2000), k-Nearest Neighbor (Tan, 2006) and Support Vector Machine (Forman, 2008). They are, however, primarily dependent on the hand-crafted features at the cost of labour and efﬁciency.
+There are several deep learning methods proposed to address the problem, among which Recurrent Neural Network (RNN) (Mikolov et al., 2010) and Convolutional Neural Network (CNN) (Kim, 2014) are essential ones. Based on them, extended models follow to leverage the classiﬁcation performance, for instance, TextCNN (Kim,
+∗The ﬁrst two authors contribute equally to this work. 1https://github.com/CRIPAC-DIG/TextING
+
+2014), TextRNN (Liu et al., 2016) and TextRCNN (Lai et al., 2015). Yet they all focus on the locality of words and thus lack of long-distance and non-consecutive word interactions. Graph-based methods are recently applied to solve such issue, which do not treat the text as a sequence but as a set of co-occurrent words instead. For example, Yao et al. (2019) employ Graph Convolutional Networks (Kipf and Welling, 2017) and turns the text classiﬁcation problem into a node classiﬁcation one (TextGCN). Moreover, Huang et al. (2019) improve TextGCN by introducing the message passing mechanism and reducing the memory consumption.
+However, there are two major drawbacks in these graph-based methods. First, the contextual-aware word relations within each document are neglected. To be speciﬁc, TextGCN (Yao et al., 2019) constructs a single graph with global relations between documents and words, where ﬁne-grained text level word interactions are not considered (Wu et al., 2019; Hu et al., 2019a,b). In Huang et al. (2019), the edges of the graph are globally ﬁxed between each pair of words, but the fact is that they may affect each other differently in a different text. Second, due to the global structure, the test documents are mandatory in training. Thus they are inherently transductive and have difﬁculty with inductive learning, in which one can easily obtain word embeddings for new documents with new structures and words using the trained model.
+Therefore, in this work, we propose a novel Text classiﬁcation method for INductive word representations via Graph neural networks, termed TextING. In contrast to previous graph-based approaches with global structure, we train a GNN that can depict the detailed word-word relations using only training documents, and generalise to new documents in test. We build individual graphs by applying the sliding window inside each doc-
+
+ument (Rousseau et al., 2015). The information of word nodes is propagated to their neighbours via the Gated Graph Neural Networks (Li et al., 2015, 2019), which is then aggregated into the document embedding. We also conduct extensive experiments to examine the advantages of our approach against baselines, even when words in test are mostly unseen (21.06% average gain in such inductive condition). Noticing a concurrent work (Nikolentzos et al., 2020) also reinforces the approach with a similar graph network structure, we describe the similarities and differences in the method section. To sum up, our contributions are threefold:
+• We propose a new graph neural network for text classiﬁcation, where each document is an individual graph and text level word interactions can be learned in it.
+• Our approach can generalise to new words that absent in training, and it is therefore applicable for inductive circumstances.
+• We demonstrate that our approach outperforms state-of-the-art text classiﬁcation methods experimentally.
+2 Method
+TextING comprises three key components: the graph construction, the graph-based word interaction, and the readout function. The architecture is illustrated in Figure 1. In this section, we detail how to implement the three and how they work.
+
+Attention Layer
+ 
+
+h"
+%
+
+h"
+"
+
+h"
+&
+
+h"
+$
+
+h#("
+"
+h#("
+$
+h#("
+&
+h#("
+%
+GGNN
+
+Sum +
+Max Text Level Representation
+
+Readout
+
+)*+
+Text Label
+
+h#
+"
+
+h#
+
++
+
+GRU
+
+h#("
+&
+
+$
+
+Graph Construction
+
+h#
+
+%
+
+#
+
+h&
+
+Graph-based Word Interaction
+
+Figure 1: The architecture of TextING. As an example, upon a graph of document, every word node updates itself from its neighbours and they aggregate to the ultimate graph representation.
+
+Graph Construction
+We construct the graph for a textual document by representing unique words as vertices and co-
+
+occurrences between words as edges, denoted as G = (V, E) where V is the set of vertices and E the edges. The co-occurrences describe the relationship of words that occur within a ﬁxed-size sliding window (length 3 at default) and they are undirected in the graph. Nikolentzos et al. (2020) also use a sliding window of size 2. However, they include a particular master node connecting to every other node, which means the graph is densely connected and the structure information is vague during message passing.
+The text is preprocessed in a standard way, including tokenisation and stopword removal (Blanco and Lioma, 2012; Rousseau et al., 2015). Embeddings of the vertices are initialised with word features, denoted as h ∈ R|V|×d where d is the embedding dimension. Since we build individual graphs for each document, the word feature information is propagated and incorporated contextually during the word interaction phase.
+
+Graph-based Word Interaction
+Upon each graph, we then employ the Gated Graph Neural Networks (Li et al., 2015) to learn the embeddings of the word nodes. A node could receive the information a from its adjacent neighbours and then merge with its own representation to update. As the graph layer operates on the ﬁrst-order neighbours, we can stack such layer t times to achieve high-order feature interactions, where a node can reach another node t hops away. The formulas of the interaction are:
+
+at = Aht−1Wa,
+
+(1)
+
+zt = σ Wzat + Uzht−1 + bz ,
+
+(2)
+
+rt = σ Wrat + Urht−1 + br ,
+
+(3)
+
+h˜t = tanh What + Uh(rt ht−1) + bh , (4)
+
+ht = h˜t zt + ht−1 1 − zt ,
+
+(5)
+
+where A ∈ R|V|×|V| is the adjacency matrix, σ is the sigmoid function, and all W, U and b are trainable weights and biases. z and r function as the update gate and reset gate respectively to determine to what degree the neighbour information contributes to the current node embedding.
+
+Readout Function
+After the word nodes are sufﬁciently updated, they are aggregated to a graph-level representation for the document, based on which the ﬁnal prediction
+
+Table 1: The statistics of the datasets including both short (sentence) and long (paragraph) documents. The vocab means the number of unique words in a document. The Prop.NW denotes the proportion of new words in test.
+
+Dataset # Docs # Training # Test # Classes Max.Vocab Min.Vocab Avg.Vocab Prop.NW
+
+MR
+
+10,662
+
+7,108
+
+3,554
+
+2
+
+46
+
+R8
+
+7,674
+
+5,485
+
+2,189
+
+8
+
+291
+
+R52
+
+9,100
+
+6,532
+
+2,568
+
+52
+
+301
+
+Ohsumed 7,400
+
+3,357
+
+4,043
+
+23
+
+197
+
+1
+
+18.46 30.07%
+
+4
+
+41.25
+
+2.60%
+
+4
+
+44.02
+
+2.64%
+
+11
+
+79.49
+
+8.46%
+
+is produced. We deﬁne the readout function as:
+
+hv = σ f1(htv) tanh f2(htv) ,
+
+(6)
+
+1 hG = |V| hv + Maxpooling (h1...hV ) , (7)
+v∈V
+
+where f1 and f2 are two multilayer perceptrons (MLP). The former performs as a soft attention weight while the latter as a non-linear feature transformation. In addition to averaging the weighted word features, we also apply a max-pooling function for the graph representation hG. The idea behind is that every word plays a role in the text and the keywords should contribute more explicitly.
+Finally, the label is predicted by feeding the graph-level vector into a softmax layer. We minimise the loss through the cross-entropy function:
+
+yˆG = softmax (WhG + b) ,
+
+(8)
+
+L = − yGilog (yˆGi) ,
+
+(9)
+
+i
+
+where W and b are weights and bias, and yGi is the i-th element of the one-hot label.
+
+Model Variant
+We also extend our model with a multichannel branch TextING-M, where graphs with local structure (original TextING) and graphs with global structure (subgraphs from TextGCN) work in parallel. The nodes remain the same whereas the edges of latter are extracted from the large graph (built on the whole corpus) for each document. We train them separately and make them vote 1:1 for the ﬁnal prediction. Although it is not the inductive case, our point is to investigate whether and how the two could complement each other from micro and macro perspectives.
+
+3 Experiments
+In this section, we aim at testing and evaluating the overall performance of TextING. During the experimental tests, we principally concentrate on three concerns: (i) the performance and advantages of
+
+our approach against other comparable models, (ii) the adaptability of our approach for words that are never seen in training, and (iii) the interpretability of our approach on how words impact a document.
+Datasets. For the sake of consistency, we adopt four benchmark tasks the same as in (Yao et al., 2019): (i) classifying movie reviews into positive or negative sentiment polarities (MR)2, (ii) & (iii) classifying documents that appear on Reuters newswire into 8 and 52 categories (R8 and R52 respectively)3, (iv) classifying medical abstracts into 23 cardiovascular diseases categories (Ohsumed)4. Table 1 demonstrates the statistics of the datasets as well as their supplemental information.
+Baselines. We consider three types of models as baselines: (i) traditional deep learning methods including TextCNN (Kim, 2014) and TextRNN (Liu et al., 2016), (ii) simple but efﬁcient strategies upon word features including fastText (Joulin et al., 2017) and SWEM (Shen et al., 2018), and (iii) graph-based methods for text classiﬁcation including TextGCN (Yao et al., 2019) and Huang et al. (2019).
+Experimental Set-up. For all the datasets, the training set and the test set are given, and we randomly split the training set into the ratio 9:1 for actual training and validation respectively. The hyperparameters were tuned according to the performance on the validation set. Empirically, we set the learning rate as 0.01 with Adam (Kingma and Ba, 2015) optimiser and the dropout rate as 0.5. Some depended on the intrinsic attributes of the dataset, for example, the word interaction step and the sliding window size. We refer to them in the parameter sensitivity subsection.
+Regarding the word embeddings, we used the pre-trained GloVe (Pennington et al., 2014)5 with
+2http://www.cs.cornell.edu/people/pabo/movie-reviewdata/
+3http://disi.unitn.it/moschitti/corpora.htm 4https://www.cs.umb.edu/˜smimarog/textmining/datasets/ 5http://nlp.stanford.edu/data/glove.6B.zip
+
+Table 2: Test accuracy (%) of various models on four datasets. The mean ± standard deviation of our model is reported according to 10 times run. Note that some baseline results are from (Yao et al., 2019).
+
+Model
+
+MR
+
+R8
+
+R52
+
+Ohsumed
+
+CNN (Non-static) RNN (Bi-LSTM) fastText SWEM TextGCN Huang et al. (2019)
+
+77.75 ± 0.72 77.68 ± 0.86 75.14 ± 0.20 76.65 ± 0.63 76.74 ± 0.20
+-
+
+95.71 ± 0.52 96.31 ± 0.33 96.13 ± 0.21 95.32 ± 0.26 97.07 ± 0.10 97.80 ± 0.20
+
+87.59 ± 0.48 90.54 ± 0.91 92.81 ± 0.09 92.94 ± 0.24 93.56 ± 0.18 94.60 ± 0.30
+
+58.44 ± 1.06 49.27 ± 1.07 57.70 ± 0.49 63.12 ± 0.55 68.36 ± 0.56 69.40 ± 0.60
+
+TextING TextING-M
+
+79.82 ± 0.20 98.04 ± 0.25 95.48 ± 0.19 70.42 ± 0.39 80.19 ± 0.31 98.13 ± 0.12 95.68 ± 0.35 70.84 ± 0.52
+
+d = 300 as the input features while the out-ofvocabulary (OOV) words’ were randomly sampled from a uniform distribution [-0.01, 0.01]. For a fair comparison, the other baseline models shared the same embeddings.
+Results. Table 2 presents the performance of our model as well as the baselines. We observe that graph-based methods generally outperform other types of models, suggesting that the graph model beneﬁts to the text processing. Further, TextING ranks top on all tasks, suggesting that the individual graph exceeds the global one. Particularly, the result of TextING on MR is remarkably higher. Because the short documents in MR lead to a lowdensity graph in TextGCN, it restrains the label message passing among document nodes, whereas our individual graphs (documents) do not rely on such label message passing mechanism. Another reason is that there are approximately one third new words in test as shown in Table 1, which implies TextING is more friendly to unseen words. The improvement on R8 is relatively subtle since R8 is simple to ﬁt and the baselines are rather satisfying. The proportion of new words is also low on R8.
+The multichannel variant also performs well on all datasets. It implies the model can learn different patterns through different channels.
+Under Inductive Condition. To examine the adaptability of TextING under inductive condition, we reduce the amount of training data to 20 labelled documents per class and compare it with TextGCN. Word nodes absent in the training set are masked for TextGCN to simulate the inductive condition. In this scenario, most of the words in the test set are unseen during training, which behaves like a rigorous cold-start problem. The result of both models on MR and Ohsumed are listed in Table 3. An average gain of 21.06% shows that TextING is much less impacted by the reduction of exposed
+
+Table 3: Accuracy (%) of TextGCN and TextING on MR and Ohsumed, where MR uses 40 labelled documents (0.5% of full training data) and Ohsumed uses 460 labelled documents (13.7% of full training data).
+
+Model
+
+MR* Ohsumed*
+
+TextGCN TextING
+
+53.15 64.43
+
+47.24 57.11
+
+# Words in Training 465 # New Words in Test 18,299
+
+7,009 7,148
+
+words. In addition, a tendency of test performance and gain with different percentages of training data on MR is illustrated as Figure 2. TextING shows a consistent improvement when increasing number of words become unseen.
+
+0.8
+
+0.25
+
+Accuracy Gain percetage
+
+0.2
+
+0.7
+
+TextGCN 0.15
+
+TextING
+
+Gain
+
+0.1
+
+0.6
+
+0.05
+
+0.5
+
+0
+
+0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+1
+
+Training percentage
+
+Figure 2: Test performance and gain with different per-
+
+cent of training data ranging from 0.005 to 1 on MR.
+
+The less data in training, the more new words in test.
+
+Case Study. To understand what is of importance that TextING learns for a document, we further visualise the attention layer (i.e. the readout function), illustrated as Figure 3. The highlighted words are proportional to the attention weights, and they show a positive correlation to the label, which interprets how TextING works in sentiment analysis.
+Parameter Sensitivity. Figure 4 exhibits the performance of TextING with a varying number of the graph layer on MR and Ohsumed. The result reveals that with the increment of the layer, a node could receive more information from high-order
+
+(a) Positive reviews
+
+(b) Negative reviews
+
+Figure 3: Attention visualisation of positive and nega-
+
+tive movie reviews in MR.
+
+neighbours and learn its representation more accurately. Nevertheless, the situation reverses with a continuous increment, where a node receives from every node in the graph and becomes over-smooth. Figure 5 illustrates the performance as well as the graph density of TextING with a varying window size on MR and Ohsumed. It presents a similar trend as the interaction step’s when the number of neighbours of a node grows.
+
+Accuracy Accuracy
+
+0.81 MR 0.71 Obsumed
+0.705 0.8
+0.7
+0.79 0.695
+
+0.78 0
+
+2
+
+4
+
+Interaction Step
+
+0.69 0
+
+2
+
+4
+
+Interaction Step
+
+(a) MR
+
+(b) Ohsumed
+
+Figure 4: Accuracy with varying interaction steps.
+
+Accurancy Density
+Accurancy Density
+
+0.8 0.795 0.79 0.785
+1
+
+10
+
+5
+
+Accuracy
+
+Density 0
+
+3
+
+5
+
+7
+
+Window Size
+
+0.71 0.705
+0.7 0.695 0.69
+1
+
+15
+
+10
+
+5
+
+Accuracy
+
+Density 0
+
+3
+
+5
+
+7
+
+Window Size
+
+(a) MR
+
+(b) Ohsumed
+
+Figure 5: Accuracy with varying graph density.
+
+4 Conclusion
+We proposed a novel graph-based method for inductive text classiﬁcation, where each text owns its structural graph and text level word interactions can be learned. Experiments proved the effectiveness of our approach in modelling local word-word relations and word signiﬁcances in the text.
+Acknowledgement
+This work is supported by National Natural Science Foundation of China (U19B2038, 61772528) and National Key Research and Development Program (2018YFB1402600, 2016YFB1001000).
+
+References
+Ion Androutsopoulos, John Koutsias, Konstantinos V Chandrinos, George Paliouras, and Constantine D Spyropoulos. 2000. An evaluation of naive bayesian anti-spam ﬁltering. arXiv preprint cs/0006013.
+Roi Blanco and Christina Lioma. 2012. Graph-based term weighting for information retrieval. Information retrieval.
+George Forman. 2008. Bns feature scaling: an improved representation over tf-idf for svm text classiﬁcation. In CIKM. ACM.
+Fenyu Hu, Yanqiao Zhu, Shu Wu, Weiran Huang, Liang Wang, and Tieniu Tan. 2019a. Graphair: Graph representation learning with neighborhood aggregation and interaction. arXiv preprint arXiv:1911.01731.
+Fenyu Hu, Yanqiao Zhu, Shu Wu, Liang Wang, and Tieniu Tan. 2019b. Hierarchical graph convolutional networks for semi-supervised node classiﬁcation. arXiv preprint arXiv:1902.06667.
+Lianzhe Huang, Dehong Ma, Sujian Li, Xiaodong Zhang, and Houfeng WANG. 2019. Text level graph neural network for text classiﬁcation. In EMNLP.
+Armand Joulin, Edouard Grave, and Piotr Bojanowski Tomas Mikolov. 2017. Bag of tricks for efﬁcient text classiﬁcation. In EACL.
+Yoon Kim. 2014. Convolutional neural networks for sentence classiﬁcation. In EMNLP.
+Diederik P Kingma and Jimmy Ba. 2015. Adam: A method for stochastic optimization. In ICLR.
+Thomas N Kipf and Max Welling. 2017. Semisupervised classiﬁcation with graph convolutional networks. In ICLR.
+Siwei Lai, Liheng Xu, Kang Liu, and Jun Zhao. 2015. Recurrent convolutional neural networks for text classiﬁcation. In AAAI.
+Yujia Li, Daniel Tarlow, Marc Brockschmidt, and Richard Zemel. 2015. Gated graph sequence neural networks. In ICLR.
+Zekun Li, Zeyu Cui, Shu Wu, Xiaoyu Zhang, and Liang Wang. 2019. Fi-gnn: Modeling feature interactions via graph neural networks for ctr prediction. In ACM.
+Pengfei Liu, Xipeng Qiu, and Xuanjing Huang. 2016. Recurrent neural network for text classiﬁcation with multi-task learning. In IJCAI.
+Toma´sˇ Mikolov, Martin Karaﬁa´t, Luka´sˇ Burget, Jan Cˇ ernocky`, and Sanjeev Khudanpur. 2010. Recurrent neural network based language model. In ISCA.
+Giannis Nikolentzos, Antoine Jean-Pierre Tixier, and Michalis Vazirgiannis. 2020. Message passing attention networks for document understanding. In AAAI.
+
+Jeffrey Pennington, Richard Socher, and Christopher Manning. 2014. Glove: Global vectors for word representation. In EMNLP.
+Franc¸ois Rousseau, Emmanouil Kiagias, and Michalis Vazirgiannis. 2015. Text categorization as a graph classiﬁcation problem. In ACL.
+Dinghan Shen, Guoyin Wang, Wenlin Wang, Martin Renqiang Min, Qinliang Su, Yizhe Zhang, Chunyuan Li, Ricardo Henao, and Lawrence Carin. 2018. Baseline needs more love: On simple wordembedding-based models and associated pooling mechanisms. In ACL.
+Songbo Tan. 2006. An effective reﬁnement strategy for KNN text classiﬁer. Expert Systems with Applications.
+Shu Wu, Yuyuan Tang, Yanqiao Zhu, Liang Wang, Xing Xie, and Tieniu Tan. 2019. Session-based recommendation with graph neural networks. In AAAI.
+Liang Yao, Chengsheng Mao, and Yuan Luo. 2019. Graph convolutional networks for text classiﬁcation. In AAAI.
+

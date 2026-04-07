@@ -1,0 +1,1296 @@
+19 July 2022
+
+arXiv:2207.09238v1 [cs.LG] 19 Jul 2022
+
+Formal Algorithms for Transformers
+Mary Phuong1 and Marcus Hutter1 1DeepMind
+
+This document aims to be a self-contained, mathematically precise overview of transformer architectures and algorithms (not results). It covers what transformers are, how they are trained, what they are used for, their key architectural components, and a preview of the most prominent models. The reader is assumed to be familiar with basic ML terminology and simpler neural network architectures such as MLPs.
+Keywords: formal algorithms, pseudocode, transformers, attention, encoder, decoder, BERT, GPT, Gopher, tokenization, training, inference.
+
+Contents
+
+1 Introduction
+
+1
+
+2 Motivation
+
+1
+
+3 Transformers and Typical Tasks
+
+3
+
+4 Tokenization: How Text is Represented 4
+
+5 Architectural Components
+
+4
+
+6 Transformer Architectures
+
+7
+
+7 Transformer Training and Inference 8
+
+8 Practical Considerations
+
+9
+
+A References
+
+9
+
+B List of Notation
+
+16
+
+A famous colleague once sent an actually very well-written paper he was quite proud of to a famous complexity theorist. His answer: “I can’t ﬁnd a theorem in the paper. I have no idea what this paper is about.”
+
+1. Introduction
+Transformers are deep feed-forward artiﬁcial neural networks with a (self)attention mechanism. They have been tremendously successful in natural language processing tasks and other domains. Since their inception 5 years ago [VSP+17], many variants have been suggested [LWLQ21]. Descriptions are usually graphical, verbal, partial, or incremental. Despite their popularity, it seems no pseudocode has ever been published for any variant. Contrast this to other ﬁelds of computer science, even to “cousin” discipline reinforcement learning [MKS+13, SBB18, EMK+21].
+This report intends to rectify the situation for Transformers. It aims to be a self-contained, com-
+
+plete, precise and compact overview of transformer architectures and formal algorithms (but not results). It covers what Transformers are (Section 6), how they are trained (Section 7), what they’re used for (Section 3), their key architectural components (Section 5), tokenization (Section 4), and a preview of practical considerations (Section 8) and the most prominent models.
+The essentially complete pseudocode is about 50 lines, compared to thousands of lines of actual real source code. We believe these formal algorithms will be useful for theoreticians who require compact, complete, and precise formulations, experimental researchers interested in implementing a Transformer from scratch, and encourage authors to augment their paper or text book with formal Transformer algorithms (Section 2).
+The reader is assumed to be familiar with basic ML terminology and simpler neural network architectures such as MLPs.
+In short, a (formally inclined) reader, upon understanding the contents of this document, will have a solid grasp of transformers: they will be ready to read and contribute to the literature on the topic as well as implement their own Transformer using the pseudocode as templates.
+2. Motivation
+The true story above the introduction describes quite well the feeling we have when browsing
+
+Corresponding author(s): {buiphuong,mhutter}@deepmind.com © 2022 DeepMind. All rights reserved
+
+Formal Algorithms for Transformers
+
+many Deep Learning (DL) papers; unable to ﬁgure out the algorithmic suggestions exactly. For practitioners, the papers may be suﬃciently detailed, but the precision needed by theoreticians is usually higher. For reasons not entirely clear to us, the DL community seems shy of providing pseudocode for their neural network models. Below we describe the SOTA in DL paper writing and argue for the value of formal algorithms. The reader already convinced about their merit can without loss skip this section.
+
+authors writing the diﬀerent sections. The core algorithms for the models should be accompanied by the wrapper algorithms that call them, e.g. (pre)training, ﬁne-tuning, prompting, inference, deployment. Sometimes this is simple, but sometimes the magic happens there. In any case, if these things are not formally stated they remain unclear. Again, if the setup is standard and has been formally explained elsewhere, a simple reference will do.
+
+The lack of scientiﬁc precision and detail in DL publications. Deep Learning has been tremendously successful in the last 5 to 10 years with thousands of papers published every year. Many describe only informally how they change a previous model, Some 100+ page papers contain only a few lines of prose informally describing the model [RBC+21]. At best there are some high-level diagrams. No pseudocode. No equations. No reference to a precise explanation of the model. One may argue that most DL models are minor variations of a few core architectures, such as the Transformer [VSP+17], so a reference augmented by a description of the changes should suﬃce. This would be true if (a) the changes were described precisely, (b) the reference architecture has been described precisely elsewhere, and (c) a reference is given to this description. Some if not all three are lacking in most DL papers. To the best of our knowledge no-one has even provided pseudocode for the famous Transformer and its encoder/decoder-only variations.
+Interfacing algorithms. Equally important are proper explanations of how these networks are trained and used, but sometimes it is not even clear what the inputs and outputs and potential side-eﬀects of the described model are. Of course someone experienced would usually be able to correctly guess, but this is not a particularly scientiﬁc approach. The experimental section in publications often does not explain what is actually fed into the algorithms and how. If there is some explanation in the methods section, it is often disconnected from what is described in the experimental section, possibly due to diﬀerent
+
+Source code vs pseudocode. Providing open source code is very useful, but not a proper substitute for formal algorithms. There is a massive diﬀerence between a (partial) Python dump and well-crafted pseudocode. A lot of abstraction and clean-up is necessary: remove boiler plate code, use mostly single-letter variable names, replace code by math expressions wherever possible, e.g. replace loops by sums, remove (some) optimizations, etc. A well-crafted pseudocode is often less than a page and still essentially complete, compared to often thousands of lines of real source code. This is hard work no-one seems to be willing to do. Of course a forward process of ﬁrst designing algorithms and write up pseudocode on paper, and then implementing it is ﬁne too, but few DL practitioners seem to work that way.
+Examples of good neural network pseudocode and mathematics and explanations. Multi-Layer Perceptrons (MLPs) are usually welldescribed in many papers, e.g. [MPCB14, BFT17, JGH18], though also without pseudocode. For a rare text-book example of pseudocode for a nontrivial neural network architecture, see Algorithm S2 of [SGBK+21], which constitutes a complete, i.e. essentially executable, pseudocode of just 25 lines based on a 350-line Python Colab toy implementation, which itself is based on a proper 1000+ line implementation.
+This work aims to do the same for Transformers: The whole decoder-only Transformer GPT Algorithm 10 based on attention Algorithms 4 and 5 and normalization Algorithm 6 including training Algorithm 13 and prompting and inference Algorithm 14 all-together is less than 50 lines of pseudocode, compared to e.g. the 2000-
+
+2
+
+Formal Algorithms for Transformers
+
+line self-contained C-implementation [Bel21].
+[Ala19] is a great blog-post explaining Transformers and [EGKZ21] describes the attention mechanism to suﬃcient mathematical precision to allow proving properties about it, but neither provides pseudocode. [Elh21] is an attempt to understand Transformers by reverse-engineering the computations they perform and interpreting them as circuits.
+Motivation. But does anyone actually need pseudocode and what would they be useful for (we sometimes get asked)? We ﬁnd the absence of pseudocode in DL and this question quite perplexing, but apparently it requires answering. Providing such pseudocode can be useful for many purposes:
+• They can be used as templates and adapted to precisely describe future variations, and therewith set a new standard in DL publishing. We explicitly encourage the reader to copy and adapt them to their needs and cite the original as “adapted from [PH22]”.
+• Having all that matters on one page in front of you makes it easier to develop new variations compared to reading prose or scrolling through 1000s of lines of actual code.
+• They can be used as a basis for new implementations from scratch, e.g. in diﬀerent programming languages, without having to wade through and reverse-engineer existing idiosyncratic real source code.
+• They may establish notational convention, which eases communication and reading future variations.
+• The process of converting source code into pseudocode can exhibit implementation errors (as it e.g. did in [SGBK+21]).
+• Theoreticians need compact, complete, and precise representations for reasoning and ultimately proving properties about algorithms. They are often unwilling or unable to reverse engineer code, or guess the meaning of words or fancy diagrams.
+With this motivation in mind, the following ﬁve sections formally describe all aspects of transformer architectures, training, and inference.
+
+3. Transformers and Typical Tasks
+Transformers are neural network models that excel at natural language processing, or more generally at modelling sequential data. Two common types of tasks they are used for are sequence modelling and sequence-to-sequence prediction.
+Notation. Let 𝑉 denote a ﬁnite set, called a vocabulary, often identiﬁed with [𝑁V] := {1, ..., 𝑁V}. This could be words or letters, but typically are sub-words, called tokens. Let 𝒙 ≡ 𝑥 [1 : ] ≡ 𝑥 [1]𝑥 [2]...𝑥 [ ] ∈ 𝑉∗ be a sequence of tokens, e.g. a sentence or a paragraph or a document. Unlike in Python, we use arrays starting from 1, and 𝑥 [1 : ] includes 𝑥 [ ]. For a matrix 𝑀 ∈ ℝ𝑑×𝑑 , we write 𝑀 [𝑖, :] ∈ ℝ𝑑 for the 𝑖th row and 𝑀 [:, 𝑗] ∈ ℝ𝑑 for the 𝑗-th column. We use matrix × column vector convention more common in mathematics, compared to the default row vector × matrix in the transformer literature, i.e. our matrices are transposed. See Appendix B for a complete list of notation.
+Chunking. The predominant paradigm in machine learning is (still) learning from independent and identically distributed (i.i.d.) data. Even for sequence modelling for practical reasons this tradition is upheld. The training data may naturally be a collection of (independent) articles, but even then, some may exceed the maximal context length max transformers can handle. In this case, an article is crudely broken into shorter chunks of length ≤ max.
+Sequence modelling (DTransformer). Given a vocabulary 𝑉, let 𝒙𝑛 ∈ 𝑉∗ for 𝑛 ∈ [𝑁data] be a dataset of sequences (imagined to be) sampled i.i.d. from some distribution 𝑃 over 𝑉∗. The goal is to learn an estimate 𝑃ˆ of the distribution 𝑃(𝒙). In practice, the distribution estimate is often decomposed via the chain rule as 𝑃ˆ(𝒙) = 𝑃ˆ𝜽(𝑥 [1]) · 𝑃ˆ𝜽(𝑥 [2] | 𝑥 [1]) · · · 𝑃ˆ𝜽(𝑥 [ ] | 𝒙 [1 : − 1]), where 𝜽 consists of all neural network parameters to be learned. The goal is to learn a distribution over a single token 𝑥 [𝑡] given its preceding tokens 𝑥 [1 : 𝑡 − 1] as context.
+
+3
+
+Formal Algorithms for Transformers
+
+Examples include e.g. language modelling, RL policy distillation, or music generation.
+Sequence-to-sequence (seq2seq) prediction (EDTransformer). Given a vocabulary 𝑉 and an i.i.d. dataset of sequence pairs (𝒛𝑛, 𝒙𝑛) ∼ 𝑃, where 𝑃 is a distribution over 𝑉∗ × 𝑉∗, learn an estimate of the conditional distribution 𝑃(𝒙|𝒛). In practice, the conditional distribution estimate is often decomposed as 𝑃ˆ(𝒙|𝒛) = 𝑃ˆ𝜽(𝑥 [1] | 𝒛) · 𝑃ˆ𝜽(𝑥 [2] | 𝑥 [1], 𝒛) · · · 𝑃ˆ𝜽(𝑥 [ ] | 𝒙 [1 : − 1], 𝒛).
+Examples include translation (𝒛 = a sentence in English, 𝒙 = the same sentence in German), question answering (𝒛 = question, 𝒙 = the corresponding answer), text-to-speech (𝒛 = a piece of text, 𝒙 = a voice recording of someone reading the text).
+
+(plus punctuation). In the example above, we’d get a sequence of length 7: [‘My ’, ‘grandma ’, ‘makes ’, ...]. Word-level tokenization tends to require a very large vocabulary and cannot deal with new words at test time.
+Subword tokenization. This is the method used in practice nowadays: 𝑉 is a set of commonly occurring word segments like ‘cious’, ‘ing’, ‘pre’. Common words like ‘is ’ are often a separate token, and single characters are also included in 𝑉 to ensure all words are expressible.
+There are in fact many ways to do subword tokenization. One of the simplest and most successful ones is Byte Pair Encoding [Gag94, SHB16] used in GPT-2 [RWC+19].
+
+Classiﬁcation (ETransformer). Given a vocabulary 𝑉 and a set of classes [𝑁C], let (𝒙𝑛, 𝑐𝑛) ∈ 𝑉∗ × [𝑁C] for 𝑛 ∈ [𝑁data] be an i.i.d. dataset of sequence-class pairs sampled from 𝑃(𝒙, 𝑐). The goal in classiﬁcation is to learn an estimate of the conditional distribution 𝑃(𝑐|𝒙).
+Examples include e.g. sentiment classiﬁcation, spam ﬁltering, toxicity classiﬁcation.
+4. Tokenization: How Text is Represented
+In the context of natural language tasks, tokenization refers to how a piece of text such as “My grandma makes the best apple pie.” is represented as a sequence of vocabulary elements (called tokens).
+
+Final vocabulary and text representation. Given a choice of tokenization / vocabulary, each vocabulary element is assigned a unique index in {1, 2, . . . , 𝑁V − 3}. A number of special tokens are then added to the vocabulary. The number of special tokens varies, and here we will con-
+sider three: mask_token := 𝑁V − 2, used in
+masked language modelling (see Algorithm 12);
+bos_token := 𝑁V − 1, used for representing the beginning of sequence; and eos_token := 𝑁V,
+used for representing the end of sequence. The complete vocabulary has 𝑁V = |𝑉 | elements.
+A piece of text is represented as a sequence of indices (called token IDs) corresponding to
+its (sub)words, preceded by bos_token and followed by eos_token.
+5. Architectural Components
+
+Character-level tokenization. One possible choice is to let 𝑉 be the English alphabet (plus punctuation). In the example above, we’d get a sequence of length 36: [‘M’, ‘y’, ‘ ’, ...]. Characterlevel tokenization tends to yield very long sequences.
+
+The following are the neural network building blocks (functions with learnable parameters) from which transformers are made. Full architectures featuring these building blocks are presented in the next section. (By a slight abuse of notation, we identify 𝑉 with the set {1, 2, . . . , 𝑁V}.)
+
+Word-level tokenization. Another choice would be to let 𝑉 consist of all English words
+
+Token embedding. The token embedding
+learns to represent each vocabulary element as a vector in ℝ𝑑e; see Algorithm 1.
+
+4
+
+Formal Algorithms for Transformers
+
+Algorithm 1: Token embedding.
+Input: 𝑣 ∈ 𝑉 [𝑁V], a token ID. Output: 𝒆 ∈ ℝ𝑑e, the vector representation
+of the token. Parameters: 𝑾𝒆 ∈ ℝ𝑑e×𝑁V , the token
+embedding matrix. 1 return 𝒆 = 𝑾𝒆 [:, 𝑣]
+
+Algorithm 2: Positional embedding.
+Input: ∈ [ max], position of a token in the sequence.
+Output: 𝒆𝒑 ∈ ℝ𝑑e, the vector representation of the position.
+Parameters: 𝑾𝒑 ∈ ℝ𝑑e× max, the positional embedding matrix.
+1 return 𝒆𝒑 = 𝑾𝒑 [:, ]
+
+Positional embedding. The positional embedding learns to represent a token’s position in a sequence as a vector in ℝ𝑑e. For example, the position of the ﬁrst token in a sequence is represented by a (learned) vector 𝑾𝒑 [:, 1], the position of the second token is represented by another (learned) vector 𝑾𝒑 [:, 2], etc. The purpose of the positional embedding is to allow a Transformer to make sense of word ordering; in its absence the representation would be permutation invariant and the model would perceive sequences as “bags of words” instead.
+
+Learned positional embeddings require that input sequence length is at most some ﬁxed number max (the size of the learned positional embedding matrix must be ﬁnite and ﬁxed in advance of training). An intuitive explanation of how this works can be found at [Ala18]. For pseudocode, see Algorithm 2.
+
+Not all transformers make use of learned positional embeddings, some use a hard-coded mapping 𝑾𝒑 : ℕ → ℝ𝑑e instead [Ker21]. Such hardcoded positional embeddings can (theoretically) handle arbitrarily long sequences. The original Transformer [VSP+17] uses
+𝑾𝒑 [2𝑖 − 1, 𝑡] = sin(𝑡/ max 2𝑖/𝑑e ), 𝑾𝒑 [2𝑖, 𝑡] = cos(𝑡/ max 2𝑖/𝑑e ).
+
+for 0 < 𝑖 ≤ 𝑑e/2.
+
+The positional embedding of a token is usually added to the token embedding to form a token’s initial embedding. For the 𝑡-th token of a sequence 𝒙, the embedding is
+
+𝒆 = 𝑾𝒆 [:, 𝑥 [𝑡]] + 𝑾𝒑 [:, 𝑡].
+
+(1)
+
+Attention. Attention is the main architectural component of transformers. It enables a neural
+
+network to make use of contextual information (e.g. preceding text or the surrounding text) for predicting the current token.
+On a high level, attention works as follows: the token currently being predicted is mapped to a query vector 𝒒 ∈ ℝ𝑑attn, and the tokens in the context are mapped to key vectors 𝒌𝑡 ∈ ℝ𝑑attn and value vectors 𝒗𝑡 ∈ ℝ𝑑value. The inner products 𝒒 𝒌𝑡 are interpreted as the degree to which token 𝑡 ∈ 𝑉 is important for predicting the current token 𝑞 – they are used to derive a distribution over the context tokens, which is then used to combine the value vectors. An intuitive explanation how this achieves attention can be found at [Ala18, Ala19]. The precise algorithm is given in Algorithm 3.
+
+Algorithm 3: Basic single-query attention.
+
+Input: 𝒆 ∈ ℝ𝑑in, vector representation of
+
+the current token Input: 𝒆𝑡 ∈ ℝ𝑑in, vector representations of
+
+context tokens 𝑡 ∈ [𝑇]. Output: 𝒗˜ ∈ ℝ𝑑out, vector representation of
+
+the token and context combined. Parameters: 𝑾𝒒, 𝑾𝒌 ∈ ℝ𝑑attn×𝑑in ,
+𝒃𝒒, 𝒃𝒌 ∈ ℝ𝑑attn , the query and
+
+key linear projections. Parameters: 𝑾𝒗 ∈ ℝ𝑑out×𝑑in , 𝒃𝒗 ∈ ℝ𝑑out , the
+
+value linear projection.
+
+1 𝒒 ← 𝑾𝒒𝒆 + 𝒃𝒒
+
+2 ∀𝑡 : 𝒌𝑡 ← 𝑾𝒌𝒆𝑡 + 𝒃𝒌
+
+3 ∀𝑡 : 𝒗𝑡 ← 𝑾𝒗𝒆𝑡 + 𝒃𝒗
+
+√
+
+exp(𝒒 𝒌𝑡/ 𝑑attn)
+
+4 ∀𝑡 : 𝛼𝑡 =
+
+√
+
+𝑢 exp(𝒒 𝒌𝑢/ 𝑑attn)
+
+5 return 𝒗˜ = 𝑡=1 𝑇 𝛼𝑡𝒗𝑡
+
+There are many ways the basic attention mechanism is used in transformers. We list some of the most common variants below.
+
+5
+
+Formal Algorithms for Transformers
+
+It will be useful to deﬁne the softmax function for matrix arguments, as well as a Mask matrix:
+
+on 𝑿 [:, 1 : 𝑡], hence can be used to predict 𝑿 [:, 𝑡 + 1].
+
+softmax( 𝑨) [𝑡z, 𝑡x] := exp 𝐴[𝑡z, 𝑡x] , (2) 𝑡 exp 𝐴[𝑡, 𝑡x]
+
+Mask[𝑡z, 𝑡x] =
+
+1 for bidirectional attention
+[[𝑡z ≤ 𝑡x]] for unidirectional att. (3)
+
+Algorithm 4: 𝑽˜ ← Attention(𝑿, 𝒁|W𝒒𝒌𝒗, Mask)
+
+/* Computes a single (masked) self- or
+
+cross- attention head.
+
+*/
+
+Input: 𝑿 ∈ ℝ𝑑x× x , 𝒁 ∈ ℝ𝑑z× z , vector
+
+representations of primary and
+
+context sequence. Output: 𝑽˜ ∈ ℝ𝑑out× x , updated
+
+representations of tokens in 𝑿,
+
+folding in information from
+
+tokens in 𝒁.
+
+Parameters: W𝒒𝒌𝒗 consisting of: 𝑾𝒒 ∈ ℝ𝑑attn×𝑑x , 𝒃𝒒 ∈ ℝ𝑑attn 𝑾𝒌 ∈ ℝ𝑑attn×𝑑z , 𝒃𝒌 ∈ ℝ𝑑attn 𝑾𝒗 ∈ ℝ𝑑out×𝑑z , 𝒃𝒗 ∈ ℝ𝑑out .
+
+Hyperparameters: Mask∈{0,1} z× x, ↑(3)
+
+1 𝑸 ← 𝑾𝒒𝑿 + 𝒃𝒒1 2 𝑲 ← 𝑾𝒌𝒁 + 𝒃𝒌1 3 𝑽 ← 𝑾𝒗𝒁 + 𝒃𝒗1
+
+[[𝑸uery ∈ ℝ𝑑attn× x ]] [[𝑲ey ∈ ℝ𝑑attn× z ]]
+[[𝑽alue ∈ ℝ𝑑out× z ]]
+
+4 𝑺←𝑲 𝑸
+
+[[𝑺core ∈ ℝ z× x ]]
+
+5 ∀𝑡z, 𝑡x, if ¬Mask[𝑡z, 𝑡x] then 𝑆[𝑡z, 𝑡x] ← −∞ √
+6 return 𝑽˜ = 𝑽 · softmax 𝑺/ 𝑑attn
+
+Bidirectional / unmasked self-attention. Given a sequence of token representations, this variant applies attention to each token, treating all tokens in the sequence as the context. See Algorithm 4, called with token sequence 𝒁 = 𝑿 and no masking (Mask≡1).
+Unidirectional / masked self-attention. Given a sequence of token representations, this variant applies attention to each token, treating all preceding tokens (including itself) as the context. Future tokens are masked out, so this causal auto-regressive version can be used for online prediction. See Algorithm 4, called with token sequence 𝒁 = 𝑿 and Mask[𝑡z, 𝑡x] := [[𝑡z ≤ 𝑡x]]. For this Mask, the output 𝑽˜[:, 1 : 𝑡] only depends
+
+Cross-attention. Given two sequences of token representations (often in the context of a sequence-to-sequence task), this variant applies attention to each token of the primary token sequence 𝑿, treating the second token sequence 𝒁 as the context. See Algorithm 4, called with Mask≡1. While the output 𝑽˜ and input sequences 𝑿 have the same length x, the context sequence 𝒁 can have diﬀerent length z.
+
+Multi-head attention. The attention algorithm presented so far (Algorithm 4) describes the operation of a single attention head. In practice, transformers run multiple attention heads (with separate learnable parameters) in parallel and combine their outputs; this is called multi-head attention; see Algorithm 5
+
+Algorithm 5: 𝑽˜ ← MHAttention(𝑿, 𝒁|W, Mask)
+
+/* Computes Multi-Head (masked) self-
+
+or cross- attention layer.
+
+*/
+
+Input: 𝑿 ∈ ℝ𝑑x× x , 𝒁 ∈ ℝ𝑑z× z , vector
+
+representations of primary and
+
+context sequence. Output: 𝑽˜ ∈ ℝ𝑑out× x , updated
+
+representations of tokens in 𝑿,
+
+folding in information from
+
+tokens in 𝒁.
+
+Hyperparameters: 𝐻, number of
+
+attention heads Hyperparameters: Mask∈{0,1} z× x, ↑(3)
+
+Parameters: W consisting of
+
+For
+
+ℎ
+
+∈
+
+[𝐻],
+
+ℎ
+W𝒒𝒌𝒗
+
+consisting
+
+of:
+
+| 𝑾ℎ𝒒 ∈ ℝ𝑑attn×𝑑x , 𝒃ℎ𝒒 ∈ ℝ𝑑attn ,
+
+| 𝑾ℎ𝒌 ∈ ℝ𝑑attn×𝑑z , 𝒃ℎ𝒌 ∈ ℝ𝑑attn ,
+
+| 𝑾ℎ𝒗 ∈ ℝ𝑑mid×𝑑z , 𝒃ℎ𝒗 ∈ ℝ𝑑mid .
+
+𝑾𝒐 ∈ ℝ𝑑out×𝐻𝑑mid , 𝒃𝒐 ∈ ℝ𝑑out .
+
+1 For ℎ ∈ [𝐻]:
+
+2 𝒀 ℎ ← Attention(𝑿, 𝒁|W𝒒𝒌𝒗 ℎ , Mask)
+3 𝒀 ← [𝒀 1; 𝒀 2; . . . ; 𝒀 𝐻]
+
+4 return 𝑽˜ = 𝑾𝒐𝒀 + 𝒃𝒐1
+
+6
+
+Formal Algorithms for Transformers
+
+Algorithm 6: ˆ𝒆 ← layer_norm(𝒆|𝜸, 𝜷)
+
+/* Normalizes layer activations 𝒆. */
+Input: 𝒆 ∈ ℝ𝑑e, neural network activations. Output: 𝒆 ∈ ℝ𝑑e, normalized activations. Parameters: 𝜸, 𝜷 ∈ ℝ𝑑e, element-wise
+
+scale and oﬀset. 1 𝒎 ← 𝑑e 𝑖=1 𝒆[𝑖]/𝑑e 2 𝑣 ← 𝑑e 𝑖=1 (𝒆[𝑖] − 𝒎)2/𝑑e 3 return 𝒆 = 𝒆√−𝒎𝑣 𝜸 + 𝜷, where
+
+denotes
+
+element-wise multiplication.
+
+Algorithm 7: Unembedding.
+Input: 𝒆 ∈ ℝ𝑑e, a token encoding. Output: 𝒑 ∈ Δ(𝑉), a probability
+distribution over the vocabulary. Parameters: 𝑾𝒖 ∈ ℝ𝑁V×𝑑e , the
+unembedding matrix. 1 return 𝒑 = softmax(𝑾𝒖𝒆)
+
+Layer normalisation. Layer normalisation explicitly controls the mean and variance of individual neural network activations; the pseudocode is given in Algorithm 6. Some transformers use a simpler and more computationally eﬃcient version of layer normalization setting 𝒎 = 𝜷 = 0, called root mean square layer normalisation, or RMSnorm.
+Unembedding. The unembedding learns to convert a vector representation of a token and its context into a distribution over the vocabulary elements; see Algorithm 7. The algorithm describes an independently learned unembedding matrix, but note that sometimes the unembedding matrix is instead ﬁxed to be the transpose of the embedding matrix.
+6. Transformer Architectures
+This section presents a few prominent transformer architectures, based on attention Algorithms 4 and 5 and using normalization Algorithm 6, in roughly historical order:
+• EDT [VSP+17] The original sequence-tosequence / Encoder-Decoder Transformer,
+
+Algorithms 8, 11 and 15. • BERT [DCLT19], which is an instance of
+an encoder-only transformer (encoder-only means that it is derived from the encoderdecoder architecture by dropping the decoder part), Algorithms 9 and 12. • GPT [RWC+19, BMR+20], which is an instance of a decoder-only transformer, Algorithms 10, 13 and 14.
+
+While the main architectural diﬀerence between BERT and GPT is in attention masking, they also diﬀer in a number of less important ways: e.g. they use diﬀerent activation functions and the layer-norms are positioned diﬀerently. We included these diﬀerences in the pseudocode to stay faithful to the original algorithms, but note that diﬀerent transformer architectures may adopt these selectively.
+To simplify notation, we denote by W the entire set of parameters (query, key, value and output linear projections) required by a multi-head attention layer:
+
+W :=
+
+𝑾ℎ𝒒 ∈ ℝ𝑑attn×𝑑x , 𝑾ℎ𝒌 ∈ ℝ𝑑attn×𝑑z , 𝑾ℎ𝒗 ∈ ℝ𝑑mid×𝑑z , 𝑾𝒐 ∈ ℝ𝑑out×𝐻𝑑mid ,
+
+𝒃ℎ𝒒 ∈ ℝ𝑑attn , 𝒃ℎ𝒌 ∈ ℝ𝑑attn , 𝒃ℎ𝒗 ∈ ℝ𝑑mid , 𝒃𝒐 ∈ ℝ𝑑out
+
+ℎ ∈ [𝐻] ℎ ∈ [𝐻] ℎ ∈ [𝐻]
+(4)
+
+Encoder-decoder / sequence-to-sequence transformer [VSP+17]. This is the very ﬁrst transformer. It was originally used for sequenceto-sequence tasks (machine translation), which is why it is more complicated than its successors.
+The idea behind the architecture is as follows: First, the context sequence is encoded using bidirectional multi-head attention. The output of this ‘encoder’ part of the network is a vector representation of each context token, taking into account the entire context sequence. Second, the primary sequence is encoded. Each token in the primary sequence is allowed to use information from the encoded context sequence, as well as primary sequence tokens that precede it. See Algorithm 8 for more details.
+
+7
+
+Formal Algorithms for Transformers
+
+Encoder-only transformer: BERT [DCLT19]. BERT is a bidirectional transformer trained on the task of masked language modelling. Given a piece of text with some tokens masked out, the goal is to correctly recover the masked-out tokens. The original use of BERT was to learn generally useful text representations, which could then be adapted for various downstream NLP tasks. The masking is not performed via the Mask parameter but diﬀerently: During training each input token is replaced with probability 𝑝mask by a dummy to-
+ken mask_token, and evaluation is based on the
+reconstruction probability of these knocked-out tokens (see Algorithm 12).
+The BERT architecture resembles the encoder part of the seq2seq transformer (hence ‘encoderonly’). It is described in detail in Algorithm 9. It uses the GELU nonlinearity instead of ReLU:
+
+Multi-domain decoder-only transformer: Gato [RZP+22]. Gato is a multi-modal multitask transformer built by DeepMind. It is a single neural network that can play Atari, navigate 3D environments, control a robotic arm, caption images, have conversations, and more.
+Under the hood, each modality is converted into a sequence prediction problem by a separate tokenization and embedding method; for example images are divided into non-overlapping 16 × 16 patches, ordered in raster order (left-toright, top-to-bottom) and processed by a ResNet block to obtain a vector representation.
+The actual Gato architecture is then a decoderonly transformer like the one in Algorithm 10, but where Line 2 is replaced with modality-speciﬁc embedding code.
+
+GELU(𝑥) = 𝑥 · ℙ𝑋∼N (0,1) [𝑋 < 𝑥]. (5)
+(When called with vector or matrix arguments, GELU is applied element-wise.)
+
+7. Transformer Training and Inference
+This section lists the pseudocode for various algorithms for training and using transformers:
+
+Decoder-only transformers: GPT-2 [RWC+19], GPT-3 [BMR+20], Gopher [RBC+21]. GPT-2 and GPT-3 are large language models developed by OpenAI, and Gopher is a large language model developed by DeepMind. They all have similar architectures and are trained by autoregressive language modelling: Given an incomplete sentence or paragraph, the goal is to predict the next token.
+The main diﬀerence from BERT is that GPT/Gopher use unidirectional attention instead of bidirectional attention; they also apply layernorms in slightly diﬀerent order.
+See Algorithm 10 for the pseudocode of GPT-2. GPT-3 is identical except larger, and replaces dense attention in Line 6 by sparse attention, i.e. each token only uses a subset of the full context.
+Gopher also deviates only slightly from the GPT-2 architecture: it replaces layer norm in lines 5, 7 and 10 by RMSnorm (𝑚 = 𝜷 = 0), and it uses diﬀerent positional embeddings.
+
+• EDTraining() Algorithm 11 shows how to train a sequence-to-sequence transformer (the original Transformer [VSP+17]).
+• ETraining() Algorithm 12 shows how to train a transformer on the task of masked language modelling (like BERT [DCLT19]).
+• DTraining() Algorithm 13 shows how to train a transformer on the task of next token prediction (like CPT-x [BMR+20] and Gopher [RBC+21]).
+• DInference() Algorithm 14 shows how to prompt a transformer trained on next token prediction (like GPT-x [BMR+20]). The temperature parameter 𝜏 interpolates between most likely continuation (𝜏 = 0), faithful sampling (𝜏 = 1), and uniform sampling (𝜏 = ∞).
+• EDInference() Algorithm 15 shows how to use a sequence-to-sequence transformer for prediction.
+Gradient descent. The described training Algorithms 11 to 13 use Stochastic Gradient Descent
+
+8
+
+Formal Algorithms for Transformers
+
+(SGD) 𝜽 ← 𝜽 − 𝜂 · ∇loss(𝜽) to minimize the log loss (aka cross entropy) as the update rule. Computation of the gradient is done via automatic diﬀerentiation tools; see [BPRS18, Table 5]. In practice, vanilla SGD is usually replaced by some more reﬁned variation such as RMSProp or AdaGrad or others [Rud16]. Adam [KB15] is used most often these days.
+8. Practical Considerations
+While the vanilla transformers provided here may work in practice, a variety of “tricks” have been developed over the years to improve the performance of deep neural networks in general and transformers in particular [LWLQ21]:
+• Data preprocessing: cleaning, augmentation [FGW+21], adding noise, shuﬄing [Lem21] (besides tokenization and chunking).
+• Architecture: sparse layers, weight sharing (besides attention).
+• Training: improved optimizers, minibatches, batch normalization, learning rate scheduling, weight initialization, pretraining, ensembling, multi-task, adversarial (besides layer normalization) [Sut15].
+• Regularization: weight decay, early stopping, cross-validation, dropout, adding noise [MBM20, TZ22].
+• Inference: scratchpad prompting, few-shot prompting, chain of thought, majority voting [LAD+22].
+• Others.
+A. References
+[Ala18] Jay Alammar. The Illustrated Transformer. http://jalammar.github.io/illustratedtransformer/, 2018.
+[Ala19] Jay Alammar. The Illustrated GPT2 (Visualizing Transformer Language Models). http://jalammar.github.io/illustratedgpt2/, 2019.
+[Bel21] Fabrice Bellard. NNCP v2: Lossless Data Compression with Transformer. https://bellard.org/libnc/gpt2tc.html, 2021.
+
+[BFT17] Peter L Bartlett, Dylan J Foster, and Matus J Telgarsky. Spectrally-normalized margin bounds for neural networks. NeurIPS, 2017.
+[BMR+20] Tom Brown, Benjamin Mann, Nick Ryder, et al. Language models are few-shot learners. NeurIPS, 2020.
+
+[BPRS18] Atilim Gunes Baydin, Barak A. Pearlmutter, Alexey Andreyevich Radul, and Jeffrey Mark Siskind. Automatic Diﬀerentiation in Machine Learning: A Survey. Journal of Machine Learning Research, 18(153):1–43, 2018.
+
+[DCLT19] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. BERT: Pretraining of deep bidirectional transformers for language understanding. ACL, 2019.
+
+[EGKZ21] Benjamin L. Edelman, Surbhi Goel, Sham Kakade, and Cyril Zhang. Inductive Biases and Variable Creation in Self-Attention Mechanisms. arXiv:2110.10090 [cs, stat], October 2021.
+
+[Elh21] Nelson Elhage.
+
+A Math-
+
+ematical Framework for Trans-
+
+former Circuits.
+
+https://transformer-
+
+circuits.pub/2021/framework/index.html,
+
+2021.
+
+[EMK+21] Yonathan Efroni, Dipendra Misra, Akshay Krishnamurthy, Alekh Agarwal, and John Langford. Provable RL with Exogenous Distractors via Multistep Inverse Dynamics, March 2021.
+
+[FGW+21] Steven Y Feng, Varun Gangal, Jason Wei, Sarath Chandar, Soroush Vosoughi, Teruko Mitamura, and Eduard Hovy. A survey of data augmentation approaches for NLP. In Findings of the Association for Computational Linguistics: ACL-IJCNLP 2021, pages 968–988, 2021.
+
+[Gag94] Philip Gage. A new algorithm for data compression. Dr. Dobbs / C Users Journal, 12(2):23–38, 1994.
+
+[JGH18] Arthur Jacot, Franck Gabriel, and Clément Hongler. Neural tangent kernel: Convergence and generalization in neural networks. NeurIPS, 2018.
+
+9
+
+Formal Algorithms for Transformers
+
+[KB15] Diederik Kingma and Jimmy Ba. Adam: A method for stochastic optimization. ICLR, 2015.
+
+[Ker21] Jonathan Kernes.
+
+Mas-
+
+ter Positional Encoding:
+
+Part I.
+
+https://towardsdatascience.com/master-
+
+positional-encoding-part-i-63c05d90a0c3,
+
+March 2021.
+
+[LAD+22] Aitor Lewkowycz, Anders Andreassen, David Dohan, Ethan Dyer, Henryk Michalewski, Vinay Ramasesh, Ambrose Slone, Cem Anil, Imanol Schlag, Theo Gutman-Solo, Yuhuai Wu, Behnam Neyshabur, Guy Gur-Ari, and Vedant Misra. Solving Quantitative Reasoning Problems with Language Models. arXiv:2206.14858 [cs], June 2022.
+
+[Lem21] Chris Lemke. Data preprocessing in NLP. https://towardsdatascience.com/datapreprocessing-in-nlp-c371d53ba3e0, July 2021.
+
+[LWLQ21] Tianyang Lin, Yuxin Wang, Xiangyang Liu, and Xipeng Qiu. A Survey of Transformers, June 2021.
+
+[MBM20] Reza Moradi, Reza Berangi, and Behrouz Minaei. A survey of regularization strategies for deep models. Artiﬁcial Intelligence Review, 53(6):3947–3986, August 2020.
+[MKS+13] Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Alex Graves, Ioannis Antonoglou, Daan Wierstra, and Martin Riedmiller. Playing Atari with Deep Reinforcement Learning, December 2013.
+
+[MPCB14] Guido F Montufar, Razvan Pascanu, Kyunghyun Cho, and Yoshua Bengio. On the number of linear regions of deep neural networks. NeurIPS, 2014.
+
+[PH22] M. Phuong and M. Hutter. Formal algorithms for transformers. Technical report, DeepMind, London, UK, 2022. LaTeX source available at http://arXiv.org
+[RBC+21] Jack W. Rae, Sebastian Borgeaud, Trevor Cai, et al. Scaling language models: Methods, analysis & insights from training gopher. arXiv:2112.11446, 2021.
+
+[Rud16] Sebastian Ruder.
+
+An overview
+
+of gradient descent optimization algo-
+
+rithms. https://ruder.io/optimizing-gradient-
+
+descent/, January 2016.
+
+[RWC+19] Alec Radford, Jeﬀrey Wu, Rewon Child, David Luan, Dario Amodei, and Ilya Sutskever. Language models are unsupervised multitask learners. OpenAI blog, 2019.
+
+[RZP+22] Scott Reed, Konrad Żołna, Emilio Parisotto, et al. A generalist agent. arXiv:2205.06175, 2022.
+
+[SBB18] Richard S. Sutton, Andrew G. Barto, and Francis Bach. Reinforcement Learning: An Introduction. MIT Press, Cambridge, Massachusetts, second edition edition edition, November 2018.
+[SGBK+21] Eren Sezener, Agnieszka GrabskaBarwińska, Dimitar Kostadinov, Maxime Beau, Sanjukta Krishnagopal, David Budden, Marcus Hutter, Joel Veness, Matthew Botvinick, Claudia Clopath, Michael Häusser, and Peter E. Latham. A rapid and eﬃcient learning rule for biological neural circuits. Technical report, DeepMind, London, UK, 2021.
+
+[SHB16] Rico Sennrich, Barry Haddow, and Alexandra Birch. Neural machine translation of rare words with subword units. In 54th Annual Meeting of the Association for Computational Linguistics, pages 1715–1725. Association for Computational Linguistics (ACL), 2016.
+
+[Sut15] Ilya Sutskever.
+
+A Brief
+
+Overview
+
+of
+
+Deep
+
+Learning.
+
+http://yyue.blogspot.com/2015/01/a-
+
+brief-overview-of-deep-learning.html, January
+
+2015.
+
+[TZ22] Yingjie Tian and Yuqi Zhang. A comprehensive survey on regularization strategies in machine learning. Information Fusion, 80:146– 166, April 2022.
+[VSP+17] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. NeurIPS, 2017.
+
+10
+
+Formal Algorithms for Transformers
+
+Algorithm 8: 𝑷 ← EDTransformer(𝒛, 𝒙|𝜽)
+
+/* Encoder-decoder transformer forward pass
+
+*/
+
+Input: 𝒛, 𝒙 ∈ 𝑉∗, two sequences of token IDs.
+
+Output: 𝑷 ∈ (0, 1)𝑁V×length(𝒙) , where the 𝑡-th column of 𝑷 represents 𝑃ˆ𝜽 (𝑥 [𝑡 + 1] | 𝒙 [1 : 𝑡], 𝒛).
+
+Hyperparameters: max, 𝐿enc, 𝐿dec, 𝐻, 𝑑e, 𝑑mlp ∈ ℕ
+
+Parameters: 𝜽 includes all of the following parameters:
+
+𝑾𝒆 ∈ ℝ𝑑e×𝑁V , 𝑾𝒑 ∈ ℝ𝑑e× max, the token and positional embedding matrices.
+
+For 𝑙 ∈ [𝐿enc]:
+
+|
+
+enc
+W𝑙 ,
+
+multi-head
+
+encoder
+
+attention
+
+parameters
+
+for
+
+layer
+
+𝑙,
+
+see
+
+(4),
+
+|
+
+𝜸1, 𝜷1, 𝜸2, 𝜷2 ∈ ℝ𝑑e ,
+𝑙 𝑙𝑙 𝑙
+
+two sets of layer-norm parameters,
+
+| 𝑾𝑙mlp1 ∈ ℝ𝑑mlp×𝑑e , 𝒃𝑙mlp1 ∈ ℝ𝑑mlp , 𝑾𝑙mlp2 ∈ ℝ𝑑e×𝑑mlp , 𝒃𝑙mlp2 ∈ ℝ𝑑e , MLP parameters.
+
+For 𝑙 ∈ [𝐿dec]:
+
+|
+
+dec
+W𝑙 ,
+
+multi-head
+
+decoder
+
+attention
+
+parameters
+
+for
+
+layer
+
+𝑙,
+
+see
+
+(4),
+
+| W𝑙e/d, multi-head cross-attention parameters for layer 𝑙, see (4),
+
+|
+
+𝜸3, 𝜷3, 𝜸4, 𝜷4, 𝜸5, 𝜷5 ∈ ℝ𝑑e ,
+𝑙 𝑙𝑙 𝑙𝑙 𝑙
+
+three sets of layer-norm parameters,
+
+| 𝑾𝑙mlp3 ∈ ℝ𝑑mlp×𝑑e , 𝒃𝑙mlp3 ∈ ℝ𝑑mlp , 𝑾𝑙mlp4 ∈ ℝ𝑑e×𝑑mlp , 𝒃𝑙mlp4 ∈ ℝ𝑑e , MLP parameters.
+
+𝑾𝒖 ∈ ℝ𝑁V×𝑑e, the unembedding matrix.
+
+/* Encode the context sequence:
+
+*/
+
+1 z ← length(𝒛)
+
+2 for 𝑡 ∈ [ z] : 𝒆𝑡 ← 𝑾𝒆 [:, 𝑧[𝑡]] + 𝑾𝒑 [:, 𝑡]
+
+3 𝒁 ← [𝒆1, 𝒆2, . . . 𝒆 z ]
+
+4 for 𝑙 = 1, 2, . . . , 𝐿enc do
+
+5
+
+𝒁
+
+←
+
+𝒁
+
++
+
+MHAttention(𝒁
+
+enc
+|W𝑙 ,
+
+Mask
+
+≡
+
+1)
+
+6
+
+for 𝑡 ∈ [
+
+z] :
+
+𝒁 [:,
+
+𝑡]
+
+←
+
+layer_norm ( 𝒁 [:,
+
+𝑡]
+
+|
+
+𝜸1,
+𝑙
+
+𝜷1)
+𝑙
+
+7 𝒁 ← 𝒁 + 𝑾𝑙mlp2ReLU(𝑾𝑙mlp1𝒁 + 𝒃𝑙mlp11 ) + 𝒃𝑙mlp21
+
+8
+
+for 𝑡 ∈ [
+
+z] :
+
+𝒁 [:,
+
+𝑡]
+
+←
+
+layer_norm ( 𝒁 [:,
+
+𝑡]
+
+|
+
+𝜸2,
+𝑙
+
+𝜷2)
+𝑙
+
+9 end
+
+/* Decode the primary sequence, conditioning on the context:
+
+*/
+
+10 x ← length(𝒙)
+
+11 for 𝑡 ∈ [ x] : 𝒆𝑡 ← 𝑾𝒆 [:, 𝑥 [𝑡]] + 𝑾𝒑 [:, 𝑡]
+
+12 𝑿 ← [𝒆1, 𝒆2, . . . 𝒆 x ]
+
+13 for 𝑖 = 1, 2, . . . , 𝐿dec do
+
+14
+
+𝑿
+
+←
+
+𝑿
+
++
+
+MHAttention ( 𝑿
+
+dec
+|W𝑙 ,
+
+Mask[𝑡,
+
+𝑡
+
+]
+
+≡
+
+[[𝑡
+
+≤
+
+𝑡
+
+]])
+
+15
+
+for 𝑡 ∈ [
+
+x] :
+
+𝑿 [:,
+
+𝑡]
+
+←
+
+layer_norm(𝑿 [:,
+
+𝑡]
+
+|
+
+𝜸3,
+𝑙
+
+𝜷3)
+𝑙
+
+16 𝑿 ← 𝑿 + MHAttention(𝑿, 𝒁 |W𝑙e/d, Mask ≡ 1)
+
+17
+
+for 𝑡 ∈ [
+
+x] :
+
+𝑿 [:,
+
+𝑡]
+
+←
+
+layer_norm(𝑿 [:,
+
+𝑡]
+
+|
+
+𝜸4,
+𝑙
+
+𝜷4)
+𝑙
+
+18 𝑿 ← 𝑿 + 𝑾𝑙mlp4ReLU(𝑾𝑙mlp3 𝑿 + 𝒃𝑙mlp31 ) + 𝒃𝑙mlp41
+
+19
+
+for 𝑡 ∈ [
+
+x] :
+
+𝑿 [:,
+
+𝑡]
+
+←
+
+layer_norm(𝑿 [:,
+
+𝑡]
+
+|
+
+𝜸5,
+𝑙
+
+𝜷5)
+𝑙
+
+20 end
+
+/* Derive conditional probabilities and return:
+
+*/
+
+21 return 𝑷 = softmax(𝑾𝒖𝑿)
+
+11
+
+Formal Algorithms for Transformers
+
+Algorithm 9: 𝑷 ← ETransformer(𝒙|𝜽)
+
+/* BERT, an encoder-only transformer, forward pass
+
+*/
+
+Input: 𝒙 ∈ 𝑉∗, a sequence of token IDs. Output: 𝑷 ∈ (0, 1)𝑁V×length(𝒙) , where each column of 𝑷 is a distribution over the vocabulary.
+
+Hyperparameters: max, 𝐿, 𝐻, 𝑑e, 𝑑mlp, 𝑑f ∈ ℕ
+
+Parameters: 𝜽 includes all of the following parameters: 𝑾𝒆 ∈ ℝ𝑑e×𝑁V , 𝑾𝒑 ∈ ℝ𝑑e× max, the token and positional embedding matrices.
+For 𝑙 ∈ [𝐿]:
+
+| W𝑙, multi-head attention parameters for layer 𝑙, see (4),
+
+|
+
+𝜸1, 𝜷1, 𝜸2, 𝜷2 ∈ ℝ𝑑e ,
+𝑙 𝑙𝑙 𝑙
+
+two sets of layer-norm parameters,
+
+| 𝑾𝑙mlp1 ∈ ℝ𝑑mlp×𝑑e , 𝒃𝑙mlp1 ∈ ℝ𝑑mlp , 𝑾𝑙mlp2 ∈ ℝ𝑑e×𝑑mlp , 𝒃𝑙mlp2 ∈ ℝ𝑑e , MLP parameters.
+
+𝑾𝒇 ∈ ℝ𝑑f×𝑑e, 𝒃 𝒇 ∈ ℝ𝑑f , 𝜸, 𝜷 ∈ ℝ𝑑f , the ﬁnal linear projection and layer-norm parameters.
+
+𝑾𝒖 ∈ ℝ𝑁V×𝑑e, the unembedding matrix.
+
+1 ← length(𝒙)
+
+2 for 𝑡 ∈ [ ] : 𝒆𝑡 ← 𝑾𝒆 [:, 𝑥 [𝑡]] + 𝑾𝒑 [:, 𝑡] 3 𝑿 ← [𝒆1, 𝒆2, . . . 𝒆 ] 4 for 𝑙 = 1, 2, . . . , 𝐿 do
+
+5 𝑿 ← 𝑿 + MHAttention(𝑿 |W𝑙, Mask ≡ 1)
+
+6
+
+for 𝑡 ∈ [
+
+]:
+
+𝑿 [:,
+
+𝑡]
+
+←
+
+layer_norm(𝑿 [:,
+
+𝑡]
+
+|
+
+𝜸1,
+𝑙
+
+𝜷1)
+𝑙
+
+7 𝑿 ← 𝑿 + 𝑾𝑙mlp2GELU(𝑾𝑙mlp1 𝑿 + 𝒃𝑙mlp11 ) + 𝒃𝑙mlp21
+
+8
+
+for 𝑡 ∈ [
+
+]:
+
+𝑿 [:,
+
+𝑡]
+
+←
+
+layer_norm(𝑿 [:,
+
+𝑡]
+
+|
+
+𝜸2,
+𝑙
+
+𝜷2)
+𝑙
+
+9 end
+
+10 𝑿 ← GELU(𝑾𝒇 𝑿 + 𝒃 𝒇 1 ) 11 for 𝑡 ∈ [ ] : 𝑿 [:, 𝑡] ← layer_norm(𝑿 [:, 𝑡] | 𝜸, 𝜷)
+
+12 return 𝑷 = softmax(𝑾𝒖𝑿)
+
+12
+
+Formal Algorithms for Transformers
+
+Algorithm 10: 𝑷 ← DTransformer(𝒙|𝜽)
+
+/* GPT, a decoder-only transformer, forward pass
+
+*/
+
+Input: 𝒙 ∈ 𝑉∗, a sequence of token IDs. Output: 𝑷 ∈ (0, 1)𝑁V×length(𝒙) , where the 𝑡-th column of 𝑷 represents 𝑃ˆ𝜽 (𝑥 [𝑡 + 1] | 𝒙 [1 : 𝑡]).
+
+Hyperparameters: max, 𝐿, 𝐻, 𝑑e, 𝑑mlp ∈ ℕ
+
+Parameters: 𝜽 includes all of the following parameters: 𝑾𝒆 ∈ ℝ𝑑e×𝑁V , 𝑾𝒑 ∈ ℝ𝑑e× max, the token and positional embedding matrices.
+
+For 𝑙 ∈ [𝐿]:
+
+| W𝑙, multi-head attention parameters for layer 𝑙, see (4),
+
+|
+
+𝜸1, 𝜷1, 𝜸2, 𝜷2 ∈ ℝ𝑑e ,
+𝑙 𝑙𝑙 𝑙
+
+two sets of layer-norm parameters,
+
+| 𝑾𝑙mlp1 ∈ ℝ𝑑mlp×𝑑e , 𝒃𝑙mlp1 ∈ ℝ𝑑mlp , 𝑾𝑙mlp2 ∈ ℝ𝑑e×𝑑mlp , 𝒃𝑙mlp2 ∈ ℝ𝑑e ,
+
+𝜸, 𝜷 ∈ ℝ𝑑e, ﬁnal layer-norm parameters.
+
+𝑾𝒖 ∈ ℝ𝑁V×𝑑e, the unembedding matrix.
+
+MLP parameters.
+
+1 ← length(𝒙)
+
+2 for 𝑡 ∈ [ ] : 𝒆𝑡 ← 𝑾𝒆 [:, 𝑥 [𝑡]] + 𝑾𝒑 [:, 𝑡]
+
+3 𝑿 ← [𝒆1, 𝒆2, . . . 𝒆 ]
+
+4 for 𝑙 = 1, 2, . . . , 𝐿 do
+
+5
+
+for 𝑡 ∈ [
+
+]:
+
+𝑿˜ [:,
+
+𝑡]
+
+←
+
+layer_norm(𝑿 [:,
+
+𝑡]
+
+|
+
+𝜸1,
+𝑙
+
+𝜷1)
+𝑙
+
+6 𝑿 ← 𝑿 + MHAttention(𝑿˜ |W𝑙, Mask[𝑡, 𝑡 ] = [[𝑡 ≤ 𝑡 ]])
+
+7
+
+for 𝑡 ∈ [
+
+]:
+
+𝑿˜ [:,
+
+𝑡]
+
+←
+
+layer_norm(𝑿 [:,
+
+𝑡]
+
+|
+
+𝜸2,
+𝑙
+
+𝜷2)
+𝑙
+
+8 𝑿 ← 𝑿 + 𝑾𝑙mlp2GELU(𝑾𝑙mlp1 𝑿˜ + 𝒃𝑙mlp11 ) + 𝒃𝑙mlp21
+
+9 end
+
+10 for 𝑡 ∈ [ ] : 𝑿 [:, 𝑡] ← layer_norm(𝑿 [:, 𝑡] | 𝜸, 𝜷)
+
+11 return 𝑷 = softmax(𝑾𝒖𝑿)
+
+13
+
+Formal Algorithms for Transformers
+
+Algorithm 11: 𝜽ˆ ← EDTraining(𝒛1:𝑁data , 𝒙1:𝑁data , 𝜽)
+
+/* Training a seq2seq model
+
+*/
+
+Input: {(𝒛𝑛, 𝒙𝑛)}𝑛=1 𝑁data , a dataset of
+
+sequence pairs.
+
+Input: 𝜽, initial transformer parameters.
+
+Output: 𝜽ˆ, the trained parameters.
+
+Hyperparameters: 𝑁epochs ∈ ℕ, 𝜂 ∈ (0, ∞)
+
+1 for 𝑖 = 1, 2, . . . , 𝑁epochs do
+
+2 for 𝑛 = 1, 2, . . . 𝑁data do
+
+3
+
+← length(𝒙𝑛)
+
+4
+
+𝑷(𝜽) ← EDTransformer(𝒛𝑛, 𝒙𝑛|𝜽)
+
+5
+
+loss(𝜽) = −
+
+−1 𝑡=1
+
+log
+
+𝑃
+
+(
+
+𝜽)
+
+[
+
+𝑥𝑛
+
+[𝑡+1]
+
+,
+
+𝑡
+
+]
+
+6
+
+𝜽 ← 𝜽 − 𝜂 · ∇loss(𝜽)
+
+7 end
+
+8 end
+
+Algorithm 13: 𝜽ˆ ← DTraining(𝒙1:𝑁data, 𝜽)
+
+/* Training next token prediction */
+Input: {𝒙𝑛}𝑛=1 𝑁data, a dataset of sequences. Input: 𝜽, initial decoder-only transformer
+
+parameters.
+
+Output: 𝜽ˆ, the trained parameters.
+
+Hyperparameters: 𝑁epochs ∈ ℕ, 𝜂 ∈ (0, ∞)
+
+1 for 𝑖 = 1, 2, . . . , 𝑁epochs do
+
+2 for 𝑛 = 1, 2, . . . 𝑁data do
+
+3
+
+← length(𝒙𝑛)
+
+4
+
+𝑷(𝜽) ← DTransformer(𝒙𝑛 | 𝜽)
+
+5
+
+loss(𝜽) = −
+
+−1 𝑡=1
+
+log
+
+𝑃
+
+(
+
+𝜽)
+
+[
+
+𝑥𝑛
+
+[𝑡+1]
+
+,
+
+𝑡
+
+]
+
+6
+
+𝜽 ← 𝜽 − 𝜂 · ∇loss(𝜽)
+
+9 return 𝜽ˆ = 𝜽
+
+7 end 8 end
+
+9 return 𝜽ˆ = 𝜽
+
+Algorithm 12: 𝜽ˆ ← ETraining(𝒙1:𝑁data, 𝜽)
+
+/* Training by masked language
+
+modelling
+
+*/
+
+Input: {𝒙𝑛}𝑛=1 𝑁data , a dataset of sequences.
+
+Input: 𝜽, initial encoder-only transformer
+
+parameters.
+
+Output: 𝜽ˆ, the trained parameters.
+
+Hyperparameters: 𝑁epochs ∈ ℕ, 𝜂 ∈
+
+(0, ∞), 𝑝mask ∈ (0, 1)
+
+1 for 𝑖 = 1, 2, . . . , 𝑁epochs do
+
+2 for 𝑛 = 1, 2, . . . , 𝑁data do
+
+3
+
+← length(𝒙𝑛)
+
+4
+
+for 𝑡 = 1, 2, . . . , do
+
+5
+
+𝑥˜𝑛 [𝑡] ← mask_token or 𝑥𝑛 [𝑡]
+
+randomly with probability
+
+𝑝mask or 1 − 𝑝mask
+
+6
+
+end
+
+7
+
+𝑇˜ ← {𝑡 ∈ [ ] : 𝑥˜𝑛 [𝑡] = mask_token}
+
+8
+
+𝑷(𝜽) ← ETransformer(𝒙˜𝑛 | 𝜽)
+
+9
+
+loss(𝜽) = − 𝑡∈𝑇˜ log 𝑃(𝜽) [𝑥𝑛 [𝑡], 𝑡]
+
+10
+
+𝜽 ← 𝜽 − 𝜂 · ∇loss(𝜽)
+
+11 end
+
+12 end
+
+13 return 𝜽ˆ = 𝜽
+
+Algorithm 14: 𝒚 ← DInference(𝒙, 𝜽ˆ)
+
+/* Prompting a trained model and using
+
+it for prediction.
+
+*/
+
+Input: Trained transformer parameters 𝜽ˆ. Input: 𝒙 ∈ 𝑉∗, a prompt. Output: 𝒚 ∈ 𝑉∗, the transformer’s
+
+continuation of the prompt.
+
+Hyperparameters: gen ∈ ℕ, 𝜏 ∈ (0, ∞)
+
+1 ← length(𝒙)
+
+2 for 𝑖 = 1, 2, . . . gen do
+3 𝑷 ← DTransformer(𝒙 | 𝜽ˆ)
+
+4 𝒑 ← 𝑷 [:, + 𝑖 − 1]
+
+5 sample a token 𝑦 from 𝒒 ∝ 𝒑1/𝜏
+
+6 𝒙 ← [𝒙, 𝑦]
+
+7 end 8 return 𝒚 = 𝒙 [ + 1 : + gen]
+
+14
+
+Formal Algorithms for Transformers
+
+Algorithm 15: 𝒙ˆ ← EDInference(𝒛, 𝜽ˆ)
+
+/* Using a trained seq2seq model for
+
+prediction.
+
+*/
+
+Input: A seq2seq transformer and trained parameters 𝜽ˆ of the transformer.
+Input: 𝒛 ∈ 𝑉∗, input sequence, e.g. a
+
+sentence in English. Output: 𝒙ˆ ∈ 𝑉∗, output sequence, e.g. the
+
+sentence in German.
+
+Hyperparameters: 𝜏 ∈ (0, ∞)
+
+1 𝒙ˆ ← [bos_token]
+
+2 𝑦←0
+
+3 while 𝑦 ≠ eos_token do
+
+4 𝑷 ← EDTransformer(𝒛, 𝒙ˆ | 𝜽ˆ)
+
+5 𝒑 ← 𝑷 [:, length(𝒙ˆ)] 6 sample a token 𝑦 from 𝒒 ∝ 𝒑1/𝜏
+
+7 𝒙ˆ ← [𝒙ˆ, 𝑦]
+
+8 end 9 return 𝒙ˆ
+
+15
+
+Formal Algorithms for Transformers
+
+B. List of Notation
+
+Symbol [𝑁] 𝑖, 𝑗 𝑉 𝑁V 𝑉∗
+max
+𝑡 𝑑...
+𝒙 𝒛 𝑀 [𝑖, 𝑗] 𝑀 [𝑖, :] ≡ 𝑀 [𝑖] 𝑀 [:, 𝑗] 𝒆 𝑿 𝒁 Mask 𝐿, 𝐿enc, 𝐿dec 𝑙 𝐻 ℎ 𝑁data 𝑛 𝜂 𝜏
+𝑾𝒆 𝑾𝒑 𝑾𝒖 𝑾𝒒 𝒃𝒒 𝑾𝒌 𝒃𝒌 𝑾𝒗 𝒃𝒗 W𝒒𝒌𝒗 𝑾𝒐 𝒃𝒐 W
+𝑾mlp 𝒃mlp 𝜸 𝜷 𝜽, 𝜽ˆ
+
+Type := {1, ..., 𝑁 }
+∈ℕ [ 𝑁V ]
+∈ℕ = =0 ∞ 𝑉 ∈ℕ
+∈ [ max] ∈[ ]
+∈ℕ ≡ 𝑥[1 : ] ≡ 𝑧[1 : ]
+∈ℝ ∈ ℝ𝑑 ∈ ℝ𝑑 ∈ ℝ𝑑e ∈ ℝ𝑑e× 𝑥 ∈ ℝ𝑑e× 𝑧 ∈ ℝ 𝑧× 𝑥
+∈ℕ ∈ [𝐿]
+∈ℕ ∈ [𝐻]
+∈ℕ ∈ [𝑁data] ∈ (0, ∞) ∈ (0, ∞) ∈ ℝ𝑑e×𝑁V ∈ ℝ𝑑e× max ∈ ℝ𝑁V×𝑑e ∈ ℝ𝑑attn×𝑑x ∈ ℝ𝑑attn ∈ ℝ𝑑attn×𝑑z ∈ ℝ𝑑attn ∈ ℝ𝑑out×𝑑z ∈ ℝ𝑑out
+∈ ℝ𝑑out×𝐻𝑑mid ∈ ℝ𝑑out
+∈ ℝ𝑑1×𝑑2 ∈ ℝ𝑑1 ∈ ℝ𝑑e ∈ ℝ𝑑e ∈ ℝ𝑑
+
+Explanation set of integers 1, 2, ..., 𝑁 − 1, 𝑁 generic integer indices vocabulary vocabulary size set of token sequences; elements include e.g. sentences or documents maximum sequence length length of token sequence index of token in a sequence dimension of various vectors ≡ 𝑥 [1]𝑥 [2]...𝑥 [ ] ∈ 𝑉 primary token sequence ≡ 𝑧[1]𝑧[2]...𝑧[ ] ∈ 𝑉 context token sequence entry 𝑀𝑖 𝑗 of matrix 𝑀 ∈ ℝ𝑑×𝑑 𝑖-th row of matrix 𝑀 ∈ ℝ𝑑×𝑑 𝑗-th column of matrix 𝑀 ∈ ℝ𝑑×𝑑 vector representation / embedding of a token encoded primary token sequence encoded context token sequence masking matrix, it determines the attention context for each token number of network (encoder, decoder) layers index of network layer number of attention heads index of attention head (i.i.d.) sample size index of sample sequence learning rate temperature; it controls the diversity-plausibility trade-oﬀ at inference token embedding matrix positional embedding matrix unembedding matrix query weight matrix query bias key weight matrix key bias value weight matrix value bias collection of above parameters of a single-head attention layer output weight matrix output bias collection of above parameters of a multi-head attention layer, see eq. (4) weight matrix corresponding to an MLP layer in a Transformer bias corresponding to an MLP layer in a Transformer layer-norm learnable scale parameter layer-norm learnable oﬀset parameter
+collection of all learnable / learned Transformer parameters
+
+16
+
