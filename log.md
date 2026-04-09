@@ -784,3 +784,18 @@ Touched files:
 
 Notes:
 - The architecture keeps the repo as durable truth, the compiler runtime as the engine, the control app as the operator surface, and Obsidian as the reading surface.
+
+## [2026-04-09] maintenance | App move-path cleanup and generated artifact hygiene
+
+Summary:
+Adjusted the app TypeScript build configuration so moving the UI does not emit generated JS, declaration files, or build-info files into tracked source locations, expanded ignore rules for app build artifacts, and verified a local production build from the current app path.
+
+Touched files:
+- `.gitignore`
+- `app/tsconfig.app.json`
+- `app/tsconfig.node.json`
+- `log.md`
+
+Notes:
+- The app still resolves the workspace relative to `app/..`, so it remains wired to the repo root at its current location.
+- Verification used `npm run build` in `app/`, which now writes cache/output material under ignored paths such as `app/.tsbuildinfo/` and `app/dist/`.

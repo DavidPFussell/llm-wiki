@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 export type WorkspaceSummary = {
   generatedAt: string;
@@ -170,13 +171,26 @@ function parseRecentJobs(repoRoot: string) {
   });
 }
 
-function buildReviewQueue(
-  jobs: Array<{
-    title: string;
-    touchedPaths?: string[];
-  }>
-) {
-  const seen = new Set<string>();
+function runGit(repoRoot: string, args: string[]) {
+  const gitBinary =
+    process.platform === "win32" ? "C:\\Program Files\\Git\\cmd\\git.exe" : "git";
+
+  return execFileSync(gitBinary, args, {
+    cwd: repoRoot,
+    encoding: "utf8"
+  }).trim();
+}
+
+function buildReviewQueueFromGit(repoRoot: string) {
+  let statusOutput = "";
+  try {
+    statusOutput = runGit(repoRoot, ["status", "--porcelain"]);
+  } catch {
+    return [];
+  }
+
+  if (!statusOutput) return [];
+
   const queue: Array<{
     path: string;
     changeType: string;
@@ -184,25 +198,34 @@ function buildReviewQueue(
     linesChanged: number;
   }> = [];
 
-  for (const job of jobs) {
-    for (const touchedPath of job.touchedPaths ?? []) {
-      if (seen.has(touchedPath)) continue;
-      seen.add(touchedPath);
+  for (const line of statusOutput.split(/\r?\n/)) {
+    const statusCode = line.slice(0, 2).trim();
+    const filePath = line.slice(3).trim().replace(/\\/g, "/");
+    if (!filePath) continue;
 
-      let changeType = "update";
-      if (touchedPath.endsWith("log.md")) changeType = "append";
-      if (touchedPath.includes("/outputs/")) changeType = "create";
+    let changeType = "update";
+    if (statusCode === "??" || statusCode.startsWith("A")) changeType = "create";
+    if (filePath.endsWith("log.md")) changeType = "append";
 
-      queue.push({
-        path: touchedPath,
-        changeType,
-        summary: `Touched by recent job: ${job.title}.`,
-        linesChanged: 12
-      });
+    let linesChanged = 0;
+    try {
+      const diffStats = runGit(repoRoot, ["diff", "--numstat", "--", filePath]);
+      const firstLine = diffStats.split(/\r?\n/)[0];
+      const [added, removed] = firstLine.split("\t");
+      linesChanged = (Number(added) || 0) + (Number(removed) || 0);
+    } catch {
+      linesChanged = 0;
+    }
 
-      if (queue.length >= 8) {
-        return queue;
-      }
+    queue.push({
+      path: filePath,
+      changeType,
+      summary: `Pending working tree change from git status: ${statusCode || "modified"}.`,
+      linesChanged
+    });
+
+    if (queue.length >= 8) {
+      break;
     }
   }
 
@@ -213,6 +236,30 @@ function buildDiffPreview(repoRoot: string, reviewQueue: Array<{ path: string }>
   const previews: Record<string, Array<{ kind: string; text: string }>> = {};
 
   for (const item of reviewQueue) {
+    try {
+      const diffText = runGit(repoRoot, ["diff", "--", item.path]);
+      const relevantLines = diffText
+        .split(/\r?\n/)
+        .filter((line) => !line.startsWith("diff --git") && !line.startsWith("index "))
+        .slice(0, 24);
+
+      previews[item.path] = [
+        { kind: "meta", text: `# Git diff preview for ${item.path}` },
+        ...relevantLines.map((line) => {
+          if (line.startsWith("+") && !line.startsWith("+++")) {
+            return { kind: "add", text: line };
+          }
+          if (line.startsWith("-") && !line.startsWith("---")) {
+            return { kind: "remove", text: line };
+          }
+          return { kind: "context", text: line.length > 0 ? line : " " };
+        })
+      ];
+      continue;
+    } catch {
+      // Fall through to file preview below.
+    }
+
     const fullPath = path.join(repoRoot, ...item.path.split("/"));
     if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
       previews[item.path] = [{ kind: "meta", text: "File preview unavailable." }];
@@ -220,11 +267,7 @@ function buildDiffPreview(repoRoot: string, reviewQueue: Array<{ path: string }>
     }
 
     const text = fs.readFileSync(fullPath, "utf8");
-    const lines = text
-      .split(/\r?\n/)
-      .slice(0, 12)
-      .map((line) => line.trimEnd());
-
+    const lines = text.split(/\r?\n/).slice(0, 12).map((line) => line.trimEnd());
     previews[item.path] = [
       { kind: "meta", text: `# Live preview for ${item.path}` },
       ...lines.map((line) => ({
@@ -241,7 +284,7 @@ export function buildWorkspaceSummary(repoRoot: string): WorkspaceSummary {
   const workspaceName = path.basename(repoRoot);
   const sourceFolders = path.join(repoRoot, "raw", "sources");
   const jobs = parseRecentJobs(repoRoot);
-  const reviewQueue = buildReviewQueue(jobs);
+  const reviewQueue = buildReviewQueueFromGit(repoRoot);
 
   return {
     generatedAt: new Date().toISOString(),

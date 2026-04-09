@@ -1,14 +1,35 @@
-# LLM Wiki Starter Repo
+# LLM Wiki
 
-A local-first starter repo for building an LLM-maintained wiki in markdown.
+A wiki-first system for building persistent, LLM-maintained knowledge bases from raw sources.
 
-The pattern is simple:
+This repository is a local-first starter repo for the `LLM Wiki` pattern: raw documents go in, an LLM incrementally compiles and maintains a markdown wiki, and every useful query can be filed back into the knowledge base as a durable artifact.
+
+The core pattern is simple:
 
 - `raw/` stores immutable source material.
 - `wiki/` stores the persistent markdown wiki maintained by the LLM.
 - `AGENTS.md` defines the rules, structure, and workflows the agent should follow.
 
 The human curates sources and directs the work. The LLM does the summarizing, cross-referencing, indexing, filing, and maintenance.
+
+## Why This Exists
+
+Most document-based LLM workflows are retrieval-first. They can answer questions, but they often re-derive the same synthesis from scratch each time. `LLM Wiki` takes a different approach: it treats the wiki as a persistent, compounding artifact that gets better with every source you ingest and every question you ask.
+
+That makes it useful for:
+
+- research programs
+- due diligence and competitive analysis
+- personal knowledge management
+- internal team wikis
+- long-running topic exploration
+
+## GitHub Repo Suggestion
+
+If you publish this publicly, a clean repo shape would be:
+
+- **Name:** `llm-wiki`
+- **Description:** `A wiki-first system for building persistent, LLM-maintained knowledge bases from raw sources.`
 
 ## Core Workflows
 
