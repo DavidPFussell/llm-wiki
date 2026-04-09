@@ -3,7 +3,7 @@ title: Retrieval-Augmented Generation
 type: concept
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources: []
 tags:
   - concept
@@ -28,3 +28,8 @@ Retrieval-augmented generation combines a language model with external evidence 
 
 - [Evaluating LLMs on Document Based Question Answering](../sources/evaluating-llms-on-document-based-question-answering.md)
 
+## Related Outputs
+
+- [2026-04-07 Which Persistence Layers Should Be Primary, Secondary, or Supporting in an LLM Wiki?](../outputs/2026-04-07-which-persistence-layers-should-be-primary-secondary-or-supporting-in-an-llm-wiki.md)
+- [2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](../outputs/2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)
+- [2026-04-07 LLM Wiki Product Architecture Note](../outputs/2026-04-07-llm-wiki-product-architecture-note.md)

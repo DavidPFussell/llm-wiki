@@ -3,7 +3,7 @@ title: 2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilati
 type: output
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources:
   - ../concepts/incremental-knowledge-compilation.md
   - ../concepts/retrieval-augmented-generation.md
@@ -50,3 +50,8 @@ The LLM Wiki pattern is best understood as a middle path between pure RAG and fu
 - [Knowledge Graph Construction](../concepts/knowledge-graph-construction.md)
 - [Knowledge-Graph-Augmented LLMs](../concepts/knowledge-graph-augmented-llms.md)
 
+## Related Outputs
+
+- [2026-04-07 RAG Cluster Map](2026-04-07-rag-cluster-map.md)
+- [2026-04-07 Knowledge Graphs Cluster Map](2026-04-07-knowledge-graphs-cluster-map.md)
+- [2026-04-07 Which Persistence Layers Should Be Primary, Secondary, or Supporting in an LLM Wiki?](2026-04-07-which-persistence-layers-should-be-primary-secondary-or-supporting-in-an-llm-wiki.md)

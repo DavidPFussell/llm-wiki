@@ -3,7 +3,7 @@ title: 2026-04-07 RAG Cluster Map
 type: output
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources:
   - ../sources/a-survey-on-rag-for-llms.md
   - ../sources/agentic-rag.md
@@ -21,7 +21,7 @@ confidence: medium
 
 ## Overview
 
-The `RAG` folder is compact but already coherent. It contains the best concentrated thread in the corpus for understanding how retrieval pipelines evolve from baseline grounding systems into ranking-heavy, hierarchical, and agentic retrieval workflows.
+The `RAG` folder is compact but already coherent. It contains the best concentrated thread in the corpus for understanding how retrieval pipelines evolve from baseline grounding systems into ranking-heavy, hierarchical, and agentic retrieval workflows, and it complements the broader comparison in [Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md).
 
 ## Main Threads
 
@@ -48,3 +48,10 @@ The `RAG` folder is compact but already coherent. It contains the best concentra
 - [Retrieval-Augmented Generation](../concepts/retrieval-augmented-generation.md)
 - [Agentic Information Retrieval](../concepts/agentic-information-retrieval.md)
 - [Hallucination Mitigation](../concepts/hallucination-mitigation.md)
+- [Knowledge-Graph-Augmented LLMs](../concepts/knowledge-graph-augmented-llms.md)
+
+## Related Outputs
+
+- [2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)
+- [2026-04-07 Knowledge Graphs Cluster Map](2026-04-07-knowledge-graphs-cluster-map.md)
+- [2026-04-07 Which Persistence Layers Should Be Primary, Secondary, or Supporting in an LLM Wiki?](2026-04-07-which-persistence-layers-should-be-primary-secondary-or-supporting-in-an-llm-wiki.md)

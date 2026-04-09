@@ -3,7 +3,7 @@ title: Knowledge-Graph-Augmented LLMs
 type: concept
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources: []
 tags:
   - concept
@@ -27,3 +27,15 @@ Knowledge-graph-augmented LLMs integrate explicit entities, relations, or graph 
 ## Related Sources
 
 - [Relational Deep Learning](../sources/relational-deep-learning-graph-representation-learning-on-relational-databases.md)
+
+## Related Concepts
+
+- [Retrieval-Augmented Generation](retrieval-augmented-generation.md)
+- [Knowledge Graph Construction](knowledge-graph-construction.md)
+- [Knowledge Graph Reasoning](knowledge-graph-reasoning.md)
+
+## Related Outputs
+
+- [2026-04-07 Knowledge Graphs Cluster Map](../outputs/2026-04-07-knowledge-graphs-cluster-map.md)
+- [2026-04-07 RAG Cluster Map](../outputs/2026-04-07-rag-cluster-map.md)
+- [2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](../outputs/2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)

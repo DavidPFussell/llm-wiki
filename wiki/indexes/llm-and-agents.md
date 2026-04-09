@@ -176,6 +176,8 @@ Topical navigation hub for the broader LLM-and-agents wave.
 - [Reasoning Cluster Map](../outputs/2026-04-07-reasoning-cluster-map.md)
 - [RL Cluster Map](../outputs/2026-04-07-rl-cluster-map.md)
 - [Reasoning Paradigms Comparison](../outputs/2026-04-07-reasoning-paradigms-comparison.md)
+- [LLM Wiki Product Architecture Note](../outputs/2026-04-07-llm-wiki-product-architecture-note.md)
+- [LLM Wiki Repo and App Architecture](../outputs/2026-04-07-llm-wiki-repo-and-app-architecture.md)
 
 ## Key Entities
 

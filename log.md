@@ -799,3 +799,76 @@ Touched files:
 Notes:
 - The app still resolves the workspace relative to `app/..`, so it remains wired to the repo root at its current location.
 - Verification used `npm run build` in `app/`, which now writes cache/output material under ignored paths such as `app/.tsbuildinfo/` and `app/dist/`.
+
+## [2026-04-09] maintenance | Obsidian graph link pass for LLM Wiki architecture slice
+
+Summary:
+Audited the LLM Wiki architecture slice for graph-readiness and added explicit bidirectional cross-links between the main architecture outputs, their supporting concept pages, and the broader `llm-and-agents` index so Obsidian graph view has stronger visible structure.
+
+Touched files:
+- `wiki/outputs/2026-04-07-llm-wiki-product-architecture-note.md`
+- `wiki/outputs/2026-04-07-llm-wiki-repo-and-app-architecture.md`
+- `wiki/concepts/incremental-knowledge-compilation.md`
+- `wiki/concepts/retrieval-augmented-generation.md`
+- `wiki/concepts/workflow-optimization-for-llm-agents.md`
+- `wiki/concepts/agent-harnesses.md`
+- `wiki/concepts/knowledge-graph-construction.md`
+- `wiki/concepts/sentence-embeddings.md`
+- `wiki/indexes/llm-and-agents.md`
+- `log.md`
+
+Notes:
+- The main issue was sparse explicit wiki-to-wiki links, not missing content.
+- This pass focused on the architecture cluster first because it is immediately relevant to both Obsidian navigation and the current app work.
+
+## [2026-04-09] maintenance | Obsidian graph link pass for RAG and Knowledge Graphs slice
+
+Summary:
+Added a second wave of explicit cross-links across the `RAG`, `Knowledge Graphs`, and comparison pages so retrieval-first, graph-first, and wiki-first notes form a clearer Obsidian-visible cluster instead of reading as adjacent but loosely connected analyses.
+
+Touched files:
+- `wiki/outputs/2026-04-07-rag-cluster-map.md`
+- `wiki/outputs/2026-04-07-knowledge-graphs-cluster-map.md`
+- `wiki/outputs/2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md`
+- `wiki/concepts/agentic-information-retrieval.md`
+- `wiki/concepts/knowledge-graph-augmented-llms.md`
+- `wiki/concepts/graph-representation-learning.md`
+- `wiki/concepts/knowledge-graph-reasoning.md`
+- `wiki/indexes/knowledge-graphs.md`
+- `log.md`
+
+Notes:
+- The main improvement was adding bidirectional output-to-output and concept-to-output links across retrieval and graph pages.
+- This wave should make the Obsidian graph much more legible around the central `wiki-first, graph-assisted` thesis.
+
+## [2026-04-09] maintenance | Obsidian graph link pass for RAG and Knowledge Graph entities
+
+Summary:
+Added links from key named systems in the `RAG` and `Knowledge Graphs` slices back into the cluster maps and comparison notes so entity pages like `RAFT`, `RankRAG`, `HIRAG`, `BabelNet`, `YAGO`, `node2vec`, `OpenDialKG`, and `Neo4j` act as visible graph anchors in Obsidian rather than isolated leaf nodes.
+
+Touched files:
+- `wiki/entities/raft.md`
+- `wiki/entities/rankrag.md`
+- `wiki/entities/hirag.md`
+- `wiki/entities/babelnet.md`
+- `wiki/entities/yago.md`
+- `wiki/entities/node2vec.md`
+- `wiki/entities/opendialkg.md`
+- `wiki/entities/neo4j.md`
+- `log.md`
+
+Notes:
+- This pass focused on entity-to-output links because the synthesis pages were already stronger than the entity pages.
+- Local Obsidian workspace files appeared during this pass and were intentionally left untouched.
+
+## [2026-04-09] maintenance | Ignore local Obsidian workspace files
+
+Summary:
+Marked local Obsidian workspace state as ignored so vault-specific settings and transient canvas files do not get mixed into the durable wiki repo.
+
+Touched files:
+- `.gitignore`
+- `log.md`
+
+Notes:
+- The observed files were `.obsidian/` settings plus an empty `Untitled.canvas`, which look like local editor state rather than canonical wiki artifacts.

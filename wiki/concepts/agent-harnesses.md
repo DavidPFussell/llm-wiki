@@ -3,7 +3,7 @@ title: Agent Harnesses
 type: concept
 status: active
 created: 2026-04-06
-updated: 2026-04-06
+updated: 2026-04-09
 sources:
   - ../sources/autoharness-improving-llm-agents-by-automatically-synthesizing-a-code-harness.md
   - ../sources/meta-harness-end-to-end-optimization-of-model-harnesses.md
@@ -37,3 +37,12 @@ Several papers in this collection argue that model quality alone is not enough. 
 - [AutoHarness: improving LLM agents by automatically synthesizing a code harness](../sources/autoharness-improving-llm-agents-by-automatically-synthesizing-a-code-harness.md)
 - [Meta-Harness: End-to-End Optimization of Model Harnesses](../sources/meta-harness-end-to-end-optimization-of-model-harnesses.md)
 - [Building AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned](../sources/building-ai-coding-agents-for-the-terminal-scaffolding-harness-context-engineering-and-lessons-learned.md)
+
+## Related Concepts
+
+- [Workflow Optimization for LLM Agents](workflow-optimization-for-llm-agents.md)
+
+## Related Outputs
+
+- [2026-04-07 LLM Wiki Product Architecture Note](../outputs/2026-04-07-llm-wiki-product-architecture-note.md)
+- [2026-04-07 LLM Wiki Repo and App Architecture](../outputs/2026-04-07-llm-wiki-repo-and-app-architecture.md)

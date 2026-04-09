@@ -3,7 +3,7 @@ title: 2026-04-07 LLM Wiki Product Architecture Note
 type: output
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources:
   - ../outputs/2026-04-07-how-intelligent-systems-accumulate-reusable-knowledge-over-time.md
   - ../outputs/2026-04-07-which-persistence-layers-should-be-primary-secondary-or-supporting-in-an-llm-wiki.md
@@ -21,7 +21,7 @@ confidence: medium
 
 ## Thesis
 
-An LLM Wiki should be architected as a **wiki-first knowledge compiler** with supporting retrieval, semantic, structural, and operational layers. The canonical memory of the system is the maintained markdown wiki, not the vector index, graph store, or chat history.
+An LLM Wiki should be architected as a **wiki-first knowledge compiler** with supporting retrieval, semantic, structural, and operational layers. The canonical memory of the system is the maintained markdown wiki, not the vector index, graph store, or chat history. This is the product-level expression of [Incremental Knowledge Compilation](../concepts/incremental-knowledge-compilation.md).
 
 ## Core Architectural Principle
 
@@ -54,7 +54,7 @@ Responsibilities:
 
 ### 2. Secondary Layer: Retrieval and Search
 
-This layer exists to help the agent operate on the wiki and the raw corpus efficiently.
+This layer exists to help the agent operate on the wiki and the raw corpus efficiently, in the same support role described by [Retrieval-Augmented Generation](../concepts/retrieval-augmented-generation.md).
 
 Artifacts:
 - lexical indexes
@@ -90,7 +90,7 @@ Design rule:
 
 ### 4. Secondary Layer: Selective Structured Knowledge
 
-This is a graph-assisted layer, not a graph-first product.
+This is a graph-assisted layer, not a graph-first product, which keeps it consistent with the tradeoffs surfaced in [Knowledge Graph Construction](../concepts/knowledge-graph-construction.md).
 
 Artifacts:
 - canonical entities
@@ -108,7 +108,7 @@ Design rule:
 
 ### 5. Supporting Layer: Workflow and Agent Control
 
-This is the execution layer that shapes how the system behaves.
+This is the execution layer that shapes how the system behaves, closely related to [Workflow Optimization for LLM Agents](../concepts/workflow-optimization-for-llm-agents.md) and [Agent Harnesses](../concepts/agent-harnesses.md).
 
 Artifacts:
 - schema file (`AGENTS.md`)
@@ -126,7 +126,7 @@ Design rule:
 
 ### 6. Supporting Layer: Corpus Compression and Discovery
 
-This layer helps the system propose structure.
+This layer helps the system propose structure and connects naturally to [Sentence Embeddings](../concepts/sentence-embeddings.md).
 
 Artifacts:
 - topics
@@ -215,3 +215,17 @@ The best architecture for an LLM Wiki is:
 
 That preserves the compounding value of persistent synthesis while still benefiting from the stronger supporting mechanisms found across the corpus.
 
+## Related Concepts
+
+- [Incremental Knowledge Compilation](../concepts/incremental-knowledge-compilation.md)
+- [Retrieval-Augmented Generation](../concepts/retrieval-augmented-generation.md)
+- [Workflow Optimization for LLM Agents](../concepts/workflow-optimization-for-llm-agents.md)
+- [Agent Harnesses](../concepts/agent-harnesses.md)
+- [Knowledge Graph Construction](../concepts/knowledge-graph-construction.md)
+- [Sentence Embeddings](../concepts/sentence-embeddings.md)
+
+## Related Outputs
+
+- [2026-04-07 LLM Wiki Repo and App Architecture](2026-04-07-llm-wiki-repo-and-app-architecture.md)
+- [2026-04-07 Which Persistence Layers Should Be Primary, Secondary, or Supporting in an LLM Wiki?](2026-04-07-which-persistence-layers-should-be-primary-secondary-or-supporting-in-an-llm-wiki.md)
+- [2026-04-07 How Intelligent Systems Accumulate Reusable Knowledge Over Time](2026-04-07-how-intelligent-systems-accumulate-reusable-knowledge-over-time.md)

@@ -3,7 +3,7 @@ title: OpenDialKG
 type: entity
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources:
   - ../sources/opendialkg.md
 tags:
@@ -33,3 +33,7 @@ It helps connect the graph cluster back to dialog systems, agents, and grounded 
 - [Knowledge Graph Reasoning](../concepts/knowledge-graph-reasoning.md)
 - [Knowledge-Graph-Augmented LLMs](../concepts/knowledge-graph-augmented-llms.md)
 
+## Related Outputs
+
+- [2026-04-07 Knowledge Graphs Cluster Map](../outputs/2026-04-07-knowledge-graphs-cluster-map.md)
+- [2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](../outputs/2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)

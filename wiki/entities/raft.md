@@ -3,7 +3,7 @@ title: RAFT
 type: entity
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources:
   - ../sources/raft-adapting-language-model-to-domain-specific-rag.md
 tags:
@@ -33,3 +33,7 @@ It is a good anchor for the thread where RAG stops being generic retrieval glue 
 - [Retrieval-Augmented Generation](../concepts/retrieval-augmented-generation.md)
 - [Hallucination Mitigation](../concepts/hallucination-mitigation.md)
 
+## Related Outputs
+
+- [2026-04-07 RAG Cluster Map](../outputs/2026-04-07-rag-cluster-map.md)
+- [2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](../outputs/2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)

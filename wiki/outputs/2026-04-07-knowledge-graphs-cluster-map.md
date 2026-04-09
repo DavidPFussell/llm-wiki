@@ -3,7 +3,7 @@ title: 2026-04-07 Knowledge Graphs Cluster Map
 type: output
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources:
   - ../sources/a-survey-on-knowledge-graphs.md
   - ../sources/knowledge-graph-construction.md
@@ -20,7 +20,7 @@ confidence: medium
 
 ## Overview
 
-The `Knowledge Graphs` folder is one of the most structurally relevant clusters for the LLM Wiki project. It brings together graph construction, graph embeddings, graph neural networks, semantic resources, and graph-based reasoning over explicit entities and relations.
+The `Knowledge Graphs` folder is one of the most structurally relevant clusters for the LLM Wiki project. It brings together graph construction, graph embeddings, graph neural networks, semantic resources, and graph-based reasoning over explicit entities and relations, and it pairs naturally with [Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md).
 
 ## Main Threads
 
@@ -49,3 +49,8 @@ The `Knowledge Graphs` folder is one of the most structurally relevant clusters 
 - [Knowledge Graph Reasoning](../concepts/knowledge-graph-reasoning.md)
 - [Knowledge-Graph-Augmented LLMs](../concepts/knowledge-graph-augmented-llms.md)
 
+## Related Outputs
+
+- [2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)
+- [2026-04-07 RAG Cluster Map](2026-04-07-rag-cluster-map.md)
+- [2026-04-07 Which Persistence Layers Should Be Primary, Secondary, or Supporting in an LLM Wiki?](2026-04-07-which-persistence-layers-should-be-primary-secondary-or-supporting-in-an-llm-wiki.md)

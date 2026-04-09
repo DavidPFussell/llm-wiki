@@ -3,7 +3,7 @@ title: HIRAG
 type: entity
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources:
   - ../sources/hirag-hierarchical-thought-instruction-tuning-retrieval-augmented-generation.md
 tags:
@@ -32,3 +32,8 @@ It is a useful reference point for the branch of RAG that blends retrieval, hier
 
 - [Retrieval-Augmented Generation](../concepts/retrieval-augmented-generation.md)
 - [Hallucination Mitigation](../concepts/hallucination-mitigation.md)
+
+## Related Outputs
+
+- [2026-04-07 RAG Cluster Map](../outputs/2026-04-07-rag-cluster-map.md)
+- [2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](../outputs/2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)

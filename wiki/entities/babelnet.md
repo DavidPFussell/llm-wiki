@@ -3,7 +3,7 @@ title: BabelNet
 type: entity
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources:
   - ../sources/babelnet.md
 tags:
@@ -33,3 +33,7 @@ It is a strong anchor for the part of the corpus where knowledge graphs intersec
 - [Knowledge Graph Construction](../concepts/knowledge-graph-construction.md)
 - [Knowledge-Graph-Augmented LLMs](../concepts/knowledge-graph-augmented-llms.md)
 
+## Related Outputs
+
+- [2026-04-07 Knowledge Graphs Cluster Map](../outputs/2026-04-07-knowledge-graphs-cluster-map.md)
+- [2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](../outputs/2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)

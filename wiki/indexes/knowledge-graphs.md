@@ -48,8 +48,8 @@ Topical navigation hub for the `Knowledge Graphs` cluster.
 
 - [Knowledge Graphs Cluster Map](../outputs/2026-04-07-knowledge-graphs-cluster-map.md)
 - [Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](../outputs/2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)
+- [RAG Cluster Map](../outputs/2026-04-07-rag-cluster-map.md)
 
 ## Maintenance
 
 - [Broader Corpus Lint Pass](../maintenance/2026-04-07-broader-corpus-lint-pass.md)
-

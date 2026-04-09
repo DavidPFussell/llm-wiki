@@ -3,7 +3,7 @@ title: 2026-04-07 LLM Wiki Repo and App Architecture
 type: output
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources:
   - ../outputs/2026-04-07-llm-wiki-product-architecture-note.md
   - ../outputs/2026-04-07-llm-wiki-prd.md
@@ -21,7 +21,7 @@ confidence: medium
 
 ## Goal
 
-Translate the LLM Wiki product thesis into a concrete implementation architecture that could be built as a local-first app plus repo-backed workspace.
+Translate the [LLM Wiki Product Architecture Note](2026-04-07-llm-wiki-product-architecture-note.md) into a concrete implementation architecture that could be built as a local-first app plus repo-backed workspace.
 
 ## Top-Level Shape
 
@@ -32,7 +32,7 @@ The cleanest implementation is:
 - a **thin control app** that launches jobs, shows status, and exposes navigation
 - **Obsidian** as the primary reading surface for markdown artifacts
 
-This keeps the product aligned with the wiki-first principle. The app is the command center. The repo is the durable artifact.
+This keeps the product aligned with the wiki-first principle described in [Incremental Knowledge Compilation](../concepts/incremental-knowledge-compilation.md). The app is the command center. The repo is the durable artifact.
 
 ## Workspace Layout
 
@@ -325,7 +325,7 @@ Then optionally add:
 
 ## Incremental Build Strategy
 
-The compiler should avoid scanning and rewriting the whole wiki every time.
+The compiler should avoid scanning and rewriting the whole wiki every time. That keeps the implementation aligned with [Incremental Knowledge Compilation](../concepts/incremental-knowledge-compilation.md) rather than turning the wiki into a disposable derived view.
 
 Recommended flow:
 
@@ -386,3 +386,17 @@ The most concrete implementation is:
 
 That gives you a product that is stronger than a bag of scripts without abandoning the wiki-native pattern that makes the idea attractive.
 
+## Related Concepts
+
+- [Incremental Knowledge Compilation](../concepts/incremental-knowledge-compilation.md)
+- [Workflow Optimization for LLM Agents](../concepts/workflow-optimization-for-llm-agents.md)
+- [Agent Harnesses](../concepts/agent-harnesses.md)
+- [Retrieval-Augmented Generation](../concepts/retrieval-augmented-generation.md)
+- [Knowledge Graph Construction](../concepts/knowledge-graph-construction.md)
+- [Sentence Embeddings](../concepts/sentence-embeddings.md)
+
+## Related Outputs
+
+- [2026-04-07 LLM Wiki Product Architecture Note](2026-04-07-llm-wiki-product-architecture-note.md)
+- [2026-04-07 Which Persistence Layers Should Be Primary, Secondary, or Supporting in an LLM Wiki?](2026-04-07-which-persistence-layers-should-be-primary-secondary-or-supporting-in-an-llm-wiki.md)
+- [2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)

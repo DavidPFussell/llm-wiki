@@ -3,7 +3,7 @@ title: node2vec
 type: entity
 status: active
 created: 2026-04-07
-updated: 2026-04-07
+updated: 2026-04-09
 sources:
   - ../sources/node2vec.md
 tags:
@@ -33,3 +33,7 @@ It is a central anchor for graph representation learning and a common baseline a
 - [Graph Representation Learning](../concepts/graph-representation-learning.md)
 - [Representation Learning](../concepts/representation-learning.md)
 
+## Related Outputs
+
+- [2026-04-07 Knowledge Graphs Cluster Map](../outputs/2026-04-07-knowledge-graphs-cluster-map.md)
+- [2026-04-07 Structured Knowledge vs Retrieval vs Persistent Wiki Compilation](../outputs/2026-04-07-structured-knowledge-vs-retrieval-vs-persistent-wiki-compilation.md)
